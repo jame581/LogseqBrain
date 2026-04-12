@@ -6,7 +6,7 @@
     "name": "Jan Mesarc"
   },
   "license": "MIT",
-  "homepage": "https://github.com/jame581/logseq-brain",
-  "repository": "https://github.com/jame581/logseq-brain",
+  "homepage": "https://github.com/jame581/LogseqBrain",
+  "repository": "https://github.com/jame581/LogseqBrain",
   "keywords": ["logseq", "memory", "brain", "persistence", "sync"]
 }
