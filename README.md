@@ -17,13 +17,18 @@ This plugin turns a Logseq graph into Claude's external brain. Claude can read f
 
 ### Claude Code / CLI
 
-1. Create a new Logseq graph called "ClaudeBrain"
-2. Install the plugin: `claude plugin add /path/to/logseq-brain`
+1. Create a new Logseq graph called "ClaudeBrain".
+2. Install the plugin via a marketplace. In Claude Code:
+   ```
+   /plugin marketplace add jame581/<marketplace-repo>
+   /plugin install logseq-brain@<marketplace-name>
+   ```
+   (Replace `<marketplace-repo>` and `<marketplace-name>` with the marketplace that lists this plugin.)
 3. Set the graph path (pick one):
    - Environment variable: `export LOGSEQ_BRAIN_PATH=/path/to/ClaudeBrain`
    - Config file: create `.brain-config.json` in the plugin root with `{"graphPath": "/path/to/ClaudeBrain"}`
    - Or just tell Claude the path when prompted
-4. Say "init brain" to set up the graph structure
+4. Say "init brain" to set up the graph structure.
 
 ## Skills
 
