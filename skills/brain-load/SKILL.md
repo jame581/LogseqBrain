@@ -58,13 +58,48 @@ When the user says "load brain" without specifying a project:
 2. Read `pages/Meta.md` for user preferences and conventions.
 3. Present a high-level overview: active projects, any cross-project decisions, and user preferences.
 
+## Load Modes: Brief vs Full
+
+By default, load in **brief** mode — prioritize the most useful sections to keep token usage low.
+
+**Brief mode** (default — "load Globus"):
+1. Properties (type, status, last-updated)
+2. Overview (first 5 bullets only)
+3. Current Plan (full)
+4. Session Log (last 3 entries only)
+5. Skip Implementation and Decisions unless the user asks
+
+**Full mode** ("load Globus full", "load everything about Globus"):
+1. All properties
+2. Full Overview
+3. Full Current Plan
+4. Full Implementation
+5. All Decisions
+6. Last 10 Session Log entries
+7. Related context pages (follow `[[links]]`)
+8. Today's journal entry
+
+When presenting the summary in brief mode, mention that more detail is available: "Loaded brief context. Say 'load full' for decisions, implementation details, and full history."
+
 ## Searching Across the Brain
 
-When the user asks "what do we know about X" or wants to find something:
+When the user asks "what do we know about X", "search brain for X", "find X in brain", or wants to find something across projects:
 
-1. Use Grep to search across all `.md` files in the graph folder for the search term.
-2. Read the most relevant matches.
-3. Present findings with links to the source pages.
+1. **Search broadly.** Use Grep to search across all `.md` files in the `pages/` and `journals/` directories of the graph folder. Search for the term case-insensitively.
+
+2. **Filter results.** Exclude matches from `logseq/bak/` (backup files) and `logseq/` config files. Focus on `pages/` and `journals/` matches.
+
+3. **Group by source.** Organize results by which page they came from:
+   - Project pages: show the project name and the matching section
+   - Journal entries: show the date and the matching context
+   - Meta/Decisions pages: show the matching entry
+
+4. **Read relevant context.** For the top 3-5 most relevant matches, read a few lines of surrounding context to give a meaningful answer — don't just show the matching line.
+
+5. **Present findings.** Format as:
+   - "Found [term] in [N] places:"
+   - For each match: the source page (as a `[[link]]`), the section, and the relevant context
+   - If no matches found: "Nothing in the brain about [term]. This might be new territory."
 
 ## Important Notes
 

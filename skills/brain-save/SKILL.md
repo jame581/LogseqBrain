@@ -24,14 +24,20 @@ The user's ClaudeBrain Logseq graph folder must be accessible.
 Review the current conversation and identify what should be persisted. Focus on these categories:
 
 ### 1. Session Log Entry (always save this)
-A brief record of what was accomplished in this session. Append to the project page's **Session Log** section.
+A rich record of what was accomplished in this session. Append to the project page's **Session Log** section.
 
 Format:
 ```markdown
   - yyyy-MM-dd: Brief summary of what was done
     - Detail about specific work
     - Detail about another piece of work
+    - files-modified:: comma-separated list of key files changed (if applicable)
+    - skills-used:: comma-separated list of skills/tools used (if applicable)
+    - related-tickets:: comma-separated Jira ticket IDs (if applicable)
+    - open-questions:: any unresolved questions or blockers to carry forward
 ```
+
+Include `files-modified`, `skills-used`, `related-tickets`, and `open-questions` properties only when they have meaningful values — don't add empty ones. These properties help future sessions understand not just what happened, but what was touched and what's still pending.
 
 ### 2. Decisions (save when decisions were made)
 Any technical, architectural, or process decisions made during the session. Append to the project page's **Decisions** section.
@@ -50,6 +56,20 @@ If a new plan was created or an existing one was modified, update the **Current 
 
 ### 4. Implementation Details (save when significant)
 If implementation notes, setup instructions, or technical details were discussed that would be valuable in future sessions, update the **Implementation** section.
+
+### 5. User Preferences & Meta (save when discovered)
+If during the session you learn something new about the user's preferences, working style, tools, or conventions — and it's not already in `pages/Meta.md` — update the Meta page. Examples:
+- User prefers a specific code style or naming convention
+- User mentions their tech stack or commonly used tools
+- User expresses a preference for how Claude should behave (e.g., "don't summarize at the end", "keep responses short")
+- User shares conventions about their workflow (e.g., "I always branch off develop")
+
+Read `pages/Meta.md` first to check what's already there. Add new entries under the appropriate section (User Preferences, Conventions, or Tools & Stack). Update `last-updated::` to today's date.
+
+Do NOT save to Meta:
+- One-off instructions that only apply to the current session
+- Sensitive personal information (addresses, IDs, health info)
+- Things that are obvious from the project context
 
 ## Save Process
 
@@ -79,9 +99,11 @@ If implementation notes, setup instructions, or technical details were discussed
   - [[Projects/ProjectName]]: Brief summary of session
 ```
 
-7. **Update Index if needed.** If a project status changed or new cross-project information emerged, update `pages/Index.md`.
+7. **Update Meta if needed.** If new user preferences, conventions, or tool info was discovered during the session, update `pages/Meta.md` (see category 5 above).
 
-8. **Confirm to the user** what was saved, in plain language. Example: "Saved to brain: session log for today's work on the price calculator, plus the decision to use the strategy pattern."
+8. **Update Index if needed.** If a project status changed or new cross-project information emerged, update `pages/Index.md`.
+
+9. **Confirm to the user** what was saved, in plain language. List each thing that was written. Example: "Saved to brain: session log for today's work on the price calculator, the decision to use the strategy pattern, and added 'prefers strategy pattern over switch statements' to your Meta preferences."
 
 ## Important Notes
 
