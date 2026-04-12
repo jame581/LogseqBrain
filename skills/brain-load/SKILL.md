@@ -23,11 +23,11 @@ The user's ClaudeBrain Logseq graph folder must be accessible.
 
 When the user says "load [project name]" or similar:
 
-1. **Find the project page.** Look for `pages/Projects___<ProjectName>.md` in the graph folder using this matching strategy:
-   - First, try an exact match: `pages/Projects___<ProjectName>.md`
-   - If no match, try case-insensitive: glob for `pages/Projects___*.md` and compare lowercased names
-   - If no match, try fuzzy: strip spaces, hyphens, and underscores from the user's input and compare against stripped filenames (e.g., "logseq brain" matches `Projects___LogseqBrain.md`)
-   - If no match, try substring: check if the user's input is contained within any project page name
+1. **Find the project page.** Glob for `pages/Projects___*.md` in the graph folder to get all project pages. Extract the project name from each filename by removing the `Projects___` prefix and `.md` suffix. Then match the user's input against these names using this strategy (stop at the first match):
+   - **Exact match**: user input equals the project name exactly
+   - **Case-insensitive**: lowercased user input equals lowercased project name
+   - **Fuzzy**: strip all spaces, hyphens, and underscores from BOTH the user's input and each project name, then compare lowercased versions (e.g., "chivalric quest" → "chivalricquest" matches "ChivalricQuest" → "chivalricquest")
+   - **Substring**: check if the lowercased, stripped user input is contained within the lowercased, stripped project name (e.g., "quest" matches "ChivalricQuest")
    - If still no match or multiple matches, list all available project pages and let the user pick
    - If no project pages exist at all, tell the user: "No projects in the brain yet. Use 'init brain project [name]' to create one."
 
