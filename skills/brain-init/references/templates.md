@@ -1,5 +1,20 @@
 # Page Templates
 
+## Logseq Format Rules
+
+All content written to the graph MUST follow these rules:
+
+1. **Outliner format**: Every line of content must be a bullet point (starting with `- `). No bare paragraphs.
+2. **Properties**: Use `key:: value` format. Properties go at the top of the page (page-level) or as children of a bullet (block-level).
+3. **Headings**: Use `- ## Heading` (bullet + markdown heading). Never a bare `## Heading` without the bullet prefix.
+4. **Indentation**: Use two spaces per indent level. Children are indented under their parent bullet.
+5. **Links**: Use `[[Page Name]]` for internal links. For namespaced pages: `[[Projects/PageName]]`.
+6. **Dates**: Always `yyyy-MM-dd` format (e.g., `2026-04-12`).
+7. **File names**: Use triple underscore `___` for namespace separators in filenames (e.g., `Projects___Globus.md` → appears as `Projects/Globus` in Logseq).
+8. **Journal filenames**: Use underscores in dates: `yyyy_MM_dd.md` (e.g., `2026_04_12.md`).
+9. **Emphasis/bold**: Use markdown `**bold**` and `_italic_` within bullet text. Logseq renders these.
+10. **Placeholders**: Use `_italic text_` for placeholder/empty sections (e.g., `_No active plan yet._`).
+
 ## Project Page Template
 
 Use this when creating a new project page via brain-init.

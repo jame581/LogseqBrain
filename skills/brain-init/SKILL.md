@@ -71,7 +71,7 @@ last-updated:: {{today}}
   - _Decisions that span multiple projects or are general in nature._
 ```
 
-5. Create the `journals/` directory (empty — will be populated by brain-save).
+5. Create the `journals/` directory with a `.gitkeep` file to ensure it persists in version control. Use `mkdir -p` via Bash or create `journals/.gitkeep` with the Write tool. This directory must exist before brain-save can write journal entries — do not skip this step.
 
 Replace `{{today}}` with the current date in `yyyy-MM-dd` format.
 
@@ -98,4 +98,8 @@ Always use `yyyy-MM-dd` format for dates (e.g., `2026-04-12`). This matches Logs
 
 ## Important Notes
 
-- All page filenames use triple underscor
+- All page filenames use triple underscore `___` for namespace separators (Logseq convention)
+- Properties use Logseq's `key:: value` format on bullet points
+- All content must be in bullet point (outliner) format — this is how Logseq works
+- Links between pages use `[[Page Name]]` or `[[Namespace/Page Name]]` syntax
+- When creating the `journals/` directory, use Bash (`mkdir -p`) or Write tool to ensure it exists — do not skip this step

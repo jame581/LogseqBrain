@@ -23,7 +23,13 @@ The user's ClaudeBrain Logseq graph folder must be accessible.
 
 When the user says "load [project name]" or similar:
 
-1. **Find the project page.** Look for `pages/Projects___<ProjectName>.md` in the graph folder. If the exact name doesn't match, list available project pages from the `pages/` directory and let the user pick. Match case-insensitively.
+1. **Find the project page.** Look for `pages/Projects___<ProjectName>.md` in the graph folder using this matching strategy:
+   - First, try an exact match: `pages/Projects___<ProjectName>.md`
+   - If no match, try case-insensitive: glob for `pages/Projects___*.md` and compare lowercased names
+   - If no match, try fuzzy: strip spaces, hyphens, and underscores from the user's input and compare against stripped filenames (e.g., "logseq brain" matches `Projects___LogseqBrain.md`)
+   - If no match, try substring: check if the user's input is contained within any project page name
+   - If still no match or multiple matches, list all available project pages and let the user pick
+   - If no project pages exist at all, tell the user: "No projects in the brain yet. Use 'init brain project [name]' to create one."
 
 2. **Read the project page.** Parse the full content including:
    - Properties (type, status, last-updated)
@@ -63,4 +69,8 @@ When the user asks "what do we know about X" or wants to find something:
 ## Important Notes
 
 - Be selective about what to load. Don't read every page — only what's relevant to the user's request. Token budget matters.
-- After loading, confirm what context is now available a
+- After loading, confirm what context is now available and suggest what the user can do next.
+- All content in the graph uses Logseq outliner format (bullet points). Properties use `key:: value` format.
+- Page links use `[[Page Name]]` or `[[Namespace/Page Name]]` syntax.
+- File names use triple underscore `___` for namespace separators.
+- If a project page is empty or has only placeholder text, let the user know and suggest using brain-save to populate it.

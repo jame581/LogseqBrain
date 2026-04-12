@@ -55,27 +55,33 @@ If implementation notes, setup instructions, or technical details were discussed
 
 1. **Identify the target project.** Determine which project this session was about. If unclear, ask the user. If work spanned multiple projects, save to each relevant project page.
 
-2. **Read the current project page** to understand existing content and avoid duplicates.
+2. **Verify the project page exists.** Check that `pages/Projects___<ProjectName>.md` is present in the graph folder. If it does not exist:
+   - Tell the user: "No project page found for [name]. Would you like me to create one first?"
+   - If the user agrees, follow the brain-init "Adding a New Project" flow to create the page, then continue with the save.
+   - If the user declines, ask which existing project to save to (list available projects from the `pages/` directory).
+   - Never write session data to a non-existent project page.
 
-3. **Prepare the updates.** Draft what will be added/modified for each section.
+3. **Read the current project page** to understand existing content and avoid duplicates.
 
-4. **Write the updates** using the Edit tool to surgically update specific sections:
+4. **Prepare the updates.** Draft what will be added/modified for each section.
+
+5. **Write the updates** using the Edit tool to surgically update specific sections:
    - Append new session log entries to the Session Log section
    - Append new decisions to the Decisions section
    - Replace the Current Plan section if the plan changed
    - Update Implementation section if needed
    - Update the `last-updated::` property to today's date
 
-5. **Update the journal.** Create or append to today's journal file at `journals/yyyy_MM_dd.md` (using underscores in the date). Add a brief cross-reference:
+6. **Update the journal.** Create or append to today's journal file at `journals/yyyy_MM_dd.md` (using underscores in the date). Add a brief cross-reference:
 
 ```markdown
 - ## Sessions
   - [[Projects/ProjectName]]: Brief summary of session
 ```
 
-6. **Update Index if needed.** If a project status changed or new cross-project information emerged, update `pages/Index.md`.
+7. **Update Index if needed.** If a project status changed or new cross-project information emerged, update `pages/Index.md`.
 
-7. **Confirm to the user** what was saved, in plain language. Example: "Saved to brain: session log for today's work on the price calculator, plus the decision to use the strategy pattern."
+8. **Confirm to the user** what was saved, in plain language. Example: "Saved to brain: session log for today's work on the price calculator, plus the decision to use the strategy pattern."
 
 ## Important Notes
 
@@ -85,4 +91,6 @@ If implementation notes, setup instructions, or technical details were discussed
 - Dates always in `yyyy-MM-dd` format.
 - Page links use `[[Projects/PageName]]` syntax.
 - File names use triple underscore `___` for namespace separators.
-- When appendi
+- When appending to a section, place new entries at the end of the existing content in that section (before the next `##` heading).
+- Never overwrite the entire project page — only update the specific sections that changed.
+- If the `journals/` directory doesn't exist, create it before writing the journal entry.
