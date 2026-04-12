@@ -1,0 +1,9 @@
+{
+  "name": "logseq-brain",
+  "version": "0.1.0",
+  "description": "Persistent memory for Claude using a dedicated Logseq graph. Save and load project context, decisions, and progress across sessions and devices.",
+  "author": {
+    "name": "Jan"
+  },
+  "keywords": ["logseq", "memory", "brain", "persistence", "sync"]
+}
