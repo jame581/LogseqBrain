@@ -45,12 +45,24 @@ When the user says "load [project name]" or similar:
 
 5. **Check for active Jira tasks.** If the project's Current Plan section references Jira task IDs (e.g., PROJ-1234), and the task folder is accessible, optionally read the task's `plan.md` to provide richer context. Only do this in full mode or if the user specifically asks about a task. In brief mode, just mention the task IDs and their status.
 
-6. **Present a context summary** to confirm what was loaded. Format it conversationally:
-   - Project name and status
+6. **Check for stale context.** Compare the `last-updated::` property to today's date.
+   - If last updated **more than 14 days ago**: flag prominently — "⚠ This project hasn't been updated in [N] days. Context may be outdated — verify before acting on it."
+   - If last updated **7–14 days ago**: note gently — "Note: last updated [N] days ago."
+   - If the project `status::` is `active` but it's been stale for 30+ days, suggest: "This project is marked active but hasn't been touched in a month. Want to update it or mark it paused?"
+
+7. **Surface session continuity hints.** Look at the most recent Session Log entry and extract:
+   - **What was last worked on**: the summary line of the last session
+   - **Open questions**: if the last entry has an `open-questions::` property, surface those prominently — "Last time, you left these open: [questions]"
+   - **Blockers**: if the last entry mentions blockers, surface them
+   - Frame it as: "Picking up where you left off — last session ([date]): [summary]. Open questions: [list]"
+   - If there are no open questions or blockers, just state where things left off
+
+8. **Present a context summary** to confirm what was loaded. Format it conversationally:
+   - Project name, status, and staleness warning (if any)
    - What the current plan/task is
-   - Key recent decisions
-   - Where things left off (last session log entry)
-   - Any blockers or open questions noted
+   - Continuity hint: where things left off and open questions
+   - Key recent decisions (full mode only, or if few)
+   - Suggested next actions based on the plan and open questions
 
 ## Loading General Context
 

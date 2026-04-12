@@ -62,6 +62,18 @@ Format:
     - status:: accepted
 ```
 
+**Decision conflict detection:** Before appending a new decision, read the existing Decisions section of the project page (and `pages/Decisions.md` for cross-project decisions). Check if any existing decision contradicts or is superseded by the new one. Look for:
+- Decisions about the same topic or component (e.g., two decisions about which auth library to use)
+- Decisions where the new `rationale::` would invalidate the old one
+- Decisions with `status:: accepted` that the new decision reverses
+
+If a conflict is found:
+- Surface it to the user: "This new decision conflicts with an earlier one: [old decision title] from [date]. The old decision said [summary]. Want me to mark the old one as `status:: superseded` and add the new one?"
+- If the user confirms, update the old decision's `status:: superseded` and add a `superseded-by:: [new decision title]` property
+- Then append the new decision normally
+
+If no conflict is found, append the new decision without asking.
+
 ### 3. Plan Updates (save when plans changed)
 If a new plan was created or an existing one was modified, update the **Current Plan** section of the project page. Replace the existing plan content — don't append, since there should be one current plan.
 
@@ -140,6 +152,18 @@ Do NOT save to Meta:
 8. **Update Index if needed.** If a project status changed or new cross-project information emerged, update `pages/Index.md`.
 
 9. **Confirm to the user** what was saved, in plain language. List each thing that was written. Example: "Saved to brain: session log for today's work on the price calculator, the decision to use the strategy pattern, and added 'prefers strategy pattern over switch statements' to your Meta preferences."
+
+## Auto-Suggest Save
+
+Even when the user hasn't explicitly asked to save, Claude should suggest saving if ALL of these are true:
+- The session involved substantial work on a tracked project (not just a quick question)
+- Significant decisions, progress, or plans were discussed
+- The user hasn't already said "save to brain" during this session
+- The conversation seems to be wrapping up (user says "thanks", "that's it", "done for now", etc.)
+
+In this case, suggest: "We covered a lot today on [project]. Want me to save this to the brain before we wrap up?"
+
+This is a **suggestion only** — never auto-save without the user's confirmation. This respects the explicit-trigger design decision while preventing context loss.
 
 ## Important Notes
 
