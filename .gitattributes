@@ -1,0 +1,7 @@
+# Normalize line endings across OS
+* text=auto eol=lf
+
+# Ensure these are always LF
+*.md text eol=lf
+*.json text eol=lf
+*.edn text eol=lf
