@@ -51,13 +51,44 @@ Format:
     - status:: accepted
 ```
 
+**Cross-project decisions:** If a decision affects multiple projects or is general in nature (e.g., "we're standardizing on X across all projects"), also append it to `pages/Decisions.md` with a `projects::` property listing the affected projects:
+
+```markdown
+  - yyyy-MM-dd: Decision title
+    - projects:: [[Projects/ProjectA]], [[Projects/ProjectB]]
+    - context:: Why this came up
+    - alternatives:: What else was considered
+    - rationale:: Why this option was chosen
+    - status:: accepted
+```
+
 ### 3. Plan Updates (save when plans changed)
 If a new plan was created or an existing one was modified, update the **Current Plan** section of the project page. Replace the existing plan content — don't append, since there should be one current plan.
 
 ### 4. Implementation Details (save when significant)
 If implementation notes, setup instructions, or technical details were discussed that would be valuable in future sessions, update the **Implementation** section.
 
-### 5. User Preferences & Meta (save when discovered)
+### 5. Jira Task Context (save when tasks were worked on)
+If the session involved Jira tasks (identifiable by IDs like PROJ-1234, TEAM-567), capture the task context in the project page. This bridges external task management skills with the brain.
+
+**What to save:**
+- Add the task ID, title, and current status to the project's **Current Plan** section
+- Reference the task folder path if known (e.g., `Tasks\PROJ-1234\`)
+- Note key decisions or implementation details specific to the task
+- Add the task ID to the session log entry's `related-tickets::` property
+
+**Format for task entries in Current Plan:**
+```markdown
+  - PROJ-1234: Short task title
+    - status:: in-progress
+    - estimate:: 3 days
+    - task-folder:: Tasks\PROJ-1234\
+    - summary:: Brief description of what the task involves
+```
+
+**Do NOT duplicate the full plan or estimate** — those live in the task folder managed by the task management skill. The brain stores a summary and pointer, not a copy.
+
+### 6. User Preferences & Meta (save when discovered)
 If during the session you learn something new about the user's preferences, working style, tools, or conventions — and it's not already in `pages/Meta.md` — update the Meta page. Examples:
 - User prefers a specific code style or naming convention
 - User mentions their tech stack or commonly used tools
@@ -73,7 +104,12 @@ Do NOT save to Meta:
 
 ## Save Process
 
-1. **Identify the target project.** Determine which project this session was about. If unclear, ask the user. If work spanned multiple projects, save to each relevant project page.
+1. **Identify the target project(s).** Determine which project(s) this session was about. Look for clues:
+   - Project names or Jira board prefixes mentioned in conversation
+   - Files or repos discussed that map to known projects
+   - Explicit user statements ("we're working on [project name]")
+   
+   If work spanned multiple projects, save to each relevant project page — write a session log entry and any applicable decisions to each. If unclear, ask the user: "This session touched on [X] and [Y]. Should I save to both, or just one?"
 
 2. **Verify the project page exists.** Check that `pages/Projects___<ProjectName>.md` is present in the graph folder. If it does not exist:
    - Tell the user: "No project page found for [name]. Would you like me to create one first?"

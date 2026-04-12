@@ -79,7 +79,7 @@ Confirm to the user that the graph is ready and they can open it in Logseq.
 
 ## Adding a New Project
 
-When the user wants to add a project (e.g., "add Globus to brain", "init brain project Godot"):
+When the user wants to add a project (e.g., "add MyProject to brain", "init brain project GameDev"):
 
 1. Determine the project name from the user's request.
 

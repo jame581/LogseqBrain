@@ -13,7 +13,7 @@ This plugin turns a Logseq graph into Claude's external brain. Claude can read f
 1. Create a new Logseq graph called "ClaudeBrain" (or any name you prefer)
 2. Install this plugin in Claude (accept the `.plugin` file)
 3. Say "init brain" — Claude will ask you to select the graph folder
-4. Say "init brain project Globus" to add your first project
+4. Say "init brain project MyProject" to add your first project
 
 ### Claude Code / CLI
 
@@ -29,10 +29,11 @@ This plugin turns a Logseq graph into Claude's external brain. Claude can read f
 
 **brain-init** — Set up the graph for the first time, or add a new project.
 - "init brain" — creates the graph structure (Index, Meta, Decisions pages)
-- "init brain project Globus" — adds a new project page
+- "init brain project MyProject" — adds a new project page
 
 **brain-load** — Load project context into the current session.
-- "load Globus" — loads the Globus project context
+- "load MyProject" — loads the project context (brief mode by default)
+- "load MyProject full" — loads everything including decisions, implementation, linked tasks
 - "load brain" — loads a high-level overview of all projects
 - "what do we know about strategy pattern" — searches across the graph
 
@@ -40,6 +41,13 @@ This plugin turns a Logseq graph into Claude's external brain. Claude can read f
 - "save to brain" — saves decisions, progress, and plans from this session
 - "save progress" — same as above
 - "remember this" — save specific information
+- Automatically detects multi-project sessions and Jira task context
+- Updates Meta.md when new user preferences are discovered
+
+**brain-status** — Quick dashboard of all projects.
+- "brain status" — shows all projects with status, last activity, current focus
+- "show projects" — same as above
+- Flags stale projects that haven't been updated recently
 
 ## Graph Structure
 
@@ -49,6 +57,6 @@ ClaudeBrain/
 │   ├── Index.md                    ← master index
 │   ├── Meta.md                     ← your preferences and conventions
 │   ├── Decisions.md                ← cross-project decisions
-│   └── Projects___Globus.md        ← project pages (namespace: Projects/)
+│   └── Projects___MyProject.md     ← project pages (namespace: Projects/)
 ├── journals/
 │   └── 2026_04_12.md    

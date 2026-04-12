@@ -3,7 +3,7 @@
 ## Current State: MVP (v0.1.0)
 
 Three skills shipped: `brain-init`, `brain-load`, `brain-save`.
-Graph initialized at `E:\Loqsec\ClaudeBrain`, repo pushed to GitHub.
+Graph initialized, repo pushed to GitHub.
 Save/load cycle tested and working.
 
 ---
@@ -51,7 +51,7 @@ Make brain-load smarter and brain-save more comprehensive.
 ### 2.2 Smart context budgeting in brain-load
 - When loading a project, estimate token count of each section
 - Prioritize: Current Plan > recent Session Log > Decisions > Implementation > Overview
-- Allow user to say "load Globus full" vs "load Globus brief"
+- Allow user to say "load [project] full" vs "load [project] brief"
 
 ### 2.3 Richer session log entries
 - Track which files were modified during a session
@@ -69,15 +69,15 @@ Make brain-load smarter and brain-save more comprehensive.
 
 Connect the brain to existing workflows.
 
-### 3.1 Unicorn-tasks integration
-- When unicorn-tasks creates a plan/estimate for a Jira ticket, auto-save to the project's brain page
+### 3.1 External task skill integration
+- When a task management skill creates a plan/estimate for a Jira ticket, auto-save to the project's brain page
 - When brain-load loads a project, include active Jira task context
 - Bridge between task-level work and project-level knowledge
 
 ### 3.2 Multi-project session support
 - Support sessions that span multiple projects
 - brain-save should detect which projects were discussed and write to each
-- brain-load should allow loading multiple projects: "load Globus and Godot"
+- brain-load should allow loading multiple projects: "load ProjectA and ProjectB"
 
 ### 3.3 Cross-project decision log
 - Decisions that affect multiple projects go to `pages/Decisions.md`
@@ -143,7 +143,7 @@ Prepare for Logseq's database migration and public release.
 |----------|------|-----|
 | 🔴 P0 | 1.1–1.4 (harden MVP) | Bugs and missing guards — fix before building more |
 | 🟠 P1 | 2.1 (cross-project search) | High value, brain-load already describes it |
-| 🟠 P1 | 3.1 (unicorn-tasks integration) | Connects to Jan's daily workflow immediately |
+| 🟠 P1 | 3.1 (task skill integration) | Connects to daily workflow immediately |
 | 🟡 P2 | 2.2–2.4 (smarter load/save) | Quality-of-life improvements |
 | 🟡 P2 | 3.2–3.4 (multi-project) | Needed once multiple projects are tracked |
 | 🟢 P3 | 4.x (intelligence layer) | Nice-to-have, adds polish |

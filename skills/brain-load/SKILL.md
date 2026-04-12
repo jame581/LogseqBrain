@@ -2,7 +2,7 @@
 name: brain-load
 description: >
   Load project context from the Claude Brain Logseq graph into the current session.
-  Use when the user says "load brain", "load Globus", "load project X",
+  Use when the user says "load brain", "load [project name]", "load project X",
   "what do we know about X", "get context for X", "brain context",
   "continue work on X", or wants to restore project knowledge from a previous session.
 ---
@@ -43,7 +43,9 @@ When the user says "load [project name]" or similar:
 
 4. **Read today's journal entry** if it exists (`journals/yyyy_MM_dd.md` using today's date with underscores). This may have session notes from earlier today.
 
-5. **Present a context summary** to confirm what was loaded. Format it conversationally:
+5. **Check for active Jira tasks.** If the project's Current Plan section references Jira task IDs (e.g., PROJ-1234), and the task folder is accessible, optionally read the task's `plan.md` to provide richer context. Only do this in full mode or if the user specifically asks about a task. In brief mode, just mention the task IDs and their status.
+
+6. **Present a context summary** to confirm what was loaded. Format it conversationally:
    - Project name and status
    - What the current plan/task is
    - Key recent decisions
@@ -62,14 +64,14 @@ When the user says "load brain" without specifying a project:
 
 By default, load in **brief** mode — prioritize the most useful sections to keep token usage low.
 
-**Brief mode** (default — "load Globus"):
+**Brief mode** (default — "load [project]"):
 1. Properties (type, status, last-updated)
 2. Overview (first 5 bullets only)
 3. Current Plan (full)
 4. Session Log (last 3 entries only)
 5. Skip Implementation and Decisions unless the user asks
 
-**Full mode** ("load Globus full", "load everything about Globus"):
+**Full mode** ("load [project] full", "load everything about [project]"):
 1. All properties
 2. Full Overview
 3. Full Current Plan
