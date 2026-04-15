@@ -1,0 +1,95 @@
+name: Bug report
+description: Report a bug in a brain skill, graph interaction, or plugin installation.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a problem.
+        Please include enough detail for someone new to the issue to reproduce it.
+  - type: dropdown
+    id: skill
+    attributes:
+      label: Affected skill
+      description: Which brain skill is involved?
+      options:
+        - brain-init
+        - brain-load
+        - brain-save
+        - brain-status
+        - Plugin packaging or installation
+        - Documentation
+        - Other / unsure
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: AI platform
+      description: Where did you hit the issue?
+      options:
+        - Claude Code
+        - GitHub Copilot CLI
+        - Gemini CLI
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: logseq_version
+    attributes:
+      label: Logseq version
+      description: Desktop Logseq version, if relevant.
+      placeholder: e.g. 0.10.9
+  - type: dropdown
+    id: sync
+    attributes:
+      label: Logseq Sync
+      description: Is the affected graph synced across devices?
+      options:
+        - Yes, Logseq Sync enabled
+        - Yes, other sync (Git, Syncthing, iCloud, etc.)
+        - No, single device
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: List the exact steps needed to reproduce the issue.
+      placeholder: |
+        1. Run "load <project>" / "save to brain" / ...
+        2. Observe...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: Describe what you expected to happen.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      placeholder: Describe what happened instead. Include any corrupted page contents if relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs, screenshots, or page snippets
+      description: Paste output from the agent, or the affected page markdown.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Confirmations
+      options:
+        - label: I searched existing issues before opening this report.
+          required: true
+        - label: I included enough detail for reproduction.
+          required: true
