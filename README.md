@@ -6,29 +6,46 @@ Persistent memory for Claude using a dedicated Logseq graph. Save and load proje
 
 This plugin turns a Logseq graph into Claude's external brain. Claude can read from and write to the graph, storing project plans, decisions, implementation details, and session logs. Because Logseq syncs across devices, your Claude context travels with you — start a task on your desktop, continue on your notebook.
 
-## Setup
+## Install
+
+Logseq Brain ships through the [**skillsmith**](https://github.com/jame581/skillsmith) marketplace.
+
+### Claude Code
+
+```
+/plugin marketplace add jame581/skillsmith
+/plugin install logseq-brain@skillsmith
+```
+
+### GitHub Copilot CLI
+
+```
+copilot plugin marketplace add jame581/skillsmith
+copilot plugin install logseq-brain@skillsmith
+```
+
+### Gemini CLI
+
+```
+gemini extensions install https://github.com/jame581/LogseqBrain
+```
 
 ### Cowork (Desktop App)
 
-1. Create a new Logseq graph called "ClaudeBrain" (or any name you prefer)
-2. Install this plugin in Claude (accept the `.plugin` file)
-3. Say "init brain" — Claude will ask you to select the graph folder
-4. Say "init brain project MyProject" to add your first project
+1. Create a new Logseq graph called "ClaudeBrain" (or any name you prefer).
+2. Install this plugin in Claude (accept the `.plugin` file).
+3. Say "init brain" — Claude will ask you to select the graph folder.
+4. Say "init brain project MyProject" to add your first project.
 
-### Claude Code / CLI
+## Setup
 
-1. Create a new Logseq graph called "ClaudeBrain".
-2. Install the plugin via a marketplace. In Claude Code:
-   ```
-   /plugin marketplace add jame581/<marketplace-repo>
-   /plugin install logseq-brain@<marketplace-name>
-   ```
-   (Replace `<marketplace-repo>` and `<marketplace-name>` with the marketplace that lists this plugin.)
-3. Set the graph path (pick one):
-   - Environment variable: `export LOGSEQ_BRAIN_PATH=/path/to/ClaudeBrain`
-   - Config file: create `.brain-config.json` in the plugin root with `{"graphPath": "/path/to/ClaudeBrain"}`
-   - Or just tell Claude the path when prompted
-4. Say "init brain" to set up the graph structure.
+After installing, create a Logseq graph (e.g. "ClaudeBrain") and tell the plugin where to find it. Pick one:
+
+- **Environment variable**: `export LOGSEQ_BRAIN_PATH=/path/to/ClaudeBrain`
+- **Config file**: create `.brain-config.json` in the plugin root with `{"graphPath": "/path/to/ClaudeBrain"}`
+- **Just tell Claude the path** when prompted
+
+Then say **"init brain"** to set up the graph structure, and **"init brain project MyProject"** to add your first project.
 
 ## Skills
 
