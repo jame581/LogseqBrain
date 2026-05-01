@@ -33,11 +33,11 @@ Examples:
 
    Then stop.
 
-4. **If the journal file exists but lacks `## Activity`:** insert `- ## Activity` after the last bullet of `## Sessions` (or at end of file if `## Sessions` is also missing). Then append the new bullet under it.
+4. **If the journal file exists but lacks `## Activity`:** insert a new top-level bullet `- ## Activity` after the **entire** `## Sessions` block — i.e., immediately before the next top-level `- ##` heading, or at end of file if `## Sessions` is the last block (or missing entirely). The insertion must be at indent 0 (no leading spaces), regardless of how deeply `## Sessions` is nested at the time. Then append the new bullet as a child at indent 2.
 
-5. **If the journal file exists with `## Activity`:** append a child bullet at the end of the `## Activity` section, before the next `##` heading or end of file.
+5. **If the journal file exists with `## Activity`:** append a child bullet at the end of the `## Activity` section, before the next top-level `- ##` heading or end of file.
 
-   Surgical Edit pattern: locate the last bullet under `## Activity`, replace it with `<old_last_bullet>\n  - <activity-line>`. Or if the section is empty, replace `- ## Activity\n` with `- ## Activity\n  - <activity-line>\n`.
+   Surgical Edit anchoring: the `old_string` must be unique within the file, so don't use just the last bullet's text (it may repeat — e.g., two `viewed dashboard` calls in a day). Read the last 3 lines of the `## Activity` section and use the multi-line block as `old_string`; replace with the same block plus the new bullet appended (indent 2). If the section is empty, the unique anchor is `- ## Activity\n` followed by the next top-level `- ##` heading or end of file — replace `- ## Activity\n` with `- ## Activity\n  - <activity-line>\n`.
 
 ## Format rules
 
