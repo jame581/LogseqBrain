@@ -1,10 +1,10 @@
 ---
 name: brain-init
 description: >
-  Initialize the Claude Brain Logseq graph or create a new project within it.
-  Use when the user says "init brain", "setup brain", "create brain graph",
-  "new brain project", "add project to brain", or wants to set up the Logseq
-  memory system for the first time or add a new project to it.
+  Set up the Claude Brain Logseq graph (first-time) or add a new project page.
+  Triggers: "init brain", "setup brain", "init brain project <name>", "add
+  project to brain". Don't fire for loads, saves, or status checks — those are
+  handled by brain-load, brain-save, and brain-status.
 ---
 
 # Brain Init
@@ -13,13 +13,7 @@ Initialize the Claude Brain Logseq graph or add a new project page to an existin
 
 ## Prerequisites
 
-The user's ClaudeBrain Logseq graph folder must be accessible.
-
-**In Cowork:** If no folder is connected, use `request_cowork_directory` to ask the user to select their ClaudeBrain graph folder.
-
-**In Claude Code / CLI:** The user should provide the graph path, or it can be read from the `LOGSEQ_BRAIN_PATH` environment variable. If neither is available, check for a `.brain-config.json` file in the plugin root with `{"graphPath": "/path/to/ClaudeBrain"}`. As a last resort, ask the user for the path.
-
-Store the resolved folder path — all other brain skills depend on it.
+Resolve the graph path per `skills/_shared/path-resolution.md`. If the resolved folder is empty or missing core files, this skill performs first-time setup (below). Otherwise it adds a new project to the existing graph.
 
 ## First-Time Graph Setup
 
@@ -77,6 +71,8 @@ Replace `{{today}}` with the current date in `yyyy-MM-dd` format.
 
 Confirm to the user that the graph is ready and they can open it in Logseq.
 
+After confirmation, write a journey-log entry per `skills/_shared/journey-log.md` with the activity line: `initialized graph at <graphPath>`.
+
 ## Adding a New Project
 
 When the user wants to add a project (e.g., "add MyProject to brain", "init brain project GameDev"):
@@ -91,6 +87,8 @@ When the user wants to add a project (e.g., "add MyProject to brain", "init brai
 4. Ask the user for a brief description and any initial context for the project (tech stack, repo location, key info). Populate the Overview section.
 
 Confirm the project page was created and remind the user they can now use "save to brain" during work sessions and "load [project]" to restore context.
+
+After confirmation, write a journey-log entry per `skills/_shared/journey-log.md` with the activity line: `created project [[Projects/<ProjectName>]]`.
 
 ## Date Format
 
