@@ -31,7 +31,7 @@
 - Save/load cycle against a Logseq graph
 - Initial graph layout (`pages/`, `journals/`, `Index.md`, `Meta.md`)
 
-## Current — v0.6.0 (in design)
+## Current — v0.6.0 (implementation complete, pending validation + release)
 
 - **Journey log** — one-line activity trail in today's journal `## Activity` section, written by every brain skill use (init, load, save, status, search). Existing rich `## Sessions` summary preserved.
 - **Token-frugality pass** — progressive disclosure (split each `SKILL.md` into compact orchestrator + per-skill `references/` + cross-skill `skills/_shared/`); section-targeted reads in brain-load brief mode; grep-anchored targeted reads in brain-save.
