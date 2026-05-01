@@ -36,13 +36,7 @@ Six categories — see `references/categories.md` for each one's format and rule
    - If no, list available projects and let the user pick.
    - Never write session data to a non-existent project page.
 
-3. **Read the current project page selectively.** Don't read the whole file — for each section you need to update or check (Session Log, Decisions, Current Plan, Implementation):
-
-   1. Run Grep with `output_mode: "content"`, `-n: true`, pattern `^- ## (Session Log|Decisions|Current Plan|Implementation)` against the project file. This returns the line number of each section heading.
-   2. For each section you need: Read with offset = section line, limit = (next-section-line - section-line) or ~50 lines if it's the last section.
-   3. Use the section content to (a) detect duplicates before appending, (b) anchor the Edit `old_string` with enough context to be unique.
-
-   For very large project pages (1000+ lines), this avoids reading 1000 lines just to append 5.
+3. **Read the current project page selectively** using the section-targeted-read pattern in `skills/_shared/section-locator.md`. Read only the sections you'll touch (Session Log, Decisions, Current Plan, Implementation) — never the whole file. The read serves two purposes: detect duplicates before appending, and provide enough surrounding lines for the Edit `old_string` to be unique.
 
 4. **Prepare the updates** for each applicable category from `references/categories.md`.
 

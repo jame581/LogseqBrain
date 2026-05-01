@@ -21,12 +21,7 @@ When the user says "load <project>" or similar:
 
 1. **Find the project page** using the algorithm in `references/matching.md`.
 
-2. **Read the matched project page** using section-targeted reads:
-
-   - **Properties block:** Read the first 10 lines of the file (offset 0, limit 10) — page-level properties live at the top before any `## Heading`.
-   - **For each section needed in the current mode** (see "Load Modes"): use Grep with `output_mode: "content"`, `-n: true`, and a pattern of `^- ## <SectionName>` against the project file to get the section's start line. Then Read with offset = that line, and limit = ~30 lines (or until the next `^- ## ` line, whichever comes first).
-   - **Avoid full-page reads in brief mode.** A project page with a long Session Log can be 1000+ lines; brief mode should never read more than ~80 lines total.
-   - **Full mode** still reads section-by-section but doesn't skip any sections — it just doesn't do a single big Read either.
+2. **Read the matched project page** using the section-targeted-read pattern in `skills/_shared/section-locator.md`. In brief mode, read only Properties + Overview + Current Plan + last 3 Session Log entries (target ≤80 total lines). In full mode, read all sections but still section-by-section, never as a single big Read.
 
 3. **Read related context** (full mode only). Follow `[[link]]` references inside the project page if they're critical (e.g., a linked design doc). Skip in brief mode.
 
