@@ -19,9 +19,8 @@ Resolve the graph path per `skills/_shared/path-resolution.md`.
 
 1. **List all projects.** Glob for `pages/Projects___*.md` in the graph folder. Extract project names.
 
-2. **Read each project page selectively.** Use the section-targeted-read pattern (see `skills/brain-load/SKILL.md`) to extract:
-   - `status::` property (top of file)
-   - `last-updated::` property (top of file)
+2. **Read each project page selectively** using the section-targeted-read pattern in `skills/_shared/section-locator.md`. For the dashboard you only need:
+   - `status::` and `last-updated::` properties (in the property block at offset 0, limit 10)
    - First bullet of `## Current Plan` (current focus)
    - Last entry of `## Session Log` (when last touched, with any `open-questions::`)
 
