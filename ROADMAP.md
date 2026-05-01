@@ -2,6 +2,14 @@
 
 ## Shipped
 
+### v0.6.0 — Journey log + token frugality
+- Journey log (`## Activity` section in today's journal, one bullet per brain skill use)
+- Progressive disclosure: each `SKILL.md` split into orchestrator + per-skill `references/` + cross-skill `skills/_shared/` (path-resolution, journey-log, staleness, section-locator)
+- Section-targeted reads in brain-load (brief mode) and brain-save (grep-anchored) — meaningful token reduction on large project pages
+- Description tuning on all four skills (purpose-first frontmatter with explicit "Don't fire for X" scope boundaries)
+- ROADMAP rewrite (Shipped/Current/Future), CLAUDE.md `_shared/` convention, CONTRIBUTING.md v0.6.0 manual validation checklist
+- New `.brain-config.json` `journeyLog` toggle (default `true`)
+
 ### v0.5.0 — Intelligence layer
 - Stale-context detection on load
 - Decision conflict detection on save (mark old as `superseded`)
@@ -31,14 +39,11 @@
 - Save/load cycle against a Logseq graph
 - Initial graph layout (`pages/`, `journals/`, `Index.md`, `Meta.md`)
 
-## Current — v0.6.0 (implementation complete, pending validation + release)
+## Current — v0.7.0 (TBD)
 
-- **Journey log** — one-line activity trail in today's journal `## Activity` section, written by every brain skill use (init, load, save, status, search). Existing rich `## Sessions` summary preserved.
-- **Token-frugality pass** — progressive disclosure (split each `SKILL.md` into compact orchestrator + per-skill `references/` + cross-skill `skills/_shared/`); section-targeted reads in brain-load brief mode; grep-anchored targeted reads in brain-save.
-- **Description tuning** — tighter frontmatter on all four skills with explicit scope boundaries.
-- **Doc refresh** — this file. Plus a `_shared/` convention note in `CLAUDE.md`. Plus a v0.6.0 manual-validation checklist in `CONTRIBUTING.md`.
+No design yet. Open candidates from the Future list below will be promoted here once Logseq's roadmap clarifies which is closest to ready.
 
-See `docs/superpowers/specs/2026-05-01-v0.6.0-design.md` for the full design.
+See `docs/superpowers/specs/2026-05-01-v0.6.0-design.md` for the v0.6.0 design (now shipped).
 
 ## Future — informed by Logseq's own roadmap
 
