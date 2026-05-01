@@ -39,9 +39,14 @@
 - Save/load cycle against a Logseq graph
 - Initial graph layout (`pages/`, `journals/`, `Index.md`, `Meta.md`)
 
-## Current — v0.7.0 (TBD)
+## Current — v0.7.0 (backlog)
 
-No design yet. Open candidates from the Future list below will be promoted here once Logseq's roadmap clarifies which is closest to ready.
+Driven by v0.6.0 first-dogfood findings (2026-05-02):
+
+- **Durable config location.** `.brain-config.json` at the cache plugin root gets wiped on `/reload-plugins` or version bump, breaking path resolution between sessions. Replace with env-var-only contract (`LOGSEQ_BRAIN_PATH`) or a user config dir (`~/.config/logseq-brain/` on macOS/Linux, `%APPDATA%\logseq-brain\` on Windows). Touches `skills/_shared/path-resolution.md`, `CLAUDE.md`, `CONTRIBUTING.md`, and the README install instructions.
+- **Logseq normalization tolerance.** When Logseq parses journals/pages we wrote, it normalizes — drops `- ` from heading bullets, converts indents to tabs, strips empty `## Sessions` headings. Surgical Edits handle this fine via Read-before-Edit, but the algorithm prose in `skills/_shared/journey-log.md` and `skills/brain-save/SKILL.md` assumes our written format survives. Harden explicitly. Possible new `skills/_shared/logseq-format.md` adapter.
+
+Other open candidates from the Future list will be promoted here once Logseq's roadmap clarifies which is closest to ready.
 
 See `docs/superpowers/specs/2026-05-01-v0.6.0-design.md` for the v0.6.0 design (now shipped).
 
