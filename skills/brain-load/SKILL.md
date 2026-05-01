@@ -78,6 +78,6 @@ In brief mode, mention that more is available: "Loaded brief context. Say 'load 
 
 ## Important Notes
 
-- Be selective about reads. Token budget matters — see Task 6 for section-targeted-read patterns.
+- Be selective about reads. Token budget matters — use the section-targeted-read pattern in step 2 of "Loading a Specific Project" rather than reading whole pages.
 - After loading, confirm what's available and suggest next actions.
 - All graph content is Logseq outliner format. See `CLAUDE.md` for invariants.
