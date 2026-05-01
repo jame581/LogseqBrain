@@ -1,67 +1,57 @@
 ---
 name: brain-status
 description: >
-  Show a dashboard of all projects in the Claude Brain graph.
-  Use when the user says "brain status", "show projects", "what's in my brain",
-  "project dashboard", "brain overview", "list projects", or wants a quick
-  summary of all tracked projects and their current state.
+  Show a dashboard of all projects in the Claude Brain graph. Triggers: "brain
+  status", "show projects", "show brain", "what's in my brain", "project
+  dashboard", "brain overview", "list projects", "summary". Don't fire for loads
+  (use brain-load) or saves (use brain-save).
 ---
 
 # Brain Status
 
-Display a quick dashboard of all projects in the Claude Brain graph — status, last activity, active tasks, and blockers.
+Display a quick dashboard of all projects in the Claude Brain graph — status, last activity, current focus, blockers.
 
 ## Prerequisites
 
-The user's ClaudeBrain Logseq graph folder must be accessible.
-
-**In Cowork:** If no folder is connected, use `request_cowork_directory` to ask the user to select their ClaudeBrain graph folder.
-
-**In Claude Code / CLI:** The user should provide the graph path, or read it from the `LOGSEQ_BRAIN_PATH` environment variable, or from `.brain-config.json` in the plugin root (`{"graphPath": "..."}`). As a last resort, ask the user for the path.
+Resolve the graph path per `skills/_shared/path-resolution.md`.
 
 ## Dashboard Generation
 
 1. **List all projects.** Glob for `pages/Projects___*.md` in the graph folder. Extract project names.
 
-2. **Read each project page.** For each project, extract:
-   - `status::` property (active, paused, completed, archived)
-   - `last-updated::` property
-   - The first bullet of the **Current Plan** section (what's being worked on)
-   - The last entry of the **Session Log** section (when was the last session)
-   - Any `open-questions::` from the most recent session log entry
+2. **Read each project page selectively.** Use the section-targeted-read pattern (see `skills/brain-load/SKILL.md`) to extract:
+   - `status::` property (top of file)
+   - `last-updated::` property (top of file)
+   - First bullet of `## Current Plan` (current focus)
+   - Last entry of `## Session Log` (when last touched, with any `open-questions::`)
 
-3. **Read cross-project decisions.** Check `pages/Decisions.md` for any recent entries (last 30 days).
+3. **Apply staleness rules.** Use `skills/_shared/staleness.md` to flag stale or abandoned projects.
 
-4. **Read Meta.** Check `pages/Meta.md` for last-updated date.
+4. **Read cross-project decisions.** Check `pages/Decisions.md` for entries from the last 30 days.
 
-5. **Present the dashboard.** Format conversationally, like a standup summary:
+5. **Read Meta date.** Check `pages/Meta.md` `last-updated::` only — don't read the whole file.
 
-   For each project:
-   - Project name and status
-   - Last activity date
-   - Current focus (from plan)
-   - Open questions or blockers (if any)
+6. **Present the dashboard.** For each project: name, status, staleness annotation (if any), current focus, open questions/blockers. Then: recent cross-project decisions, total counts.
 
-   Then:
-   - Recent cross-project decisions (if any)
-   - Total project count and how many are active
+7. **Write a journey-log entry** per `skills/_shared/journey-log.md` with activity line: `viewed dashboard`.
 
 ## Example Output
 
-"Here's your brain status:
+```
+Here's your brain status:
 
 **LogseqBrain** (active, last updated 2026-04-12)
-Currently: Phase 2 — richer context and search features
+Currently: Phase 6 — token-frugality and journey log
 No blockers.
 
 **ChivalricQuest** (active, last updated 2026-04-12)
 Currently: No active plan yet.
 No blockers.
 
-2 projects tracked (2 active). No recent cross-project decisions."
+2 projects tracked (2 active). No recent cross-project decisions.
+```
 
 ## Important Notes
 
-- Keep the dashboard concise — this is a quick overview, not a deep load.
-- If a project hasn't been updated in over 14 days, flag it: "⚠ Last updated [N] days ago — may be stale."
-- If there are no projects yet, tell the user: "Your brain is empty. Use 'init brain project [name]' to add your first project."
+- Concise overview, not a deep load — bias toward fewer reads.
+- If no projects yet: "Your brain is empty. Use 'init brain project [name]' to add your first project."
