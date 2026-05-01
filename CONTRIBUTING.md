@@ -14,7 +14,7 @@ skills/
   brain-load/SKILL.md   # Load project context into a session
   brain-save/SKILL.md   # Surgical append of logs, decisions, plan updates
   brain-status/SKILL.md # Dashboard across all projects
-ROADMAP.md              # Source of truth for shipped vs planned work
+ROADMAP.md              # Shipped / Current / Future phases (verify shipped status by reading skills)
 CLAUDE.md               # Guidance for agents working in this repo
 ```
 
@@ -53,12 +53,29 @@ See [`CLAUDE.md`](./CLAUDE.md) for the full set of architectural constraints.
 
 ## Validating changes
 
-There is no test suite. Validation means running the skill against a real ClaudeBrain graph:
+There is no test suite. Validation is a manual round-trip against a scratch Logseq graph. Run this checklist before tagging a release.
 
-1. Point `LOGSEQ_BRAIN_PATH` (or `.brain-config.json`) at a throwaway Logseq graph.
-2. Trigger the skill via the agent (e.g. "load logseq-brain", "save to brain").
-3. Inspect the resulting pages in Logseq desktop — make sure bullets render, properties parse, links resolve.
-4. For `brain-save`, check that the Edit was surgical (no whole-page rewrite).
+### Setup
+
+```bash
+mkdir -p /tmp/scratch-brain
+export LOGSEQ_BRAIN_PATH=/tmp/scratch-brain
+```
+
+(On Windows: `$env:LOGSEQ_BRAIN_PATH = "C:\temp\scratch-brain"`.)
+
+### Checklist
+
+1. `init brain` — verify `pages/Index.md`, `Meta.md`, `Decisions.md`, `logseq/config.edn`, `journals/.gitkeep` are created. Verify today's journal is created with `## Sessions` (empty) and `## Activity` containing one bullet (`initialized graph at <path>`).
+2. `init brain project ScratchProject` — verify `pages/Projects___ScratchProject.md` is created. Verify a second `## Activity` bullet (`created project [[Projects/ScratchProject]]`).
+3. `save to brain — we decided to use X, made progress on Y, the user prefers Z` — verify session log + decision + Meta updates. Verify today's `## Sessions` gains a project link. Verify `## Activity` gains `saved [[Projects/ScratchProject]]`.
+4. `load ScratchProject` — verify brief-mode load. Verify `## Activity` gains `loaded [[Projects/ScratchProject]] (brief)`.
+5. `load ScratchProject full` — verify full-mode load. Verify `## Activity` gains `loaded [[Projects/ScratchProject]] (full)`.
+6. `brain status` — verify dashboard. Verify `## Activity` gains `viewed dashboard`.
+7. `what do we know about X` — verify search. Verify `## Activity` gains `searched "X" · N hits`.
+8. **Token check.** Add ~200 lines of fake Session Log entries to the project page. Re-run `load ScratchProject` (brief) and observe Read tool calls. Each Read should have a small `limit` (~30 lines). No full-file Reads.
+9. **Surgical edits.** For `brain-save`, confirm the Edit was anchored to a section (no whole-page rewrite).
+10. **Config toggle.** Set `.brain-config.json` `{"journeyLog": false}`. Re-run any of the above. Verify `## Activity` does NOT gain a new bullet. Restore to `journeyLog: true` and verify activity logging resumes.
 
 ## Releasing a new version
 
