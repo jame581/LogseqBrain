@@ -1,178 +1,74 @@
 ---
 name: brain-save
 description: >
-  Save session context, decisions, and progress to the Claude Brain Logseq graph.
-  Use when the user says "save to brain", "save this", "remember this",
-  "update brain", "save progress", "brain save", "store this decision",
-  or wants to persist the current session's work for future sessions.
+  Save session context, decisions, progress, and plans to the Claude Brain Logseq
+  graph. Triggers: "save to brain", "save this", "remember this", "store this
+  decision", "log this", "save progress", "before I quit", "wrap up". Don't fire
+  for read operations (use brain-load) or status checks (use brain-status).
 ---
 
 # Brain Save
 
-Write session context — decisions, progress, plans, implementation details — to the Claude Brain Logseq graph so it persists across sessions and devices.
+Persist session context — decisions, progress, plans, implementation details — to the Claude Brain Logseq graph for cross-session and cross-device continuity.
 
 ## Prerequisites
 
-The user's ClaudeBrain Logseq graph folder must be accessible.
-
-**In Cowork:** If no folder is connected, use `request_cowork_directory` to ask the user to select their ClaudeBrain graph folder.
-
-**In Claude Code / CLI:** The user should provide the graph path, or read it from the `LOGSEQ_BRAIN_PATH` environment variable, or from `.brain-config.json` in the plugin root (`{"graphPath": "..."}`). As a last resort, ask the user for the path.
+Resolve the graph path per `skills/_shared/path-resolution.md`.
 
 ## What to Save
 
-Review the current conversation and identify what should be persisted. Focus on these categories:
+Six categories — see `references/categories.md` for each one's format and rules. The orchestrator decides which apply based on what the session covered:
 
-### 1. Session Log Entry (always save this)
-A rich record of what was accomplished in this session. Append to the project page's **Session Log** section.
-
-Format:
-```markdown
-  - yyyy-MM-dd: Brief summary of what was done
-    - Detail about specific work
-    - Detail about another piece of work
-    - files-modified:: comma-separated list of key files changed (if applicable)
-    - skills-used:: comma-separated list of skills/tools used (if applicable)
-    - related-tickets:: comma-separated Jira ticket IDs (if applicable)
-    - open-questions:: any unresolved questions or blockers to carry forward
-```
-
-Include `files-modified`, `skills-used`, `related-tickets`, and `open-questions` properties only when they have meaningful values — don't add empty ones. These properties help future sessions understand not just what happened, but what was touched and what's still pending.
-
-### 2. Decisions (save when decisions were made)
-Any technical, architectural, or process decisions made during the session. Append to the project page's **Decisions** section.
-
-Format:
-```markdown
-  - yyyy-MM-dd: Decision title
-    - context:: Why this came up
-    - alternatives:: What else was considered
-    - rationale:: Why this option was chosen
-    - status:: accepted
-```
-
-**Cross-project decisions:** If a decision affects multiple projects or is general in nature (e.g., "we're standardizing on X across all projects"), also append it to `pages/Decisions.md` with a `projects::` property listing the affected projects:
-
-```markdown
-  - yyyy-MM-dd: Decision title
-    - projects:: [[Projects/ProjectA]], [[Projects/ProjectB]]
-    - context:: Why this came up
-    - alternatives:: What else was considered
-    - rationale:: Why this option was chosen
-    - status:: accepted
-```
-
-**Decision conflict detection:** Before appending a new decision, read the existing Decisions section of the project page (and `pages/Decisions.md` for cross-project decisions). Check if any existing decision contradicts or is superseded by the new one. Look for:
-- Decisions about the same topic or component (e.g., two decisions about which auth library to use)
-- Decisions where the new `rationale::` would invalidate the old one
-- Decisions with `status:: accepted` that the new decision reverses
-
-If a conflict is found:
-- Surface it to the user: "This new decision conflicts with an earlier one: [old decision title] from [date]. The old decision said [summary]. Want me to mark the old one as `status:: superseded` and add the new one?"
-- If the user confirms, update the old decision's `status:: superseded` and add a `superseded-by:: [new decision title]` property
-- Then append the new decision normally
-
-If no conflict is found, append the new decision without asking.
-
-### 3. Plan Updates (save when plans changed)
-If a new plan was created or an existing one was modified, update the **Current Plan** section of the project page. Replace the existing plan content — don't append, since there should be one current plan.
-
-### 4. Implementation Details (save when significant)
-If implementation notes, setup instructions, or technical details were discussed that would be valuable in future sessions, update the **Implementation** section.
-
-### 5. Jira Task Context (save when tasks were worked on)
-If the session involved Jira tasks (identifiable by IDs like PROJ-1234, TEAM-567), capture the task context in the project page. This bridges external task management skills with the brain.
-
-**What to save:**
-- Add the task ID, title, and current status to the project's **Current Plan** section
-- Reference the task folder path if known (e.g., `Tasks\PROJ-1234\`)
-- Note key decisions or implementation details specific to the task
-- Add the task ID to the session log entry's `related-tickets::` property
-
-**Format for task entries in Current Plan:**
-```markdown
-  - PROJ-1234: Short task title
-    - status:: in-progress
-    - estimate:: 3 days
-    - task-folder:: Tasks\PROJ-1234\
-    - summary:: Brief description of what the task involves
-```
-
-**Do NOT duplicate the full plan or estimate** — those live in the task folder managed by the task management skill. The brain stores a summary and pointer, not a copy.
-
-### 6. User Preferences & Meta (save when discovered)
-If during the session you learn something new about the user's preferences, working style, tools, or conventions — and it's not already in `pages/Meta.md` — update the Meta page. Examples:
-- User prefers a specific code style or naming convention
-- User mentions their tech stack or commonly used tools
-- User expresses a preference for how Claude should behave (e.g., "don't summarize at the end", "keep responses short")
-- User shares conventions about their workflow (e.g., "I always branch off develop")
-
-Read `pages/Meta.md` first to check what's already there. Add new entries under the appropriate section (User Preferences, Conventions, or Tools & Stack). Update `last-updated::` to today's date.
-
-Do NOT save to Meta:
-- One-off instructions that only apply to the current session
-- Sensitive personal information (addresses, IDs, health info)
-- Things that are obvious from the project context
+1. Session Log Entry (always)
+2. Decisions (when made — see `references/decisions.md` for conflict + cross-project rules)
+3. Plan Updates (when plans changed — replace, don't append)
+4. Implementation Details (when significant)
+5. Jira Task Context (when tasks were worked on — store pointers, not full plans)
+6. User Preferences & Meta (when newly discovered — update `pages/Meta.md`)
 
 ## Save Process
 
-1. **Identify the target project(s).** Determine which project(s) this session was about. Look for clues:
-   - Project names or Jira board prefixes mentioned in conversation
-   - Files or repos discussed that map to known projects
-   - Explicit user statements ("we're working on [project name]")
-   
-   If work spanned multiple projects, save to each relevant project page — write a session log entry and any applicable decisions to each. If unclear, ask the user: "This session touched on [X] and [Y]. Should I save to both, or just one?"
+1. **Identify target project(s).** Look for project names mentioned, files/repos discussed, or explicit user statements ("we're working on X"). If multiple projects, save to each. If unclear, ask: "This touched [X] and [Y] — save to both?"
 
-2. **Verify the project page exists.** Check that `pages/Projects___<ProjectName>.md` is present in the graph folder. If it does not exist:
-   - Tell the user: "No project page found for [name]. Would you like me to create one first?"
-   - If the user agrees, follow the brain-init "Adding a New Project" flow to create the page, then continue with the save.
-   - If the user declines, ask which existing project to save to (list available projects from the `pages/` directory).
+2. **Verify project page exists.** Glob for `pages/Projects___<ProjectName>.md`. If missing:
+   - Tell user: "No project page found for [name]. Want me to create one first?"
+   - If yes, hand off to `brain-init` "Adding a New Project" flow, then continue.
+   - If no, list available projects and let the user pick.
    - Never write session data to a non-existent project page.
 
-3. **Read the current project page** to understand existing content and avoid duplicates.
+3. **Read the current project page** to understand existing content and avoid duplicates. Use section-targeted reads (see Task 8 / `skills/brain-load/SKILL.md` for the pattern).
 
-4. **Prepare the updates.** Draft what will be added/modified for each section.
+4. **Prepare the updates** for each applicable category from `references/categories.md`.
 
-5. **Write the updates** using the Edit tool to surgically update specific sections:
-   - Append new session log entries to the Session Log section
-   - Append new decisions to the Decisions section
-   - Replace the Current Plan section if the plan changed
-   - Update Implementation section if needed
-   - Update the `last-updated::` property to today's date
+5. **Write the updates** using the Edit tool — surgical updates per section, never rewrite the whole page:
+   - Append to Session Log
+   - Append to Decisions (with conflict check per `references/decisions.md`)
+   - Replace Current Plan if changed
+   - Update Implementation if needed
+   - Update `last-updated::` to today's date
 
-6. **Update the journal.** Create or append to today's journal file at `journals/yyyy_MM_dd.md` (using underscores in the date). Add a brief cross-reference:
+6. **Update the journal — `## Sessions`.** Append a rich cross-reference to today's `journals/yyyy_MM_dd.md`:
 
-```markdown
-- ## Sessions
-  - [[Projects/ProjectName]]: Brief summary of session
-```
+   ```markdown
+   - ## Sessions
+     - [[Projects/ProjectName]]: Brief summary of session
+   ```
 
-7. **Update Meta if needed.** If new user preferences, conventions, or tool info was discovered during the session, update `pages/Meta.md` (see category 5 above).
+7. **Update `pages/Meta.md`** if new user preferences emerged (see `references/categories.md` category 6).
 
-8. **Update Index if needed.** If a project status changed or new cross-project information emerged, update `pages/Index.md`.
+8. **Update `pages/Index.md`** if a project status changed or new cross-project info emerged.
 
-9. **Confirm to the user** what was saved, in plain language. List each thing that was written. Example: "Saved to brain: session log for today's work on the price calculator, the decision to use the strategy pattern, and added 'prefers strategy pattern over switch statements' to your Meta preferences."
+9. **Write a journey-log entry** per `skills/_shared/journey-log.md` with activity line: `saved [[Projects/<ProjectName>]]`.
+
+10. **Confirm to the user** in plain language what was saved. List each thing written.
 
 ## Auto-Suggest Save
 
-Even when the user hasn't explicitly asked to save, Claude should suggest saving if ALL of these are true:
-- The session involved substantial work on a tracked project (not just a quick question)
-- Significant decisions, progress, or plans were discussed
-- The user hasn't already said "save to brain" during this session
-- The conversation seems to be wrapping up (user says "thanks", "that's it", "done for now", etc.)
-
-In this case, suggest: "We covered a lot today on [project]. Want me to save this to the brain before we wrap up?"
-
-This is a **suggestion only** — never auto-save without the user's confirmation. This respects the explicit-trigger design decision while preventing context loss.
+See `references/auto-suggest.md`. Suggestion only — never auto-save.
 
 ## Important Notes
 
-- Use the Edit tool for surgical updates — don't rewrite entire pages. This minimizes sync conflicts with Logseq Sync.
-- All content must be in bullet point format (Logseq outliner).
-- Properties use `key:: value` format.
-- Dates always in `yyyy-MM-dd` format.
-- Page links use `[[Projects/PageName]]` syntax.
-- File names use triple underscore `___` for namespace separators.
-- When appending to a section, place new entries at the end of the existing content in that section (before the next `##` heading).
-- Never overwrite the entire project page — only update the specific sections that changed.
-- If the `journals/` directory doesn't exist, create it before writing the journal entry.
+- Edit tool for surgical updates only. Never rewrite a whole page (sync conflicts).
+- All content in bullet-point format. See `CLAUDE.md` for Logseq invariants.
+- When appending, place new entries at the end of the section, before the next `##` heading.
+- If `journals/` doesn't exist, create it (Bash `mkdir -p`) before writing the journal entry.
