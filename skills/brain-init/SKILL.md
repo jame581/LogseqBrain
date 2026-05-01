@@ -96,8 +96,5 @@ Always use `yyyy-MM-dd` format for dates (e.g., `2026-04-12`). This matches Logs
 
 ## Important Notes
 
-- All page filenames use triple underscore `___` for namespace separators (Logseq convention)
-- Properties use Logseq's `key:: value` format on bullet points
-- All content must be in bullet point (outliner) format — this is how Logseq works
-- Links between pages use `[[Page Name]]` or `[[Namespace/Page Name]]` syntax
-- When creating the `journals/` directory, use Bash (`mkdir -p`) or Write tool to ensure it exists — do not skip this step
+- See `CLAUDE.md` "Logseq format invariants" for namespace separators, bullet format, properties, link syntax, and date format.
+- When creating the `journals/` directory, use Bash (`mkdir -p`) or the Write tool to ensure it exists — do not skip this step.

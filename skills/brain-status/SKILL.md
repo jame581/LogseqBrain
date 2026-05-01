@@ -39,11 +39,11 @@ Resolve the graph path per `skills/_shared/path-resolution.md`.
 ```
 Here's your brain status:
 
-**LogseqBrain** (active, last updated 2026-04-12)
-Currently: Phase 6 — token-frugality and journey log
+**LogseqBrain** (active, last updated <yyyy-MM-dd>)
+Currently: <first bullet of Current Plan>
 No blockers.
 
-**ChivalricQuest** (active, last updated 2026-04-12)
+**ChivalricQuest** (active, last updated <yyyy-MM-dd>)
 Currently: No active plan yet.
 No blockers.
 

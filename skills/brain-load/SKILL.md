@@ -2,9 +2,11 @@
 name: brain-load
 description: >
   Load project context from the Claude Brain Logseq graph into the current session.
-  Triggers: "load brain", "load <project>", "resume <project>", "open <project>",
-  "switch to <project>", "continue work on <project>", "what do we know about <topic>".
-  Don't fire for write operations (use brain-save) or generic questions about Logseq itself.
+  Triggers: "load brain", "load <project>", "resume <project>", "continue work on
+  <project>", "what do we know about <topic>". Don't fire for write operations
+  (use brain-save), generic questions about Logseq itself, or "open <file>" /
+  "switch to <branch>" requests that mean opening files or switching git branches
+  rather than loading project memory.
 ---
 
 # Brain Load
