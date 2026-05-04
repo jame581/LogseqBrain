@@ -1,6 +1,10 @@
 # Logseq Brain
 
-Persistent memory for Claude using a dedicated Logseq graph. Save and load project context, decisions, and progress across sessions and devices.
+[![Version](https://img.shields.io/github/v/tag/jame581/LogseqBrain?label=version&color=blue)](https://github.com/jame581/LogseqBrain/releases)
+[![License](https://img.shields.io/github/license/jame581/LogseqBrain?color=green)](./LICENSE)
+[![Skillsmith](https://img.shields.io/badge/marketplace-skillsmith-8A2BE2)](https://github.com/jame581/skillsmith)
+
+Persistent memory for Claude using a dedicated [Logseq](https://logseq.com) graph. Save and load project context, decisions, and progress across sessions and devices.
 
 ## Overview
 
@@ -81,4 +85,11 @@ ClaudeBrain/
 │   ├── Decisions.md                ← cross-project decisions
 │   └── Projects___MyProject.md     ← project pages (namespace: Projects/)
 ├── journals/
-│   └── 2026_04_12.md    
+│   └── 2026_04_12.md                ← daily journal: ## Sessions + ## Activity
+└── logseq/
+    └── config.edn                   ← Logseq graph config
+```
+
+## Journey Log
+
+Every brain operation (init / load / save / status / search) leaves a one-line bullet in today's journal under `## Activity` — a low-cost audit trail of what Claude did, when. Disable by adding `"journeyLog": false` to `.brain-config.json`.
