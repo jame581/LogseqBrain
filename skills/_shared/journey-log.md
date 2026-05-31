@@ -39,13 +39,13 @@ Examples:
 
 5. **If the journal file exists with `## Activity`:** append a child bullet at the end of the `## Activity` section, before the next top-level heading (a `## …` line, with or without a leading `- `) or end of file.
 
-   Surgical Edit anchoring: the `old_string` must be unique within the file, so don't use just the last bullet's text (it may repeat — e.g., two `viewed dashboard` calls in a day; the `HH:mm` prefix usually differs but don't rely on it). Read the last 3 lines of the `## Activity` section and use the multi-line block as `old_string`; replace with the same block plus the new bullet appended (indent 2, with `HH:mm ` prefix). If the section is empty, the unique anchor is `- ## Activity\n` followed by the next top-level heading (a `## …` line, with or without a leading `- `) or end of file — replace `- ## Activity\n` with `- ## Activity\n  - HH:mm <activity-line>\n`.
+   Surgical Edit anchoring: the `old_string` must be unique within the file, so don't use just the last bullet's text (it may repeat — e.g., two `viewed dashboard` calls in a day; the `HH:mm` prefix usually differs but don't rely on it). Read the last 3 lines of the `## Activity` section and use the multi-line block as `old_string`; replace with the same block plus the new bullet appended (indent 2, with `HH:mm ` prefix). If the section is empty, use the `## Activity` heading line **exactly as you just read it** as the `old_string` (it may be `- ## Activity` as we wrote it, or `## Activity` after Logseq normalized it — match the form actually present), and replace it with that same line plus a child bullet `  - HH:mm <activity-line>` appended below.
 
    Before editing, account for Logseq normalization — see `skills/_shared/logseq-format.md`. When constructing `old_string`, anchor the block on the `## Activity` heading text rather than relying on a leading `- ` or specific indentation surviving Logseq normalization intact.
 
 ## Format rules
 
-- Bullet indented two spaces under `- ## Activity`.
+- Write the bullet indented two spaces under the `## Activity` heading. (Logseq may store the indent as a tab after sync; when reading back, match what you see — see `skills/_shared/logseq-format.md` survival rule 3.)
 - Each bullet begins with an `HH:mm ` local-time prefix (24-hour, e.g. `14:32 `). This restores the quick-scan chronological signal; v0.6.0 dropped it on the assumption Logseq would render `created-at::` inline, which it does not. See `docs/superpowers/specs/2026-05-31-v0.7.0-design.md` §3.
 - One bullet per call. Multiple calls in the same session each produce a new bullet.
 
