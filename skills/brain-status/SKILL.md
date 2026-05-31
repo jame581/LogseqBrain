@@ -1,15 +1,23 @@
 ---
 name: brain-status
 description: >
-  Show a dashboard of all projects in the Claude Brain graph. Triggers: "brain
-  status", "show projects", "show brain", "what's in my brain", "project
-  dashboard", "brain overview", "list projects", "summary". Don't fire for loads
-  (use brain-load) or saves (use brain-save).
+  Show a dashboard of all projects in the Claude Brain graph, or graph
+  analytics. Dashboard triggers: "brain status", "show projects", "show brain",
+  "what's in my brain", "project dashboard", "brain overview", "list projects",
+  "summary". Analytics triggers: "brain stats", "graph analytics", "activity
+  over time". Don't fire for loads (use brain-load) or saves (use brain-save).
 ---
 
 # Brain Status
 
 Display a quick dashboard of all projects in the Claude Brain graph — status, last activity, current focus, blockers.
+
+## Modes
+
+- **Dashboard** (default, "brain status" / "show projects" / …): the per-project overview in "Dashboard Generation" below.
+- **Analytics** ("brain stats" / "graph analytics" / "activity over time"): the aggregate counts in "Analytics (brain stats)" below.
+
+Both resolve the graph path first (Prerequisites). Pick the mode from the trigger phrase; if ambiguous, default to Dashboard.
 
 ## Prerequisites
 
@@ -49,6 +57,27 @@ No blockers.
 
 2 projects tracked (2 active). No recent cross-project decisions.
 ```
+
+## Analytics (brain stats)
+
+Read-only aggregate view. Writes nothing except the journey-log entry. Stay token-frugal — use `skills/_shared/section-locator.md` for targeted reads; never full-read project pages.
+
+1. **Projects.** Glob `pages/Projects___*.md`. Count total. Apply `skills/_shared/staleness.md` to split active vs. stale.
+2. **Decisions.** Read `pages/Decisions.md`. Count total decision entries and break down by `status::` value (e.g. accepted, superseded). Also count per-project decisions inside project pages' `## Decisions` sections.
+3. **Sessions.** For each project page, count entries under `## Session Log` (section-targeted read). Sum across projects.
+4. **Activity (recent window).** Glob `journals/*.md`. For journals dated within the last 30 days (filename `yyyy_MM_dd.md`), count bullets under `## Activity`. Report the total as the recent activity signal.
+5. **Present** a compact block:
+
+   ```
+   Brain stats:
+
+   Projects: <N> (<active> active, <stale> stale)
+   Decisions: <D> total (<accepted> accepted, <superseded> superseded, …)
+   Sessions logged: <S>
+   Activity (last 30 days): <A> entries
+   ```
+
+6. **Write a journey-log entry** per `skills/_shared/journey-log.md` with activity line: `viewed brain stats`.
 
 ## Important Notes
 
