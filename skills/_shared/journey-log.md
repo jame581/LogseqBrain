@@ -28,7 +28,7 @@ Examples:
    ```markdown
    - ## Sessions
    - ## Activity
-     - HH:mm {{activity-line}}
+     - HH:mm <activity-line>
    ```
 
    where `HH:mm` is the current local time in 24-hour format (e.g. `14:32`).
@@ -41,7 +41,7 @@ Examples:
 
    Surgical Edit anchoring: the `old_string` must be unique within the file, so don't use just the last bullet's text (it may repeat — e.g., two `viewed dashboard` calls in a day; the `HH:mm` prefix usually differs but don't rely on it). Read the last 3 lines of the `## Activity` section and use the multi-line block as `old_string`; replace with the same block plus the new bullet appended (indent 2, with `HH:mm ` prefix). If the section is empty, the unique anchor is `- ## Activity\n` followed by the next top-level `- ##` heading or end of file — replace `- ## Activity\n` with `- ## Activity\n  - HH:mm <activity-line>\n`.
 
-   Before editing, account for Logseq normalization — see `skills/_shared/logseq-format.md`. Read the region immediately before the Edit and anchor on the `## Activity` heading text, not on a `- ` prefix or indentation.
+   Before editing, account for Logseq normalization — see `skills/_shared/logseq-format.md`. When constructing `old_string`, anchor the block on the `## Activity` heading text rather than relying on a leading `- ` or specific indentation surviving Logseq normalization intact.
 
 ## Format rules
 
