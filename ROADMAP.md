@@ -2,6 +2,12 @@
 
 ## Shipped
 
+### v0.7.0 — Durability, format tolerance, first analytics
+- Durable config: `LOGSEQ_BRAIN_PATH` → user config dir (`%APPDATA%\logseq-brain\config.json` / `~/.config/logseq-brain/config.json`) → ask-and-persist; survives `/reload-plugins`; one-time legacy `.brain-config.json` migration
+- `skills/_shared/logseq-format.md` — normalization-tolerance reference (read-before-edit, anchor on heading text); `section-locator.md` Grep pattern hardened to tolerate Logseq's normalized (no `- `) headings
+- `HH:mm` time prefix restored on journey-log activity bullets (reverses v0.6.0 call)
+- `brain-stats` analytics mode on `brain-status` (project/decision/session counts + 30-day activity window)
+
 ### v0.6.0 — Journey log + token frugality
 - Journey log (`## Activity` section in today's journal, one bullet per brain skill use)
 - Progressive disclosure: each `SKILL.md` split into orchestrator + per-skill `references/` + cross-skill `skills/_shared/` (path-resolution, journey-log, staleness, section-locator)
@@ -39,17 +45,11 @@
 - Save/load cycle against a Logseq graph
 - Initial graph layout (`pages/`, `journals/`, `Index.md`, `Meta.md`)
 
-## Current — v0.7.0 (backlog)
+## Current — v0.8.0 (TBD)
 
-Driven by v0.6.0 first-dogfood findings (2026-05-02):
+Open candidates from the Future list will be promoted here once Logseq's roadmap clarifies which is closest to ready.
 
-- **Durable config location.** `.brain-config.json` at the cache plugin root gets wiped on `/reload-plugins` or version bump, breaking path resolution between sessions. Replace with env-var-only contract (`LOGSEQ_BRAIN_PATH`) or a user config dir (`~/.config/logseq-brain/` on macOS/Linux, `%APPDATA%\logseq-brain\` on Windows). Touches `skills/_shared/path-resolution.md`, `CLAUDE.md`, `CONTRIBUTING.md`, and the README install instructions.
-- **Logseq normalization tolerance.** When Logseq parses journals/pages we wrote, it normalizes — drops `- ` from heading bullets, converts indents to tabs, strips empty `## Sessions` headings. Surgical Edits handle this fine via Read-before-Edit, but the algorithm prose in `skills/_shared/journey-log.md` and `skills/brain-save/SKILL.md` assumes our written format survives. Harden explicitly. Possible new `skills/_shared/logseq-format.md` adapter.
-- **Re-add `HH:mm` time prefix to journey-log activity bullets.** Reverses v0.6.0's "no time prefix" design call. The original rationale was "Logseq auto-assigns `created-at::` block metadata" implying inline display, but real-world dogfood (2026-05-02) showed Logseq does NOT auto-render those timestamps visibly. Without prefixes the activity trail loses its quick-scan chronological signal. Touches `skills/_shared/journey-log.md`, activity-line examples in all four `SKILL.md`, and the v0.6.0 spec events table.
-
-Other open candidates from the Future list will be promoted here once Logseq's roadmap clarifies which is closest to ready.
-
-See `docs/superpowers/specs/2026-05-01-v0.6.0-design.md` for the v0.6.0 design (now shipped).
+See `docs/superpowers/specs/2026-05-31-v0.7.0-design.md` for the v0.7.0 design (now shipped).
 
 ## Future — informed by Logseq's own roadmap
 
@@ -59,5 +59,4 @@ These items are deferred until Logseq's own work makes them clearly worthwhile.
 - **Logseq DB plugin API integration.** Replace markdown file IO with Logseq's plugin API once it goes GA. Per Logseq's roadmap the API is in development; revisit when stable.
 - **Headless sync via new Logseq CLI.** The new Logseq CLI supports headless sync without the desktop app, which would let LogseqBrain operate concurrently with the desktop app safely. Revisit when the CLI ships in stable.
 - **Conflict resolution for Logseq Sync.** Detect and merge sync conflicts gracefully (relevant once we're touching the same files Logseq Sync is touching mid-write).
-- **Graph analytics.** "brain stats" — counts of decisions, sessions, projects, activity over time.
 - **Plugin packaging refinements.** Cleaner Cowork install flow, installation wizard.

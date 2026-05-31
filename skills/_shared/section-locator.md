@@ -15,7 +15,7 @@ Project pages and journals can grow to thousands of lines. Reading them whole wa
 2. **Locate sections** with Grep:
    - `output_mode: "content"`
    - `-n: true`
-   - pattern: `^- ## (SectionName1|SectionName2|...)` — list every section you might need in a single Grep call
+   - pattern: `^(- )?## (SectionName1|SectionName2|...)` — the optional `- ` (note: the space is inside the group) tolerates both our freshly-written `- ## Heading` form and Logseq's normalized `## Heading` form (see `skills/_shared/logseq-format.md`). List every section you might need in a single Grep call.
    - file: the project page or journal path
 
    This returns one line per matching heading with its line number.

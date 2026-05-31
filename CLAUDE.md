@@ -27,12 +27,13 @@ Current shared references:
 - `skills/_shared/journey-log.md` — one-line activity-trail write logic, called by every brain skill
 - `skills/_shared/staleness.md` — stale-project rules (used by `brain-load` and `brain-status`)
 - `skills/_shared/section-locator.md` — grep-anchored section-targeted reads (used by `brain-load`, `brain-save`, `brain-status` to avoid full-page reads)
+- `skills/_shared/logseq-format.md` — Logseq parse-time normalization behaviors + read-before-edit survival rules (used by `brain-save`, `journey-log`)
 
 When adding a new shared reference, prefer this directory. Per-skill references stay in `skills/<skill>/references/`.
 
 ### Graph path resolution (every skill does this)
 
-See `skills/_shared/path-resolution.md` — branches by host (Cowork uses `request_cowork_directory`; Claude Code / Copilot CLI / Gemini CLI use env var → config file → ask). Once resolved, all other brain operations in the session use that path. When editing skills, preserve this host-aware branching — don't collapse it into a single chain.
+See `skills/_shared/path-resolution.md` — branches by host (Cowork uses `request_cowork_directory`; Claude Code / Copilot CLI / Gemini CLI use `LOGSEQ_BRAIN_PATH` env var → durable user config file at `%APPDATA%\logseq-brain\config.json` / `~/.config/logseq-brain/config.json` → ask-and-persist). The config file lives outside the plugin cache so it survives `/reload-plugins`. Once resolved, all other brain operations in the session use that path. When editing skills, preserve this host-aware branching — don't collapse it into a single chain.
 
 ### Logseq format invariants (non-negotiable when editing skills)
 

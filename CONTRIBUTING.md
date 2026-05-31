@@ -75,7 +75,9 @@ export LOGSEQ_BRAIN_PATH=/tmp/scratch-brain
 7. `what do we know about X` — verify search. Verify `## Activity` gains `searched "X" · N hits`.
 8. **Token check.** Add ~200 lines of fake Session Log entries to the project page. Re-run `load ScratchProject` (brief) and observe Read tool calls. Each Read should have a small `limit` (~30 lines). No full-file Reads.
 9. **Surgical edits.** For `brain-save`, confirm the Edit was anchored to a section (no whole-page rewrite).
-10. **Config toggle.** Set `.brain-config.json` `{"journeyLog": false}`. Re-run any of the above. Verify `## Activity` does NOT gain a new bullet. Restore to `journeyLog: true` and verify activity logging resumes.
+10. **Config toggle.** Set `"journeyLog": false` in the user config file (`%APPDATA%\logseq-brain\config.json` on Windows; on macOS/Linux `$XDG_CONFIG_HOME/logseq-brain/config.json` if `XDG_CONFIG_HOME` is set, else `~/.config/logseq-brain/config.json`). Re-run any of the above. Verify `## Activity` does NOT gain a new bullet. Restore to `journeyLog: true` and verify activity logging resumes.
+11. **Durable config.** Resolve a path by answering the prompt; confirm it persists to the user config file. Simulate `/reload-plugins` (or delete the plugin cache) and re-run — confirm no re-prompt. Set `LOGSEQ_BRAIN_PATH` to a different graph and confirm it overrides the file.
+12. **Brain stats.** Run "brain stats" against a graph with ≥2 projects; confirm counts match the files and "brain status" still shows the plain dashboard.
 
 ## Releasing a new version
 
