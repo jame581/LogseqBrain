@@ -42,7 +42,7 @@ Six categories — see `references/categories.md` for each one's format and rule
 
 5. **Write the updates** using the Edit tool — surgical updates per section, never rewrite the whole page:
 
-   > Before any Edit, account for Logseq's parse-time normalization (dropped `- ` on headings, space→tab indents, stripped empty headings). Read the target region immediately before editing and anchor on heading text — see `skills/_shared/logseq-format.md`.
+   > Before any Edit, account for Logseq's parse-time normalization (dropped `- ` on headings, space→tab indents, stripped empty headings). Confirm the region's current normalized form before editing and anchor on heading text — see `skills/_shared/logseq-format.md`.
 
    - Append to Session Log
    - Append to Decisions (with conflict check per `references/decisions.md`)

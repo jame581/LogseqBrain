@@ -5,7 +5,7 @@ When Logseq parses pages and journals that a brain skill wrote, it **normalizes*
 ## What Logseq normalizes on parse
 
 - **Heading bullets lose the `- ` marker.** A line we wrote as `- ## Activity` is re-serialized by Logseq as `## Activity` (no leading bullet) once the file is opened and synced.
-- **Leading-space indents become tabs.** Two-space child indents (`  - foo`) are converted to a single tab (`\t- foo`).
+- **Leading-space indents become tabs.** Two-space child indents (`  - foo`) are converted to a tab-indented bullet — a literal tab character before `- foo`.
 - **Empty section headings are stripped.** An empty `## Sessions` heading with no children may be removed entirely.
 - **Trailing whitespace and blank-line runs are collapsed.**
 
@@ -18,4 +18,4 @@ When Logseq parses pages and journals that a brain skill wrote, it **normalizes*
 
 ## Why this matters
 
-The plugin's whole value is cross-device continuity via Logseq Sync. Files we write get opened, normalized, and synced by Logseq on other devices before we touch them again. Surgical Read-before-Edit (rules above) is what keeps our writes idempotent across that round-trip.
+The plugin's whole value is cross-device continuity via Logseq Sync. Files we write get opened, normalized, and synced by Logseq on other devices before we touch them again. Surgical Read-before-Edit (rules above) is what keeps our writes correct and conflict-safe across that round-trip.
