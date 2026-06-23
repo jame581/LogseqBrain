@@ -75,11 +75,10 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **auto-fixable:** safe-only
 - **detection:** single-colon `key: value` where the key is one lowercase-dashed token at property position. Grep:
   `grep -rnE "^[[:space:]-]*[a-z][a-z0-9-]*: " pages/ journals/`
-  The single-token-no-space key excludes prose ("Root cause:" has a space in the phrase), leading `[a-z]` excludes times ("18:18") and capitalized prose, the trailing space excludes URLs. Open vocabulary — do NOT use a fixed key whitelist (a real graph invents ~60 keys).
+  The single-token-no-space key excludes prose ("Root cause:" has a space in the phrase), leading `[a-z]` excludes times ("18:18") and capitalized prose. A URL in *key position* (`https://…`) is excluded too, but note a URL *value* line (`- url: https://…`) still matches the grep — it lands in the report tier below, never auto-fixed. Open vocabulary — do NOT use a fixed key whitelist (a real graph invents ~60 keys).
 - **remediation:** `key:` → `key::`, applied by confidence tier:
-  - **page-top property block** (lines before the first `- ##` heading): unambiguously properties → auto-fix.
-  - **inline** bullet whose key also appears as `key::` somewhere in the graph: confirmed property → auto-fix.
-  - **inline** whose key is never seen as `key::` anywhere: ambiguous → report with suggestion, don't write.
+  - **page-top property block** (lines before the first `- ##` heading): unambiguously properties → **auto-fix**. This is the only tier `safe-only` auto-fixes.
+  - **inline** bullet (anywhere below the first heading): ambiguous — a prose line like `- status: we are blocked` would be silently turned into a property → **report with suggestion, never auto-write**. If the key also appears as `key::` elsewhere in the graph, surface that as a higher-confidence suggestion, but still leave the decision to the user.
 
 ## `broken-link`
 - **severity:** data-quality
@@ -91,7 +90,7 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
   grep -rohE "\[\[[^]]+\]\]" pages/ journals/ | sed 's/^\[\[//; s/\]\]$//' | grep -v '^file:///' | sort -u > /tmp/links.txt
   comm -23 /tmp/links.txt /tmp/real.txt
   ```
-  Do **not** re-run this command inside `description-link` or `unnamespaced-link` — they consume `/tmp/links.txt` and `/tmp/real.txt` from this single run.
+  Do **not** re-run this command inside `description-link` or `unnamespaced-link` — they consume the two lists from this single run. The `/tmp/*` paths are illustrative scratch — use any temp/host-scratchpad location (on Windows Git Bash `/tmp` resolves).
 - **remediation:** report. Sub-classify each phantom target: (a) missing namespace (e.g. `[[CRMGM-x]]`) → handled by `unnamespaced-link` (auto-fix); (b) prose-like or slug-like target → handled by `description-link` (unbracket/backtick); (c) fuzzy-close to an existing page → likely typo → report **with the suggested match**; (d) no close match → forward-reference → report under "intentional? leaving as-is." Never auto-delete a link.
 
 ## `duplicate-entry`
