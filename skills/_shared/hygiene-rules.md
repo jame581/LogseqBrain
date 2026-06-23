@@ -72,6 +72,46 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
   - Description or internal slug → unbracket to prose, or backtick if it's a literal token.
   - A reference to a page that simply doesn't exist **yet** (a real ticket ID, a planned page) → **leave it** unless the user says otherwise. A missing-page link is a valid forward-reference, not always a bug. List these separately in the report.
 
+## `malformed-property`
+- **severity:** data-quality
+- **enforced-at:** compose, scan
+- **auto-fixable:** safe-only
+- **detection:** single-colon `key: value` where the key is one lowercase-dashed token at property position. Grep:
+  `grep -rnE "^[[:space:]-]*[a-z][a-z0-9-]*: " pages/ journals/`
+  The single-token-no-space key excludes prose ("Root cause:" has a space in the phrase), leading `[a-z]` excludes times ("18:18") and capitalized prose, the trailing space excludes URLs. Open vocabulary — do NOT use a fixed key whitelist (a real graph invents ~60 keys).
+- **remediation:** `key:` → `key::`, applied by confidence tier:
+  - **page-top property block** (lines before the first `- ##` heading): unambiguously properties → auto-fix.
+  - **inline** bullet whose key also appears as `key::` somewhere in the graph: confirmed property → auto-fix.
+  - **inline** whose key is never seen as `key::` anywhere: ambiguous → report with suggestion, don't write.
+
+## `broken-link`
+- **severity:** data-quality
+- **enforced-at:** scan
+- **auto-fixable:** report
+- **detection:** real-page set (filenames `___`→`/`) vs. all `[[…]]` targets:
+  ```
+  ls pages/*.md | sed 's#pages/##; s/\.md$//; s/___/\//g' | sort -u > /tmp/real.txt
+  grep -rohE "\[\[[^]]+\]\]" pages/ journals/ | sed 's/^\[\[//; s/\]\]$//' | grep -v '^file:///' | sort -u > /tmp/links.txt
+  comm -23 /tmp/links.txt /tmp/real.txt
+  ```
+- **remediation:** report. Sub-classify each phantom target: (a) missing namespace (e.g. `[[CRMGM-x]]`) → handled by `unnamespaced-link` (auto-fix); (b) fuzzy-close to an existing page → likely typo → report **with the suggested match**; (c) no close match → forward-reference → report under "intentional? leaving as-is." Never auto-delete a link.
+
+## `duplicate-entry`
+- **severity:** data-quality
+- **enforced-at:** scan
+- **auto-fixable:** report
+- **detection:** within `## Session Log` (project pages) and `## Activity` (journals) only, normalize each bullet (strip leading `HH:mm`/`yyyy-MM-dd` prefix + indentation) and flag **exact** repeats. Procedure: read each section, normalize bullets, group, report any group with count > 1. Optionally surface ≥0.9-similar pairs as "possible" (report, lower confidence).
+- **remediation:** report the duplicate group(s); the user chooses which to drop. No auto-removal.
+
+## `structural-integrity`
+- **severity:** data-quality
+- **enforced-at:** scan
+- **auto-fixable:** report
+- **detection:**
+  - **Missing required properties:** each `pages/Projects___*.md` must have `type::`, `status::`, `created::`, `last-updated::` in its page-top property block (the keys `brain-init` seeds). Task pages have no fixed template → skip this check for them.
+  - **Empty / placeholder-only sections:** a `## Heading` whose only child is an italic `_stub_` (e.g. `_No active plan yet._`, `_Session entries are added by brain-save._`) or nothing.
+- **remediation:** report. One **optional** safe suggestion: backfill a missing `last-updated::` from the newest `## Session Log` date (offer, do not auto-apply).
+
 ## After repair — verify
 
 - Re-run each detection; expect zero (minus intentional forward-references).
