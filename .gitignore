@@ -7,3 +7,6 @@
 
 # subagent-driven-development scratch (briefs, reports, ledger)
 .superpowers/
+
+# marketing images — kept local, not part of the plugin
+assets/
