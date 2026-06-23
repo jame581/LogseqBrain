@@ -11,7 +11,7 @@ The narrative "why" and the compose-time guidance live in `skills/_shared/logseq
 
 Each rule below has:
 
-- **id** — stable slug (used by both consumers; never rename).
+- **id** — stable slug; it is the rule's `## …` section heading (the backtick-wrapped slug shown on each entry below), not a separate `id:` line; used by both consumers; never rename.
 - **severity** — `breaks-render` | `phantom-page` | `data-quality`.
 - **enforced-at** — `compose` (brain-save can prevent it) and/or `scan` (brain-doctor finds it).
 - **auto-fixable** — `yes` (safe to bulk-fix), `safe-only` (auto-fix the unambiguous subset, report the rest), `report` (never auto-write; surface with a suggestion).
