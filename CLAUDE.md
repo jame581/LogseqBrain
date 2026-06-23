@@ -28,7 +28,8 @@ Current shared references:
 - `skills/_shared/journey-log.md` — one-line activity-trail write logic, called by every brain skill
 - `skills/_shared/staleness.md` — stale-project rules (used by `brain-load` and `brain-status`)
 - `skills/_shared/section-locator.md` — grep-anchored section-targeted reads (used by `brain-load`, `brain-save`, `brain-status` to avoid full-page reads)
-- `skills/_shared/logseq-format.md` — Logseq parse-time normalization behaviors + read-before-edit survival rules + compose-time content-generation invariants (used by `brain-save`, `journey-log`, `brain-doctor`)
+- `skills/_shared/logseq-format.md` — Logseq parse-time normalization behaviors + read-before-edit survival rules + compose-time content-generation invariants (used by brain-save, journey-log, brain-doctor; defers detection/remediation to hygiene-rules.md)
+- `skills/_shared/hygiene-rules.md` — canonical graph-hygiene rule catalog (detection + remediation for all 9 issue classes; used by `brain-doctor` to scan and by `brain-save` to self-check)
 
 When adding a new shared reference, prefer this directory. Per-skill references stay in `skills/<skill>/references/`.
 

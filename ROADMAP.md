@@ -7,6 +7,8 @@
 - **Prevention:** compose-time content-generation invariants added to `skills/_shared/logseq-format.md` (backticks not `{{ }}`; escape `#` before numbers/hex; namespaced `[[Tasks/…]]` / `[[Projects/…]]` links; markdown links not `[[file://]]`); `brain-save` and `CLAUDE.md` updated to enforce them
 - **Cure (one-time):** repaired the maintainer's own graph — ~1,031 `{{ }}` broken macros, 125 phantom `#`-tags, 16 un-namespaced task links, 7 `[[file://]]` links, 7 junk/typo links across 49 pages + 49 journals
 - See `docs/superpowers/specs/2026-06-23-v0.8.0-design.md`
+- Shared rule catalog `skills/_shared/hygiene-rules.md` (Approach A) feeding both brain-doctor and brain-save
+- 4 added detection rules (malformed-property, broken-link, duplicate-entry, structural-integrity) + a brain-save write-time self-check; see `docs/superpowers/specs/2026-06-23-v0.8.0-hygiene-deepening-design.md`
 
 ### v0.7.0 — Durability, format tolerance, first analytics
 - Durable config: `LOGSEQ_BRAIN_PATH` → user config dir (`%APPDATA%\logseq-brain\config.json` / `~/.config/logseq-brain/config.json`) → ask-and-persist; survives `/reload-plugins`; one-time legacy `.brain-config.json` migration
