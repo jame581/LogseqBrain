@@ -20,6 +20,8 @@ Each rule below has:
 
 Detections that match inside backticks or `{{ }}` are false positives for the `#`/link rules (Logseq does not linkify code/macro content) — mask inline-code and macro spans before counting, as noted per rule.
 
+---
+
 ## `code-in-braces`
 - **severity:** breaks-render
 - **enforced-at:** compose, scan

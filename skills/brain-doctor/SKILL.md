@@ -11,7 +11,7 @@ description: >
 
 # Brain Doctor
 
-Scan the whole graph for the format mistakes that silently corrupt a Logseq graph — inline code wrapped in `{{ }}` (broken macros), bare `#number`/hex tags and un-namespaced `[[links]]` (phantom empty pages), `[[file://]]` links, and junk/description links — then report them and, on confirmation, repair them. This is a maintenance tool: run it on demand, not as part of the save/load cycle.
+Scan the whole graph for the format mistakes that silently corrupt a Logseq graph — inline code wrapped in `{{ }}` (broken macros), bare `#number`/hex tags and un-namespaced `[[links]]` (phantom empty pages), `[[file://]]` links, and junk/description links — plus data-quality checks — malformed properties, broken/duplicate entries, and missing-structure gaps (see the full catalog in `skills/_shared/hygiene-rules.md`) — then report them and, on confirmation, repair them. This is a maintenance tool: run it on demand, not as part of the save/load cycle.
 
 See `skills/_shared/hygiene-rules.md` for the full catalog: each rule with its detection pattern, auto-fixable tier, and remediation. The compose-time rules these checks enforce live in `skills/_shared/logseq-format.md`.
 
