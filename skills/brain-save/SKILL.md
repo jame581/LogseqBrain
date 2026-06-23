@@ -38,9 +38,11 @@ Six categories — see `references/categories.md` for each one's format and rule
 
 3. **Read the current project page selectively** using the section-targeted-read pattern in `skills/_shared/section-locator.md`. Read only the sections you'll touch (Session Log, Decisions, Current Plan, Implementation) — never the whole file. The read serves two purposes: detect duplicates before appending, and provide enough surrounding lines for the Edit `old_string` to be unique.
 
-4. **Prepare the updates** for each applicable category from `references/categories.md`.
+4. **Prepare the updates** for each applicable category from `references/categories.md`. When composing the text, follow the **content-generation invariants** in `skills/_shared/logseq-format.md` — backticks for code (never `{{ }}`), escape `#` before numbers/hex, namespace every `[[Tasks/…]]` / `[[Projects/…]]` link, and use markdown links (not `[[file://]]`) for file paths. Violating these silently spawns phantom pages and broken macros.
 
-5. **Write the updates** using the Edit tool — surgical updates per section, never rewrite the whole page:
+5. **Self-check the composed text** against `skills/_shared/hygiene-rules.md` before writing — the rules with `enforced-at: compose` and `auto-fixable` of `yes`/`safe-only`: `code-in-braces`, `bare-hash-tag`, `unnamespaced-link`, `file-link`, `malformed-property`. Scan only the block(s) you just composed (pure in-memory; no extra file reads), and silently correct any violation to the invariant form — it's your own output, so no prompt. For `malformed-property` specifically, only auto-correct `key:` → `key::` when the composed block is a page-top property block (e.g. updating `last-updated::`); in a section append such as Session Log or Decisions a `key: value` line may be prose, so leave it for `brain-doctor` to report. Do **not** run the `report` rules (`broken-link`, `duplicate-entry`, `structural-integrity`, `description-link`); those need whole-graph context and belong to `brain-doctor`. Contract: never emit a mechanical violation.
+
+6. **Write the updates** using the Edit tool — surgical updates per section, never rewrite the whole page:
 
    > Before any Edit, account for Logseq's parse-time normalization (dropped `- ` on headings, space→tab indents, stripped empty headings). Confirm the region's current normalized form before editing and anchor on heading text — see `skills/_shared/logseq-format.md`.
 
@@ -50,20 +52,20 @@ Six categories — see `references/categories.md` for each one's format and rule
    - Update Implementation if needed
    - Update `last-updated::` to today's date
 
-6. **Update the journal — `## Sessions`.** Append a rich cross-reference to today's `journals/yyyy_MM_dd.md`:
+7. **Update the journal — `## Sessions`.** Append a rich cross-reference to today's `journals/yyyy_MM_dd.md`:
 
    ```markdown
    - ## Sessions
      - [[Projects/ProjectName]]: Brief summary of session
    ```
 
-7. **Update `pages/Meta.md`** if new user preferences emerged (see `references/categories.md` category 6).
+8. **Update `pages/Meta.md`** if new user preferences emerged (see `references/categories.md` category 6).
 
-8. **Update `pages/Index.md`** if a project status changed or new cross-project info emerged.
+9. **Update `pages/Index.md`** if a project status changed or new cross-project info emerged.
 
-9. **Write a journey-log entry** per `skills/_shared/journey-log.md` with activity line: `saved [[Projects/<ProjectName>]]`.
+10. **Write a journey-log entry** per `skills/_shared/journey-log.md` with activity line: `saved [[Projects/<ProjectName>]]`.
 
-10. **Confirm to the user** in plain language what was saved. List each thing written.
+11. **Confirm to the user** in plain language what was saved. List each thing written.
 
 ## Auto-Suggest Save
 

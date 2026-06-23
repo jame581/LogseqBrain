@@ -14,6 +14,7 @@ skills/
   brain-load/SKILL.md   # Load project context into a session
   brain-save/SKILL.md   # Surgical append of logs, decisions, plan updates
   brain-status/SKILL.md # Dashboard across all projects
+  brain-doctor/SKILL.md # Graph-hygiene lint + repair (phantom pages, broken macros)
 ROADMAP.md              # Shipped / Current / Future phases (verify shipped status by reading skills)
 CLAUDE.md               # Guidance for agents working in this repo
 ```
