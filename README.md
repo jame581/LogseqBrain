@@ -74,6 +74,11 @@ Then say **"init brain"** to set up the graph structure, and **"init brain proje
 - "show projects" — same as above
 - Flags stale projects that haven't been updated recently
 
+**brain-doctor** — Lint and repair the graph (graph hygiene).
+- "brain doctor" / "check brain health" — scans for format problems and reports them
+- "fix brain" / "clean up brain" — repairs them after a backup and your confirmation
+- Catches the things that quietly create empty "phantom" pages or broken macros: code wrapped in `{{ }}`, bare `#number`/hex tags, un-namespaced `[[Task]]` links, `[[file://]]` links
+
 ## Graph Structure
 
 ```
