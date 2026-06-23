@@ -61,16 +61,11 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **severity:** phantom-page
 - **enforced-at:** scan
 - **auto-fixable:** report
-- **detection:** part of the general phantom-link scan — compare every `[[target]]` against the set of real pages (filenames with `___`→`/`):
-  ```
-  ls pages/*.md | sed 's#pages/##; s/\.md$//; s/___/\//g' | sort -u > /tmp/real.txt
-  grep -rohE "\[\[[^]]+\]\]" pages/ journals/ | sed 's/^\[\[//; s/\]\]$//' | grep -v '^file:///' | sort -u > /tmp/links.txt
-  comm -23 /tmp/links.txt /tmp/real.txt   # phantom targets
-  ```
+- **detection:** consumes `broken-link`'s phantom-target list (no separate scan). From that list, identify entries that are prose-like or slug-like rather than real page names — e.g. `[[2026-04-16: Fixed 5.7h half-life]]` (timestamped description), `[[feedback_user_builds_locally]]` (underscore-separated slug), `[[link]]` (generic word). These are not forward-references to real pages; they are accidental linkification of prose or identifiers.
 - **remediation:**
-  - Obvious typo → fix to the correct page (`[[Projects/Unicorn]]` → `[[Projects/Unicorn-Globus]]`).
-  - Description or internal slug → unbracket to prose, or backtick if it's a literal token.
-  - A reference to a page that simply doesn't exist **yet** (a real ticket ID, a planned page) → **leave it** unless the user says otherwise. A missing-page link is a valid forward-reference, not always a bug. List these separately in the report.
+  - Description sentence accidentally bracketed → unbracket to plain prose.
+  - Internal slug (underscores, no spaces, no namespace) → backtick the token instead: `` `feedback_user_builds_locally` ``.
+  - Ambiguous (short word that could be a real page) → report with suggestion, do not auto-fix.
 
 ## `malformed-property`
 - **severity:** data-quality
@@ -88,13 +83,14 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **severity:** data-quality
 - **enforced-at:** scan
 - **auto-fixable:** report
-- **detection:** real-page set (filenames `___`→`/`) vs. all `[[…]]` targets:
+- **detection:** real-page set (filenames `___`→`/`) vs. all `[[…]]` targets — run this **once** per scan session; the result feeds `description-link` (prose/slug sub-case) and `unnamespaced-link` (missing-namespace sub-case):
   ```
   ls pages/*.md | sed 's#pages/##; s/\.md$//; s/___/\//g' | sort -u > /tmp/real.txt
   grep -rohE "\[\[[^]]+\]\]" pages/ journals/ | sed 's/^\[\[//; s/\]\]$//' | grep -v '^file:///' | sort -u > /tmp/links.txt
   comm -23 /tmp/links.txt /tmp/real.txt
   ```
-- **remediation:** report. Sub-classify each phantom target: (a) missing namespace (e.g. `[[CRMGM-x]]`) → handled by `unnamespaced-link` (auto-fix); (b) fuzzy-close to an existing page → likely typo → report **with the suggested match**; (c) no close match → forward-reference → report under "intentional? leaving as-is." Never auto-delete a link.
+  Do **not** re-run this command inside `description-link` or `unnamespaced-link` — they consume `/tmp/links.txt` and `/tmp/real.txt` from this single run.
+- **remediation:** report. Sub-classify each phantom target: (a) missing namespace (e.g. `[[CRMGM-x]]`) → handled by `unnamespaced-link` (auto-fix); (b) prose-like or slug-like target → handled by `description-link` (unbracket/backtick); (c) fuzzy-close to an existing page → likely typo → report **with the suggested match**; (d) no close match → forward-reference → report under "intentional? leaving as-is." Never auto-delete a link.
 
 ## `duplicate-entry`
 - **severity:** data-quality
@@ -108,7 +104,10 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **enforced-at:** scan
 - **auto-fixable:** report
 - **detection:**
-  - **Missing required properties:** each `pages/Projects___*.md` must have `type::`, `status::`, `created::`, `last-updated::` in its page-top property block (the keys `brain-init` seeds). Task pages have no fixed template → skip this check for them.
+  - **Missing required properties:** each `pages/Projects___*.md` must have `type::`, `status::`, `created::`, `last-updated::` in its page-top property block (the keys `brain-init` seeds). Task pages have no fixed template → skip this check for them. Runnable check:
+    ```
+    for f in pages/Projects___*.md; do for k in type status created last-updated; do grep -qE "^$k:: " "$f" || echo "$f missing $k::"; done; done
+    ```
   - **Empty / placeholder-only sections:** a `## Heading` whose only child is an italic `_stub_` (e.g. `_No active plan yet._`, `_Session entries are added by brain-save._`) or nothing.
 - **remediation:** report. One **optional** safe suggestion: backfill a missing `last-updated::` from the newest `## Session Log` date (offer, do not auto-apply).
 
