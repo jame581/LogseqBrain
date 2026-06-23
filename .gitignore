@@ -4,3 +4,6 @@
 
 # stray copy of .git/config accidentally placed in repo root
 /config
+
+# subagent-driven-development scratch (briefs, reports, ledger)
+.superpowers/
