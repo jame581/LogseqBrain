@@ -26,7 +26,7 @@ The survival rules above are about *editing* existing content. These rules are a
 4. **Local file paths are markdown links or code — never `[[file:// ]]`.** `[[file:///C:/…/design.md]]` makes a phantom page titled with the whole path. Use a markdown link `[design.md](file:///C:/…/design.md)` or backtick the path.
 5. **Don't link a description or a memory slug.** `[[2026-04-16: Fixed 5.7h half-life]]` or `[[feedback_user_builds_locally]]` create junk pages. Reference decisions in prose; never bracket a sentence-like string or an internal slug.
 
-These are detected and repaired by `brain-doctor` (see `skills/brain-doctor/SKILL.md`); following them at compose-time is what keeps a graph from needing the doctor.
+These invariants map one-to-one to rules in `skills/_shared/hygiene-rules.md` (the operational catalog with detection + remediation): backticks→`code-in-braces`, `#`-escaping→`bare-hash-tag`, namespaced links→`unnamespaced-link`, file links→`file-link`, no description links→`description-link`. `brain-save` self-checks the auto-fixable subset at write time; `brain-doctor` scans the full catalog. Keep the narrative here and the detection/remediation there — don't duplicate the greps into this file.
 
 ## Why this matters
 
