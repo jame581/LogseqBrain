@@ -1,3 +1,6 @@
 *.plugin
 .brain-config.json
 .DS_Store
+
+# stray copy of .git/config accidentally placed in repo root
+/config
