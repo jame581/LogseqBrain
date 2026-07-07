@@ -59,6 +59,23 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
   - Labeled `[[file:///URL][LABEL]]` → `[LABEL](file:///URL)`.
   - Bare `[[file:///URL]]` → `[<basename>](file:///URL)` (use the last path segment as the label), or backtick the path if a link isn't wanted.
 
+## `jira-markup`
+- **severity:** breaks-render
+- **enforced-at:** compose, scan
+- **auto-fixable:** report
+- **detection:** Jira wiki markup outside fenced code blocks. Mask fenced blocks (``` … ```) first — a hit *inside* a fence is a false positive (that is exactly where Jira markup belongs). Then:
+  `grep -rnE "(^|[[:space:]])h[1-6]\.[[:space:]]|\{code(:[a-z]+)?\}|\{noformat\}|\[~[A-Za-z0-9._@-]+\]" pages/ journals/`
+  Raw `{{x}}` outside fences is **not** this rule — it stays covered by `code-in-braces`. This rule catches the *rest* of the Jira residue that signals an unfenced draft.
+- **remediation:** report — never auto-write. A Jira comment draft belongs **verbatim inside a fenced code block**: one pointer bullet above it (date, ticket, one-line gist), the fence as its child bullet, e.g.
+  ```
+  - Jira comment (CZ) posted 2026-06-25 — baseline script + Docker delivery:
+    - ```
+      h3. Shrnutí
+      Dnes tři věci: … {{IMProxy}} …
+      ```
+  ```
+  Deciding where a draft begins and ends needs judgment, so brain-doctor suggests the wrap and the user confirms. **Compose (brain-save):** when saving a Jira comment draft — signals: the user calls it a Jira comment, or the text contains `h[1-6].` headings, `{code}`/`{noformat}`, `[~mentions]`, or `{{monospace}}` spans — store it fenced as above. Never translate Jira markup to Logseq format, and never paste it raw into bullets.
+
 ## `description-link`
 - **severity:** phantom-page
 - **enforced-at:** scan
