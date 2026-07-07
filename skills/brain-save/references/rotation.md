@@ -14,7 +14,7 @@ Either → suggest: "This page is <size>/<N> entries. Move session entries older
 ## Rotation procedure (on confirmation)
 
 1. **Identify the cut.** Session Log entries dated more than **90 days** before today move; newer entries stay. Never split a dated entry — an entry moves whole (its date bullet plus all children).
-2. **Create the archive page on first rotation:** `pages/Projects___<Name>___SessionArchive.md` with:
+2. **Create the archive page only if it does not already exist** (first rotation): `pages/Projects___<Name>___SessionArchive.md` with:
    ```markdown
    type:: session-archive
    project:: [[Projects/<Name>]]
@@ -22,6 +22,7 @@ Either → suggest: "This page is <size>/<N> entries. Move session entries older
    - ## Archived Session Log
      - _Entries rotated from [[Projects/<Name>]] by brain-save._
    ```
+   If the page exists, leave it untouched and go to step 3 (append under its `## Archived Session Log`).
 3. **Move in one confirmed batch:** append the moving entries (verbatim, oldest-first) under `## Archived Session Log`, then delete them from the project page — surgical Edits on both sides, respecting `skills/_shared/logseq-format.md` survival rules (read-before-edit, anchor on heading text).
 4. **Marker bullet:** ensure the project page's `## Session Log` has as its first child: `- Older entries: [[Projects/<Name>/SessionArchive]]` (add once; don't duplicate on later rotations).
 5. **Verify:** entry count before == entries kept + entries archived; run the "Post-write verify (scoped)" procedure from `skills/_shared/hygiene-rules.md` over both files.
