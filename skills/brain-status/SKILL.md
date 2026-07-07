@@ -40,7 +40,7 @@ Resolve the graph path per `skills/_shared/path-resolution.md`.
 
 6. **Task summary.** Glob `pages/Tasks___*.md`; read only each page-top `status::` (offset 0, limit 5). Group: **active** and **blocked** tasks are listed by ID with their status; **done** tasks collapse to a single count line ("N done"); tasks with no `status::` are listed as "legacy — run brain-doctor to backfill".
 
-7. **Present the dashboard.** For each project: name, status, staleness annotation (if any), current focus, open questions/blockers. Then: recent cross-project decisions, total counts.
+7. **Present the dashboard.** For each project: name, status, staleness annotation (if any), current focus, open questions/blockers. Then: task summary (from step 6), recent cross-project decisions, total counts.
 
 8. **Write a journey-log entry** per `skills/_shared/journey-log.md` with activity line: `viewed dashboard`.
 
@@ -72,13 +72,13 @@ When counting, **exclude template placeholder stubs** — the italic markers a f
 2. **Decisions.** Count two distinct figures, because cross-project decisions are intentionally duplicated in both places (so never sum them): (a) **cross-project** decisions in `pages/Decisions.md`, and (b) decisions recorded on project pages (in their `## Decisions` sections; this includes the project-page copy of any cross-project decision). Break each down by `status::` value (e.g. accepted, superseded).
 3. **Sessions.** For each project page, count real entries under `## Session Log` (section-targeted read; skip the placeholder stub). Sum across projects.
 4. **Activity (recent window).** Glob `journals/*.md`. For journals dated within the last 30 days (filename `yyyy_MM_dd.md`), count bullets under `## Activity`. Report the total as the recent activity signal.
-5. **Present** a compact block:
+5. **Present** a compact block. The Tasks line is computed as in Dashboard step 6 (glob `pages/Tasks___*.md`, page-top `status::` only); **legacy** = task pages with no `status::`.
 
    ```
    Brain stats:
 
    Projects: <N> (<active> active, <stale> stale)
-   Tasks: <N> (<a> active, <b> blocked, <d> done)
+   Tasks: <N> (<a> active, <b> blocked, <d> done, <l> legacy)
    Decisions: <P> on project pages, <X> cross-project (by status: <accepted> accepted, <superseded> superseded)
    Sessions logged: <S>
    Activity (last 30 days): <A> entries
