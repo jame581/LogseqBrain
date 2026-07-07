@@ -3,7 +3,7 @@
 The single source of truth for the format violations that corrupt a Logseq brain graph. Two consumers read this file:
 
 - **`skills/brain-doctor/SKILL.md`** — iterates every rule whose `enforced-at` includes `scan` (reactive whole-graph lint + repair).
-- **`skills/brain-save/SKILL.md`** — applies rules whose `enforced-at` includes `compose` and `auto-fixable` is `yes`/`safe-only` as a write-time self-check on its own composed text. It also follows the compose-time *composition instructions* of `compose`+`report` rules — currently only `jira-markup`, whose "Compose (brain-save):" line tells it how to format content in the first place (fence it up front) rather than fixing it after the fact. It never runs the scan-only `report` rules (`description-link`, `broken-link`, `duplicate-entry`, `structural-integrity`), which need whole-graph context brain-save doesn't have.
+- **`skills/brain-save/SKILL.md`** — applies rules whose `enforced-at` includes `compose` and `auto-fixable` is `yes`/`safe-only` as a write-time self-check on its own composed text. It also follows the compose-time *composition instructions* of `compose`+`report` rules — currently only `jira-markup`, whose "Compose (brain-save):" line tells it how to format content in the first place (fence it up front) rather than fixing it after the fact. It never runs the scan-only `report` rules (`description-link`, `broken-link`, `duplicate-entry`, `structural-integrity`), which need whole-graph context brain-save doesn't have. It (and later `brain-init`) also runs the `## Post-write verify (scoped)` procedure below after writing files, re-checking on disk what the compose self-check checked in memory.
 
 The narrative "why" and the compose-time guidance live in `skills/_shared/logseq-format.md`; this file is the operational catalog.
 
@@ -144,7 +144,7 @@ For skills that write graph files (brain-save; reusable by brain-init): after **
    grep -nP "(?<![\w/&\x60#\]])#([0-9]{1,4}|[0-9A-Fa-f]{6})\b" $F
    grep -nE "\[\[(CRMGM|GLOPRICE)-[0-9]+\]\]" $F
    grep -nE "\[\[file:///" $F
-   for f in $F; do c=$(grep -o '\`' "$f" | wc -l); [ $((c%2)) -ne 0 ] && echo "ODD backticks: $f"; done
+   for f in $F; do c=$(grep -o '`' "$f" | wc -l); [ $((c%2)) -ne 0 ] && echo "ODD backticks: $f"; done
    ```
    (Apply each rule's masking notes when judging hits — e.g. a `#N` inside backticks or a `{{x}}` inside a fenced block is a false positive.)
 3. Any real hit → apply that rule's remediation with a surgical Edit → re-run that detection on that file; expect zero.
