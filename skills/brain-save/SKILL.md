@@ -63,9 +63,11 @@ Six categories — see `references/categories.md` for each one's format and rule
 
 9. **Update `pages/Index.md`** if a project status changed or new cross-project info emerged.
 
-10. **Write a journey-log entry** per `skills/_shared/journey-log.md` with activity line: `saved [[Projects/<ProjectName>]]`.
+10. **Post-write verify.** Run the "Post-write verify (scoped)" procedure in `skills/_shared/hygiene-rules.md` over exactly the files written in steps 6–9. Fix any hit per the catalog remediation and re-verify. This is mandatory — the compose self-check (step 5) is necessary but not sufficient.
 
-11. **Confirm to the user** in plain language what was saved. List each thing written.
+11. **Write a journey-log entry** per `skills/_shared/journey-log.md` with activity line: `saved [[Projects/<ProjectName>]]`.
+
+12. **Confirm to the user** in plain language what was saved. List each thing written.
 
 ## Auto-Suggest Save
 

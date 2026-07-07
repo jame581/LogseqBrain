@@ -132,6 +132,24 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
   - **Empty / placeholder-only sections:** a `## Heading` whose only child is an italic `_stub_` (e.g. `_No active plan yet._`, `_Session entries are added by brain-save._`) or nothing.
 - **remediation:** report. One **optional** safe suggestion: backfill a missing `last-updated::` from the newest `## Session Log` date (offer, do not auto-apply).
 
+## Post-write verify (scoped)
+
+For skills that write graph files (brain-save; reusable by brain-init): after **all** writes in the operation are done, verify what actually landed on disk. This is the mechanical safety net behind the compose-time self-check — instructions alone demonstrably miss things (see the v0.9.0 design spec).
+
+1. Collect the list of files written in this operation (project/task page, journal, `Index.md`, `Meta.md`, …).
+2. In **one** Bash call, run the detections for `code-in-braces`, `bare-hash-tag`, `unnamespaced-link`, and `file-link` with `pages/ journals/` replaced by that file list, plus per-file backtick parity:
+   ```
+   F="pages/Projects___X.md journals/2026_07_07.md"   # the actual list
+   grep -nE "\{\{[^}]*\}\}" $F
+   grep -nP "(?<![\w/&\x60#\]])#([0-9]{1,4}|[0-9A-Fa-f]{6})\b" $F
+   grep -nE "\[\[(CRMGM|GLOPRICE)-[0-9]+\]\]" $F
+   grep -nE "\[\[file:///" $F
+   for f in $F; do c=$(grep -o '\`' "$f" | wc -l); [ $((c%2)) -ne 0 ] && echo "ODD backticks: $f"; done
+   ```
+   (Apply each rule's masking notes when judging hits — e.g. a `#N` inside backticks or a `{{x}}` inside a fenced block is a false positive.)
+3. Any real hit → apply that rule's remediation with a surgical Edit → re-run that detection on that file; expect zero.
+4. Report in the skill's final confirmation: "post-write check: clean" or "post-write check fixed N issues". No user prompt — the skill is correcting its own just-written output, which the compose invariants already commit it to.
+
 ## After repair — verify
 
 - Re-run each detection; expect zero (minus intentional forward-references).
