@@ -54,6 +54,7 @@ Six categories — see `references/categories.md` for each one's format and rule
    - Update Implementation if needed
    - Update `last-updated::` to today's date
    - Seed/update the task page's page-top `status::` when the save targets a task page (per step 2 — seed `active` if missing; write `done`/`blocked` only with the user's confirmation)
+   - After appending to Session Log, check the rotation trigger per `references/rotation.md` (64 KB / 40 entries) and suggest rotation if exceeded — suggestion only.
 
 7. **Update the journal — `## Sessions`.** Append a rich cross-reference to today's `journals/yyyy_MM_dd.md`:
 
