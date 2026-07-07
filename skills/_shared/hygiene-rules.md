@@ -40,7 +40,8 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **auto-fixable:** yes
 - **detection:** `grep -rnP "(?<![\w/&\x60#\]])#([0-9]{1,4}|[0-9A-Fa-f]{6})\b" pages/ journals/`
   (PCRE lookbehind: `\x60` is the backtick. Not preceded by a word char, `/`, `&`, a backtick, `#`, or `]` — this also catches punctuation-adjacent tags like `(#1)`, `#2–#5`, `[#4`. If `grep -P` is unavailable, fall back to the POSIX ERE form below — note `]` must be the first character after `^` in the bracket expression to be literal, and the backtick is written literally (no `\x60` escape in ERE):
-  `` `grep -rnE "(^|[^][:alnum:]_/&#`])#([0-9]{1,4}|[0-9A-Fa-f]{6})\b" pages/ journals/` ``)
+  `` grep -rnE '(^|[^][:alnum:]_/&#`])#([0-9]{1,4}|[0-9A-Fa-f]{6})\b' pages/ journals/ ``
+  — single-quote the pattern: the literal backtick inside it would start command substitution in a double-quoted shell string.)
   Hits already inside backticks, `{{ }}`, or fenced code blocks are false positives (Logseq won't linkify code/macro/fenced content) — mask those before counting.
 - **remediation:** `#44` → `` `#44` ``, `#0066CC` → `` `#0066CC` ``. Punctuation-adjacent hits are in scope — `(#1)` → `` (`#1`) ``, `#2–#5` → `` `#2`–`#5` ``. **Never touch `#[[Page Name]]`** (valid tag-link) or `#` already inside backticks/`{{ }}`/fenced blocks. Mask inline-code spans (`` `…` ``), macro spans (`{{…}}`), fenced code blocks (``` … ```), and `#[[…]]` first, transform on the remainder, then unmask.
 
