@@ -36,6 +36,8 @@ Six categories — see `references/categories.md` for each one's format and rule
    - If no, list available projects and let the user pick.
    - Never write session data to a non-existent project page.
 
+   **Task pages:** a save may also target a task page (`pages/Tasks___<ID>.md`) when the session was about that task. Task pages have no fixed template, but their page-top property block must contain `status::` with one of `active | blocked | done`. If the page exists without `status::`, seed `status:: active` as part of this save. If the session content signals completion ("merged", "deployed", "closed", "released", "hotovo"), **suggest** `status:: done` — never write a status change the user didn't confirm (same rule as auto-save).
+
 3. **Read the current project page selectively** using the section-targeted-read pattern in `skills/_shared/section-locator.md`. Read only the sections you'll touch (Session Log, Decisions, Current Plan, Implementation) — never the whole file. The read serves two purposes: detect duplicates before appending, and provide enough surrounding lines for the Edit `old_string` to be unique.
 
 4. **Prepare the updates** for each applicable category from `references/categories.md`. When composing the text, follow the **content-generation invariants** in `skills/_shared/logseq-format.md` — backticks for code (never `{{ }}`), escape `#` before numbers/hex, namespace every `[[Tasks/…]]` / `[[Projects/…]]` link, and use markdown links (not `[[file://]]`) for file paths. Violating these silently spawns phantom pages and broken macros.

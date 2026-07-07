@@ -125,12 +125,18 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **enforced-at:** scan
 - **auto-fixable:** report
 - **detection:**
-  - **Missing required properties:** each `pages/Projects___*.md` must have `type::`, `status::`, `created::`, `last-updated::` in its page-top property block (the keys `brain-init` seeds). Task pages have no fixed template → skip this check for them. Runnable check:
+  - **Missing required properties:** each `pages/Projects___*.md` must have `type::`, `status::`, `created::`, `last-updated::` in its page-top property block (the keys `brain-init` seeds). Task pages have no fixed template, but each `pages/Tasks___*.md` must carry `status::` (one of `active | blocked | done`) in its page-top block:
+    ```
+    for f in pages/Tasks___*.md; do grep -qE "^status:: (active|blocked|done)$" "$f" || echo "$f missing/invalid status::"; done
+    ```
+    Runnable check:
     ```
     for f in pages/Projects___*.md; do for k in type status created last-updated; do grep -qE "^$k:: " "$f" || echo "$f missing $k::"; done; done
     ```
   - **Empty / placeholder-only sections:** a `## Heading` whose only child is an italic `_stub_` (e.g. `_No active plan yet._`, `_Session entries are added by brain-save._`) or nothing.
 - **remediation:** report. One **optional** safe suggestion: backfill a missing `last-updated::` from the newest `## Session Log` date (offer, do not auto-apply).
+
+  For missing task `status::`, offer the **guided batch backfill**: list every flagged task page with the date of its most recent Session Log entry; propose `done` for each, **except** propose `active` when the task is *visibly active* — a session entry within the last 30 days, **or** the task is listed in any project page's `## Active Tasks` / `## Current Plan` section. Present the full proposal table, apply on one confirmation (surgical Edit inserting the `status::` line into each page-top block). Never write without the confirmation.
 
 ## Post-write verify (scoped)
 
