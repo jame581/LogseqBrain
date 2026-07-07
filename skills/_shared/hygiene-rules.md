@@ -3,7 +3,7 @@
 The single source of truth for the format violations that corrupt a Logseq brain graph. Two consumers read this file:
 
 - **`skills/brain-doctor/SKILL.md`** — iterates every rule whose `enforced-at` includes `scan` (reactive whole-graph lint + repair).
-- **`skills/brain-save/SKILL.md`** — applies rules whose `enforced-at` includes `compose` and `auto-fixable` is `yes`/`safe-only` as a write-time self-check on its own composed text (it never runs the `report` rules).
+- **`skills/brain-save/SKILL.md`** — applies rules whose `enforced-at` includes `compose` and `auto-fixable` is `yes`/`safe-only` as a write-time self-check on its own composed text. It also follows the compose-time *composition instructions* of `compose`+`report` rules — currently only `jira-markup`, whose "Compose (brain-save):" line tells it how to format content in the first place (fence it up front) rather than fixing it after the fact. It never runs the scan-only `report` rules (`description-link`, `broken-link`, `duplicate-entry`, `structural-integrity`), which need whole-graph context brain-save doesn't have.
 
 The narrative "why" and the compose-time guidance live in `skills/_shared/logseq-format.md`; this file is the operational catalog.
 
@@ -18,7 +18,7 @@ Each rule below has:
 - **detection** — the grep/procedure (run from the graph root, over `pages/` and `journals/`).
 - **remediation** — the transform, or the report guidance.
 
-Detections that match inside backticks or `{{ }}` are false positives for the `#`/link rules (Logseq does not linkify code/macro content) — mask inline-code and macro spans before counting, as noted per rule.
+Detections that match inside backticks or `{{ }}` are false positives for the `#`/link rules (Logseq does not linkify code/macro content) — mask inline-code and macro spans before counting, as noted per rule. Content inside ``` … ``` fenced code blocks is never linkified or macro-expanded by Logseq either, so a hit *inside* a fence is a false positive for **all** rules, not just `jira-markup` — mask fenced blocks (in addition to inline-code and macro spans) before counting or transforming, for every rule below.
 
 ---
 
@@ -27,8 +27,8 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **enforced-at:** compose, scan
 - **auto-fixable:** yes
 - **detection:** `grep -rohE "\{\{[^}]*\}\}" pages/ journals/ | sort | uniq -c | sort -rn`
-  Confirm it's not an intentional macro: check `logseq/config.edn` for a non-empty `:macros {…}`, and that none are real macros (`{{query`, `{{embed`, `{{video`, `{{renderer`, `{{cards`, `{{function`, `{{namespace`, `{{tutorial`). If `:macros {}` and none match, every hit is mis-wrapped code.
-- **remediation:** `{{X}}` → `` `X` ``. Two edge cases the bulk pass must skip and you hand-fix:
+  Confirm it's not an intentional macro: check `logseq/config.edn` for a non-empty `:macros {…}`, and that none are real macros (`{{query`, `{{embed`, `{{video`, `{{renderer`, `{{cards`, `{{function`, `{{namespace`, `{{tutorial`). If `:macros {}` and none match, every hit is mis-wrapped code. Mask fenced code blocks first — `{{x}}` inside a fence is intentional verbatim content (see `jira-markup`), never a hit.
+- **remediation:** `{{X}}` → `` `X` ``. The bulk pass must skip fenced blocks — mask them before the regex replace and unmask after. Two edge cases the bulk pass must skip and you hand-fix:
   - Span contains a backtick (e.g. `` Expression`1 ``): use a double-backtick fence `` `` … `` ``.
   - Span contains a literal `{` or `}` (Mongo query `countDocuments({ … })`, a CSS rule, a `{list}` template): the simple regex won't match it; reconstruct the literal braces (a bad save sometimes *doubled* them, `{`→`{{`) and wrap the whole thing in backticks.
 
@@ -39,8 +39,8 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **enforced-at:** compose, scan
 - **auto-fixable:** yes
 - **detection:** `grep -rnE "(^|[[:space:]])#([0-9]{1,4}|[0-9A-Fa-f]{6})\b" pages/ journals/ | grep -vE "#\[\["`
-  Hits already inside backticks or `{{ }}` are false positives (Logseq won't linkify code/macro content) — mask those before counting.
-- **remediation:** `#44` → `` `#44` ``, `#0066CC` → `` `#0066CC` ``. **Never touch `#[[Page Name]]`** (valid tag-link) or `#` already inside backticks/`{{ }}`. Mask inline-code spans (`` `…` ``), macro spans (`{{…}}`), and `#[[…]]` first, transform on the remainder, then unmask.
+  Hits already inside backticks, `{{ }}`, or fenced code blocks are false positives (Logseq won't linkify code/macro/fenced content) — mask those before counting.
+- **remediation:** `#44` → `` `#44` ``, `#0066CC` → `` `#0066CC` ``. **Never touch `#[[Page Name]]`** (valid tag-link) or `#` already inside backticks/`{{ }}`/fenced blocks. Mask inline-code spans (`` `…` ``), macro spans (`{{…}}`), fenced code blocks (``` … ```), and `#[[…]]` first, transform on the remainder, then unmask.
 
 ## `unnamespaced-link`
 - **severity:** phantom-page
