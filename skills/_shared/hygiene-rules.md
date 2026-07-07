@@ -38,9 +38,10 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **severity:** phantom-page
 - **enforced-at:** compose, scan
 - **auto-fixable:** yes
-- **detection:** `grep -rnE "(^|[[:space:]])#([0-9]{1,4}|[0-9A-Fa-f]{6})\b" pages/ journals/ | grep -vE "#\[\["`
+- **detection:** `grep -rnP "(?<![\w/&\x60#\]])#([0-9]{1,4}|[0-9A-Fa-f]{6})\b" pages/ journals/`
+  (PCRE lookbehind: `\x60` is the backtick. Not preceded by a word char, `/`, `&`, a backtick, `#`, or `]` — this also catches punctuation-adjacent tags like `(#1)`, `#2–#5`, `[#4`. If `grep -P` is unavailable, fall back to `grep -rnE "(^|[^[:alnum:]_/&#\]\x60])#([0-9]{1,4}|[0-9A-Fa-f]{6})\b"`.)
   Hits already inside backticks, `{{ }}`, or fenced code blocks are false positives (Logseq won't linkify code/macro/fenced content) — mask those before counting.
-- **remediation:** `#44` → `` `#44` ``, `#0066CC` → `` `#0066CC` ``. **Never touch `#[[Page Name]]`** (valid tag-link) or `#` already inside backticks/`{{ }}`/fenced blocks. Mask inline-code spans (`` `…` ``), macro spans (`{{…}}`), fenced code blocks (``` … ```), and `#[[…]]` first, transform on the remainder, then unmask.
+- **remediation:** `#44` → `` `#44` ``, `#0066CC` → `` `#0066CC` ``. Punctuation-adjacent hits are in scope — `(#1)` → `` (`#1`) ``, `#2–#5` → `` `#2`–`#5` ``. **Never touch `#[[Page Name]]`** (valid tag-link) or `#` already inside backticks/`{{ }}`/fenced blocks. Mask inline-code spans (`` `…` ``), macro spans (`{{…}}`), fenced code blocks (``` … ```), and `#[[…]]` first, transform on the remainder, then unmask.
 
 ## `unnamespaced-link`
 - **severity:** phantom-page
@@ -114,7 +115,7 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **severity:** data-quality
 - **enforced-at:** scan
 - **auto-fixable:** report
-- **detection:** within `## Session Log` (project pages) and `## Activity` (journals) only, normalize each bullet (strip leading `HH:mm`/`yyyy-MM-dd` prefix + indentation) and flag **exact** repeats. Procedure: read each section, normalize bullets, group, report any group with count > 1. Optionally surface ≥0.9-similar pairs as "possible" (report, lower confidence).
+- **detection:** within `## Session Log` (project pages) and `## Activity` (journals) only. Normalize each bullet by stripping indentation and the leading `- ` marker **only** — keep any `HH:mm` time prefix (two saves of the same project at different times are two events, not duplicates) and keep the `yyyy-MM-dd` date prefix. **Exclude property lines** (after stripping, lines matching `^[a-z][a-z0-9-]*:: `) — repeating `skills-used::`/`related-tickets::` values across sessions is expected, not duplication. Group the remaining normalized bullets and flag any group with count > 1 (exact repeats only).
 - **remediation:** report the duplicate group(s); the user chooses which to drop. No auto-removal.
 
 ## `structural-integrity`
