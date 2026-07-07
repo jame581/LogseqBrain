@@ -65,7 +65,7 @@ Six categories — see `references/categories.md` for each one's format and rule
 
 8. **Update `pages/Meta.md`** if new user preferences emerged (see `references/categories.md` category 6).
 
-9. **Update `pages/Index.md`** if a project status changed or new cross-project info emerged.
+9. **Refresh `pages/Index.md`.** Every save rewrites the saved project's one-liner: keep the stable descriptor before the parenthetical untouched; replace the parenthetical with `(<latest version or milestone> — <current focus>)`, e.g. `(v0.8.0 shipped 2026-06-23 — v0.9.0 in design)`. One surgical single-line Edit. This is unconditional — Index rot comes precisely from "only when status changed" judgment calls.
 
 10. **Post-write verify.** Run the "Post-write verify (scoped)" procedure in `skills/_shared/hygiene-rules.md` over exactly the files written in steps 6–9. Fix any hit per the catalog remediation and re-verify. This is mandatory — the compose self-check (step 5) is necessary but not sufficient.
 
