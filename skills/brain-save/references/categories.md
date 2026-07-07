@@ -46,7 +46,7 @@ If the session involved Jira tasks (IDs like `PROJ-1234`), capture in `## Curren
 
 ```markdown
   - PROJ-1234: Short task title
-    - status:: in-progress
+    - status:: active
     - estimate:: 3 days
     - task-folder:: Tasks\PROJ-1234\
     - summary:: Brief description of what the task involves
