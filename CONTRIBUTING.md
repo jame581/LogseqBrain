@@ -82,7 +82,7 @@ export LOGSEQ_BRAIN_PATH=/tmp/scratch-brain
 13. **Jira draft fencing.** Save a session containing a Jira comment draft — verify the draft lands fenced (pointer bullet + fenced code block), and the post-write verify grep reports clean.
 14. **Post-write verify catches a deliberate violation.** Deliberately compose a violation (bare `#12`) — verify the post-write verify step catches and fixes it.
 15. **brain-doctor residue + duplicate-entry accuracy.** Run brain-doctor — verify it reports unfenced Jira residue outside fences, and reports zero `duplicate-entry` false positives on repeating property lines (e.g. `skills-used::`) and same-day journal entries with distinct `HH:mm` prefixes.
-16. **Guided task-status backfill.** Run the guided backfill via brain-doctor against task pages missing `status::` — verify statuses are seeded on confirmation and "brain status" groups tasks correctly afterward.
+16. **Guided task-status backfill.** Run the guided backfill via brain-doctor against task pages missing `status::` — verify statuses are seeded on confirmation, "brain status" groups tasks correctly afterward, and a brief-mode `load <project>` skips the `done` task pages.
 17. **Session Log rotation.** Grow a project page past 64 KB or 40 Session Log entries — verify brain-save suggests rotation, and on confirmation entries older than 90 days move to `Projects___<Name>___SessionArchive.md` with `type:: session-archive` and a marker link on the main page.
 18. **Index refresh + decision prompt.** Run a normal save — verify the project's `Index.md` one-liner is refreshed unconditionally, and the decision prompt fires only when the session content is decision-shaped (not on unrelated saves).
 
