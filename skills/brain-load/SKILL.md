@@ -30,6 +30,7 @@ When the user says "load <project>" or similar:
 4. **Read today's journal** (`journals/yyyy_MM_dd.md`) if it exists — captures session notes from earlier today.
 
 5. **Check active Jira tasks.** If the project's Current Plan section references task IDs (e.g., `PROJ-1234`), and the task folder is accessible, optionally read `plan.md`. Full mode or explicit user ask only — in brief mode, just mention task IDs and status.
+   When a referenced task has its own page (`pages/Tasks___<ID>.md`), check its page-top `status::`: in brief mode skip `done` tasks entirely; in full mode mention them as "done" without loading their content.
 
 6. **Apply staleness rules.** Use `skills/_shared/staleness.md` against the project's `last-updated::` and `status::`.
 
@@ -50,7 +51,7 @@ When the user says "load brain" without a project:
 
 ## Searching Across the Brain
 
-When the user asks "what do we know about X" or similar, follow the algorithm in `references/search.md`. After presenting findings, write a journey-log entry: `searched "X" · N hits`.
+When the user asks "what do we know about X" or similar, follow the algorithm in `references/search.md`. After presenting findings, write a journey-log entry: `searched "X" · N hits`. Label hits from done-task pages and session-archive pages as such in the results, so cold context is recognizable.
 
 ## Load Modes: Brief vs Full
 
@@ -59,7 +60,7 @@ When the user asks "what do we know about X" or similar, follow the algorithm in
 2. Overview (first 5 bullets only)
 3. Current Plan (full)
 4. Session Log (last 3 entries only)
-5. Skip Implementation, Decisions, linked context
+5. Skip Implementation, Decisions, linked context, `done` task pages, and session-archive pages (`type:: session-archive`)
 
 **Full mode** ("load <project> full", "load everything about <project>"):
 1. All properties

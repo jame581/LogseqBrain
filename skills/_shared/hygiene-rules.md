@@ -3,7 +3,7 @@
 The single source of truth for the format violations that corrupt a Logseq brain graph. Two consumers read this file:
 
 - **`skills/brain-doctor/SKILL.md`** — iterates every rule whose `enforced-at` includes `scan` (reactive whole-graph lint + repair).
-- **`skills/brain-save/SKILL.md`** — applies rules whose `enforced-at` includes `compose` and `auto-fixable` is `yes`/`safe-only` as a write-time self-check on its own composed text (it never runs the `report` rules).
+- **`skills/brain-save/SKILL.md`** — applies rules whose `enforced-at` includes `compose` and `auto-fixable` is `yes`/`safe-only` as a write-time self-check on its own composed text. It also follows the compose-time *composition instructions* of `compose`+`report` rules — currently only `jira-markup`, whose "Compose (brain-save):" line tells it how to format content in the first place (fence it up front) rather than fixing it after the fact. It never runs the scan-only `report` rules (`description-link`, `broken-link`, `duplicate-entry`, `structural-integrity`), which need whole-graph context brain-save doesn't have. It (and later `brain-init`) also runs the `## Post-write verify (scoped)` procedure below after writing files, re-checking on disk what the compose self-check checked in memory.
 
 The narrative "why" and the compose-time guidance live in `skills/_shared/logseq-format.md`; this file is the operational catalog.
 
@@ -18,7 +18,7 @@ Each rule below has:
 - **detection** — the grep/procedure (run from the graph root, over `pages/` and `journals/`).
 - **remediation** — the transform, or the report guidance.
 
-Detections that match inside backticks or `{{ }}` are false positives for the `#`/link rules (Logseq does not linkify code/macro content) — mask inline-code and macro spans before counting, as noted per rule.
+Detections that match inside backticks or `{{ }}` are false positives for the `#`/link rules (Logseq does not linkify code/macro content) — mask inline-code and macro spans before counting, as noted per rule. Content inside ``` … ``` fenced code blocks is never linkified or macro-expanded by Logseq either, so a hit *inside* a fence is a false positive for **all** rules, not just `jira-markup` — mask fenced blocks (in addition to inline-code and macro spans) before counting or transforming, for every rule below.
 
 ---
 
@@ -27,8 +27,8 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **enforced-at:** compose, scan
 - **auto-fixable:** yes
 - **detection:** `grep -rohE "\{\{[^}]*\}\}" pages/ journals/ | sort | uniq -c | sort -rn`
-  Confirm it's not an intentional macro: check `logseq/config.edn` for a non-empty `:macros {…}`, and that none are real macros (`{{query`, `{{embed`, `{{video`, `{{renderer`, `{{cards`, `{{function`, `{{namespace`, `{{tutorial`). If `:macros {}` and none match, every hit is mis-wrapped code.
-- **remediation:** `{{X}}` → `` `X` ``. Two edge cases the bulk pass must skip and you hand-fix:
+  Confirm it's not an intentional macro: check `logseq/config.edn` for a non-empty `:macros {…}`, and that none are real macros (`{{query`, `{{embed`, `{{video`, `{{renderer`, `{{cards`, `{{function`, `{{namespace`, `{{tutorial`). If `:macros {}` and none match, every hit is mis-wrapped code. Mask fenced code blocks first — `{{x}}` inside a fence is intentional verbatim content (see `jira-markup`), never a hit.
+- **remediation:** `{{X}}` → `` `X` ``. The bulk pass must skip fenced blocks — mask them before the regex replace and unmask after. Two edge cases the bulk pass must skip and you hand-fix:
   - Span contains a backtick (e.g. `` Expression`1 ``): use a double-backtick fence `` `` … `` ``.
   - Span contains a literal `{` or `}` (Mongo query `countDocuments({ … })`, a CSS rule, a `{list}` template): the simple regex won't match it; reconstruct the literal braces (a bad save sometimes *doubled* them, `{`→`{{`) and wrap the whole thing in backticks.
 
@@ -38,9 +38,12 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **severity:** phantom-page
 - **enforced-at:** compose, scan
 - **auto-fixable:** yes
-- **detection:** `grep -rnE "(^|[[:space:]])#([0-9]{1,4}|[0-9A-Fa-f]{6})\b" pages/ journals/ | grep -vE "#\[\["`
-  Hits already inside backticks or `{{ }}` are false positives (Logseq won't linkify code/macro content) — mask those before counting.
-- **remediation:** `#44` → `` `#44` ``, `#0066CC` → `` `#0066CC` ``. **Never touch `#[[Page Name]]`** (valid tag-link) or `#` already inside backticks/`{{ }}`. Mask inline-code spans (`` `…` ``), macro spans (`{{…}}`), and `#[[…]]` first, transform on the remainder, then unmask.
+- **detection:** `grep -rnP "(?<![\w/&\x60#\]])#([0-9]{1,4}|[0-9A-Fa-f]{6})\b" pages/ journals/`
+  (PCRE lookbehind: `\x60` is the backtick. Not preceded by a word char, `/`, `&`, a backtick, `#`, or `]` — this also catches punctuation-adjacent tags like `(#1)`, `#2–#5`, `[#4`. If `grep -P` is unavailable, fall back to the POSIX ERE form below — note `]` must be the first character after `^` in the bracket expression to be literal, and the backtick is written literally (no `\x60` escape in ERE):
+  `` grep -rnE '(^|[^][:alnum:]_/&#`])#([0-9]{1,4}|[0-9A-Fa-f]{6})\b' pages/ journals/ ``
+  — single-quote the pattern: the literal backtick inside it would start command substitution in a double-quoted shell string.)
+  Hits already inside backticks, `{{ }}`, or fenced code blocks are false positives (Logseq won't linkify code/macro/fenced content) — mask those before counting.
+- **remediation:** `#44` → `` `#44` ``, `#0066CC` → `` `#0066CC` ``. Punctuation-adjacent hits are in scope — `(#1)` → `` (`#1`) ``, `#2–#5` → `` `#2`–`#5` ``. **Never touch `#[[Page Name]]`** (valid tag-link) or `#` already inside backticks/`{{ }}`/fenced blocks. Mask inline-code spans (`` `…` ``), macro spans (`{{…}}`), fenced code blocks (``` … ```), and `#[[…]]` first, transform on the remainder, then unmask.
 
 ## `unnamespaced-link`
 - **severity:** phantom-page
@@ -58,6 +61,23 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **remediation:**
   - Labeled `[[file:///URL][LABEL]]` → `[LABEL](file:///URL)`.
   - Bare `[[file:///URL]]` → `[<basename>](file:///URL)` (use the last path segment as the label), or backtick the path if a link isn't wanted.
+
+## `jira-markup`
+- **severity:** breaks-render
+- **enforced-at:** compose, scan
+- **auto-fixable:** report
+- **detection:** Jira wiki markup outside fenced code blocks. Mask fenced blocks (``` … ```) first — a hit *inside* a fence is a false positive (that is exactly where Jira markup belongs). Then:
+  `grep -rnE "(^|[[:space:]])h[1-6]\.[[:space:]]|\{code(:[a-z]+)?\}|\{noformat\}|\[~[A-Za-z0-9._@-]+\]" pages/ journals/`
+  Raw `{{x}}` outside fences is **not** this rule — it stays covered by `code-in-braces`. This rule catches the *rest* of the Jira residue that signals an unfenced draft.
+- **remediation:** report — never auto-write. A Jira comment draft belongs **verbatim inside a fenced code block**: one pointer bullet above it (date, ticket, one-line gist), the fence as its child bullet, e.g.
+  ```
+  - Jira comment (CZ) posted 2026-06-25 — baseline script + Docker delivery:
+    - ```
+      h3. Shrnutí
+      Dnes tři věci: … {{IMProxy}} …
+      ```
+  ```
+  Deciding where a draft begins and ends needs judgment, so brain-doctor suggests the wrap and the user confirms. **Compose (brain-save):** when saving a Jira comment draft — signals: the user calls it a Jira comment, or the text contains `h[1-6].` headings, `{code}`/`{noformat}`, `[~mentions]`, or `{{monospace}}` spans — store it fenced as above. Never translate Jira markup to Logseq format, and never paste it raw into bullets.
 
 ## `description-link`
 - **severity:** phantom-page
@@ -97,7 +117,7 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **severity:** data-quality
 - **enforced-at:** scan
 - **auto-fixable:** report
-- **detection:** within `## Session Log` (project pages) and `## Activity` (journals) only, normalize each bullet (strip leading `HH:mm`/`yyyy-MM-dd` prefix + indentation) and flag **exact** repeats. Procedure: read each section, normalize bullets, group, report any group with count > 1. Optionally surface ≥0.9-similar pairs as "possible" (report, lower confidence).
+- **detection:** within `## Session Log` (project pages) and `## Activity` (journals) only. Normalize each bullet by stripping indentation and the leading `- ` marker **only** — keep any `HH:mm` time prefix (two saves of the same project at different times are two events, not duplicates) and keep the `yyyy-MM-dd` date prefix. **Exclude property lines** (after stripping, lines matching `^[a-z][a-z0-9-]*:: `) — repeating `skills-used::`/`related-tickets::` values across sessions is expected, not duplication. Group the remaining normalized bullets and flag any group with count > 1 (exact repeats only).
 - **remediation:** report the duplicate group(s); the user chooses which to drop. No auto-removal.
 
 ## `structural-integrity`
@@ -105,17 +125,41 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **enforced-at:** scan
 - **auto-fixable:** report
 - **detection:**
-  - **Missing required properties:** each `pages/Projects___*.md` must have `type::`, `status::`, `created::`, `last-updated::` in its page-top property block (the keys `brain-init` seeds). Task pages have no fixed template → skip this check for them. Runnable check:
+  - **Missing required properties:** each `pages/Projects___*.md` must have `type::`, `status::`, `created::`, `last-updated::` in its page-top property block (the keys `brain-init` seeds). Task pages have no fixed template, but each `pages/Tasks___*.md` must carry `status::` (one of `active | blocked | done`) in its page-top block:
+    ```
+    for f in pages/Tasks___*.md; do grep -qE "^status:: (active|blocked|done)$" "$f" || echo "$f missing/invalid status::"; done
+    ```
+    Runnable check:
     ```
     for f in pages/Projects___*.md; do for k in type status created last-updated; do grep -qE "^$k:: " "$f" || echo "$f missing $k::"; done; done
     ```
   - **Empty / placeholder-only sections:** a `## Heading` whose only child is an italic `_stub_` (e.g. `_No active plan yet._`, `_Session entries are added by brain-save._`) or nothing.
 - **remediation:** report. One **optional** safe suggestion: backfill a missing `last-updated::` from the newest `## Session Log` date (offer, do not auto-apply).
 
+  For missing task `status::`, offer the **guided batch backfill**: list every flagged task page with the date of its most recent Session Log entry; propose `done` for each, **except** propose `active` when the task is *visibly active* — a session entry within the last 30 days, **or** the task is listed in any project page's `## Active Tasks` / `## Current Plan` section. Present the full proposal table, apply on one confirmation (surgical Edit inserting the `status::` line into each page-top block). Never write without the confirmation.
+
+## Post-write verify (scoped)
+
+For skills that write graph files (brain-save; reusable by brain-init): after **all** writes in the operation are done, verify what actually landed on disk. This is the mechanical safety net behind the compose-time self-check — instructions alone demonstrably miss things (see the v0.9.0 design spec).
+
+1. Collect the list of files written in this operation (project/task page, journal, `Index.md`, `Meta.md`, …).
+2. In **one** Bash call, run the detections for `code-in-braces`, `bare-hash-tag`, `unnamespaced-link`, and `file-link` with `pages/ journals/` replaced by that file list, plus per-file backtick parity:
+   ```
+   F="pages/Projects___X.md journals/2026_07_07.md"   # the actual list
+   grep -nE "\{\{[^}]*\}\}" $F
+   grep -nP "(?<![\w/&\x60#\]])#([0-9]{1,4}|[0-9A-Fa-f]{6})\b" $F
+   grep -nE "\[\[(CRMGM|GLOPRICE)-[0-9]+\]\]" $F
+   grep -nE "\[\[file:///" $F
+   for f in $F; do c=$(grep -o '`' "$f" | wc -l); [ $((c%2)) -ne 0 ] && echo "ODD backticks: $f"; done; true
+   ```
+   (Apply each rule's masking notes when judging hits — e.g. a `#N` inside backticks or a `{{x}}` inside a fenced block is a false positive. The `grep -nP` line needs PCRE support — no `-P` on this host → use the ERE fallback documented in `bare-hash-tag`. If an odd backtick count traces into a fenced code block (e.g. a verbatim Jira draft), leave the fence content untouched — verbatim fenced content is exempt; investigate the lines this save wrote instead.)
+3. Any real hit → apply that rule's remediation with a surgical Edit → re-run that detection on that file; expect zero.
+4. Report in the skill's final confirmation: "post-write check: clean" or "post-write check fixed N issues". Hits on lines this save wrote → fix silently, it's the skill's own output. Hits clearly on pre-existing lines this save didn't touch → still safe-tier fixable, but call them out explicitly in the confirmation (e.g. "also fixed a pre-existing `#12` in Index.md") so the user knows content beyond this session's writes was touched — or report-and-defer to brain-doctor if the fix would be invasive. No user prompt needed for the silent case — the skill is correcting its own just-written output, which the compose invariants already commit it to.
+
 ## After repair — verify
 
 - Re-run each detection; expect zero (minus intentional forward-references).
 - Per-file backtick parity: every file should have an **even** number of `` ` `` characters (odd = a broken inline-code span introduced by the fix).
 ```
-for f in pages/*.md journals/*.md; do c=$(grep -o '`' "$f" | wc -l); [ $((c%2)) -ne 0 ] && echo "ODD: $f"; done
+for f in pages/*.md journals/*.md; do c=$(grep -o '`' "$f" | wc -l); [ $((c%2)) -ne 0 ] && echo "ODD: $f"; done; true
 ```

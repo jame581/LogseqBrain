@@ -36,9 +36,11 @@ Six categories — see `references/categories.md` for each one's format and rule
    - If no, list available projects and let the user pick.
    - Never write session data to a non-existent project page.
 
+   **Task pages:** a save may also target a task page (`pages/Tasks___<ID>.md`) when the session was about that task. Task pages have no fixed template, but their page-top property block must contain `status::` with one of `active | blocked | done`. If the page exists without `status::`, seed `status:: active` as part of this save. If the session content signals completion ("merged", "deployed", "closed", "released", "hotovo"), **suggest** `status:: done` — never write a status change the user didn't confirm (same rule as auto-save). If no task page exists for a worked task, keep the Current Plan pointer entry only — don't create `Tasks___<ID>.md` uninvited; offer to create one and only do so if the user wants it.
+
 3. **Read the current project page selectively** using the section-targeted-read pattern in `skills/_shared/section-locator.md`. Read only the sections you'll touch (Session Log, Decisions, Current Plan, Implementation) — never the whole file. The read serves two purposes: detect duplicates before appending, and provide enough surrounding lines for the Edit `old_string` to be unique.
 
-4. **Prepare the updates** for each applicable category from `references/categories.md`. When composing the text, follow the **content-generation invariants** in `skills/_shared/logseq-format.md` — backticks for code (never `{{ }}`), escape `#` before numbers/hex, namespace every `[[Tasks/…]]` / `[[Projects/…]]` link, and use markdown links (not `[[file://]]`) for file paths. Violating these silently spawns phantom pages and broken macros.
+4. **Prepare the updates** for each applicable category from `references/categories.md`. When composing the text, follow the **content-generation invariants** in `skills/_shared/logseq-format.md` — backticks for code (never `{{ }}`), escape `#` before numbers/hex, namespace every `[[Tasks/…]]` / `[[Projects/…]]` link, and use markdown links (not `[[file://]]`) for file paths. Violating these silently spawns phantom pages and broken macros. Also run the decision-detection scan on your composed session summary per the "Decision detection (forward-only)" section of `references/decisions.md`.
 
 5. **Self-check the composed text** against `skills/_shared/hygiene-rules.md` before writing — the rules with `enforced-at: compose` and `auto-fixable` of `yes`/`safe-only`: `code-in-braces`, `bare-hash-tag`, `unnamespaced-link`, `file-link`, `malformed-property`. Scan only the block(s) you just composed (pure in-memory; no extra file reads), and silently correct any violation to the invariant form — it's your own output, so no prompt. For `malformed-property` specifically, only auto-correct `key:` → `key::` when the composed block is a page-top property block (e.g. updating `last-updated::`); in a section append such as Session Log or Decisions a `key: value` line may be prose, so leave it for `brain-doctor` to report. Do **not** run the `report` rules (`broken-link`, `duplicate-entry`, `structural-integrity`, `description-link`); those need whole-graph context and belong to `brain-doctor`. Contract: never emit a mechanical violation.
 
@@ -51,6 +53,8 @@ Six categories — see `references/categories.md` for each one's format and rule
    - Replace Current Plan if changed
    - Update Implementation if needed
    - Update `last-updated::` to today's date
+   - Seed/update the task page's page-top `status::` when the save targets a task page (per step 2 — seed `active` if missing; write `done`/`blocked` only with the user's confirmation)
+   - After appending to Session Log, check the rotation trigger per `references/rotation.md` (64 KB / 40 entries) and suggest rotation if exceeded — suggestion only.
 
 7. **Update the journal — `## Sessions`.** Append a rich cross-reference to today's `journals/yyyy_MM_dd.md`:
 
@@ -61,11 +65,13 @@ Six categories — see `references/categories.md` for each one's format and rule
 
 8. **Update `pages/Meta.md`** if new user preferences emerged (see `references/categories.md` category 6).
 
-9. **Update `pages/Index.md`** if a project status changed or new cross-project info emerged.
+9. **Refresh `pages/Index.md`.** Every save rewrites the saved project's one-liner: keep the stable descriptor before the parenthetical untouched; replace the parenthetical with `(<latest version or milestone> — <current focus>)`, e.g. `(v0.8.0 shipped 2026-06-23 — v0.9.0 in design)`. One surgical single-line Edit. This is unconditional — Index rot comes precisely from "only when status changed" judgment calls. If the project's one-liner has no parenthetical yet, append one after the stable descriptor. If the project is missing from `pages/Index.md` entirely, add a one-liner under `## Projects` — descriptor taken from the project page's first Overview bullet, then the parenthetical.
 
-10. **Write a journey-log entry** per `skills/_shared/journey-log.md` with activity line: `saved [[Projects/<ProjectName>]]`.
+10. **Post-write verify.** Run the "Post-write verify (scoped)" procedure in `skills/_shared/hygiene-rules.md` over exactly the files written in steps 6–9. Fix any hit per the catalog remediation and re-verify. This is mandatory — the compose self-check (step 5) is necessary but not sufficient.
 
-11. **Confirm to the user** in plain language what was saved. List each thing written.
+11. **Write a journey-log entry** per `skills/_shared/journey-log.md` with activity line: `saved [[Projects/<ProjectName>]]`.
+
+12. **Confirm to the user** in plain language what was saved. List each thing written.
 
 ## Auto-Suggest Save
 

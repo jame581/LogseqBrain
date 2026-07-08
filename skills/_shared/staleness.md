@@ -30,3 +30,8 @@ One of four staleness levels, with suggested phrasing for each:
 `days_since = (today - last-updated)` in calendar days. Use straightforward date subtraction; no timezone gymnastics needed since dates are date-only.
 
 If `last-updated::` is missing or malformed, treat as `aging` and log: "Project [name] has no valid `last-updated::` property — consider running brain-save to set one."
+
+## Task and archive pages
+
+- **Task pages** (`pages/Tasks___*.md`) with `status:: done` are **exempt** — finished work is never "stale". `active`/`blocked` task pages follow the table above when a caller checks them. A task page with no `status::` is legacy — don't nag about staleness; brain-doctor's guided backfill (see `hygiene-rules.md` → `structural-integrity`) is the fix.
+- **Session-archive pages** (`type:: session-archive`) are exempt — they are cold storage by design.

@@ -11,7 +11,7 @@ description: >
 
 # Brain Doctor
 
-Scan the whole graph for the format mistakes that silently corrupt a Logseq graph — inline code wrapped in `{{ }}` (broken macros), bare `#number`/hex tags and un-namespaced `[[links]]` (phantom empty pages), `[[file://]]` links, and junk/description links — plus data-quality checks — malformed properties, broken/duplicate entries, and missing-structure gaps (see the full catalog in `skills/_shared/hygiene-rules.md`) — then report them and, on confirmation, repair them. This is a maintenance tool: run it on demand, not as part of the save/load cycle.
+Scan the whole graph for the format mistakes that silently corrupt a Logseq graph — inline code wrapped in `{{ }}` (broken macros), bare `#number`/hex tags and un-namespaced `[[links]]` (phantom empty pages), `[[file://]]` links, junk/description links, and un-fenced Jira markup residue — plus data-quality checks — malformed properties, broken/duplicate entries, and missing-structure gaps (see the full catalog in `skills/_shared/hygiene-rules.md`) — then report them and, on confirmation, repair them. This is a maintenance tool: run it on demand, not as part of the save/load cycle.
 
 See `skills/_shared/hygiene-rules.md` for the full catalog: each rule with its detection pattern, auto-fixable tier, and remediation. The compose-time rules these checks enforce live in `skills/_shared/logseq-format.md`.
 
@@ -28,11 +28,11 @@ Resolve the graph path per `skills/_shared/path-resolution.md`.
 
 ## Process
 
-1. **Scan.** For each rule in `skills/_shared/hygiene-rules.md` with `enforced-at: scan` (all 9), run its detection across `pages/` and `journals/`. Collect counts and 1–2 example locations per rule. Stay read-only in this phase.
+1. **Scan.** For each rule in `skills/_shared/hygiene-rules.md` with `enforced-at: scan` (all 10), run its detection across `pages/` and `journals/`. Collect counts and 1–2 example locations per rule. Stay read-only in this phase.
 
 2. **Report.** Present a compact health summary grouped by the rule's `auto-fixable` field:
    - **Auto-fixable** (`yes` / `safe-only`): `code-in-braces`, `bare-hash-tag`, `unnamespaced-link`, `file-link`, `malformed-property` (safe tiers only).
-   - **Needs your call** (`report`): `description-link`, `broken-link` (with suggested matches), `duplicate-entry` (the duplicate groups), `structural-integrity` (missing props / stub sections).
+   - **Needs your call** (`report`): `description-link`, `broken-link` (with suggested matches), `duplicate-entry` (the duplicate groups), `structural-integrity` (missing props / stub sections), `jira-markup` (unfenced Jira residue — suggests the fence wrap).
    Example:
    ```
    Brain health: 12 issues across 6 pages

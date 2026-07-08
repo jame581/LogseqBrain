@@ -46,7 +46,7 @@ If the session involved Jira tasks (IDs like `PROJ-1234`), capture in `## Curren
 
 ```markdown
   - PROJ-1234: Short task title
-    - status:: in-progress
+    - status:: active
     - estimate:: 3 days
     - task-folder:: Tasks\PROJ-1234\
     - summary:: Brief description of what the task involves
@@ -55,6 +55,8 @@ If the session involved Jira tasks (IDs like `PROJ-1234`), capture in `## Curren
 **Do NOT duplicate the full plan or estimate** — those live in the task folder. The brain stores a pointer.
 
 Also add the task ID to the session log entry's `related-tickets::` property.
+
+If the task has its own page (`pages/Tasks___<ID>.md`), keep its page-top `status::` current: `active` while worked on, `blocked` when explicitly blocked, `done` on confirmed completion (suggest, never assume). The `## Current Plan` pointer entry's `status::` property and the task page's page-top `status::` should agree.
 
 ## 6. User Preferences & Meta (when discovered)
 

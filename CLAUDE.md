@@ -14,9 +14,9 @@ Five skills make up the save/load cycle against a Logseq graph:
 
 - **brain-init** — First-time graph setup (creates `pages/Index.md`, `Meta.md`, `Decisions.md`, `logseq/config.edn`, `journals/.gitkeep`) and adds new project pages.
 - **brain-load** — Reads a project page back into the session. Supports brief/full modes, fuzzy project name matching, and cross-graph search ("what do we know about X").
-- **brain-save** — Surgically appends session logs, decisions, plan updates to the relevant `Projects___<Name>.md` page via Edit. Also updates journals, Meta, Index. Detects cross-project decisions and decision conflicts (marks old as `status:: superseded`).
-- **brain-status** — Dashboard across all project pages; flags stale projects.
-- **brain-doctor** — Graph-hygiene lint/repair (v0.8.0). Scans pages + journals for format violations that spawn phantom pages or broken macros (`{{ }}` mis-used for inline code, bare `#number`/hex tags, un-namespaced `[[Task]]` links, `[[file://]]` links, junk/description links), reports them, and — after a backup — repairs them. Maintenance tool, run on demand; not part of the per-session save/load cycle.
+- **brain-save** — Surgically appends session logs, decisions, plan updates to the relevant `Projects___<Name>.md` page via Edit. Also updates journals, Meta, Index. Detects cross-project decisions and decision conflicts (marks old as `status:: superseded`); seeds/updates task `status::`, suggests rotation of Session Logs past 64 KB/40 entries, refreshes the project's `Index.md` one-liner on every save, prompts on decision-shaped statements, and runs a mechanical post-write verify grep over the files it wrote.
+- **brain-status** — Dashboard across all project pages; flags stale projects; groups task pages by `status::`.
+- **brain-doctor** — Graph-hygiene lint/repair (v0.8.0, extended in v0.9.0). Scans pages + journals for format violations that spawn phantom pages or broken macros (`{{ }}` mis-used for inline code, bare `#number`/hex tags, un-namespaced `[[Task]]` links, `[[file://]]` links, junk/description links), reports them, and — after a backup — repairs them. Includes the `jira-markup` residue check and the guided task-status backfill. Maintenance tool, run on demand; not part of the per-session save/load cycle.
 
 ### Shared references (since v0.6.0)
 
@@ -48,6 +48,7 @@ Skills generate content that must round-trip through Logseq's outliner without c
 - **Inline code uses backticks, NEVER `{{ }}`.** `{{ }}` is Logseq *macro* syntax; with the default `:macros {}` it renders broken. Code, identifiers, file:line refs, CSS, and DB queries get backticks.
 - **Escape `#` before a number or hex color** (PR `#44`, `#0066CC`) — a bare `#44` becomes a tag → an empty phantom page. Real tags use `#[[Page Name]]`.
 - **Local file paths are markdown links `[label](file:///…)` or backticks — never `[[file://]]`** (which makes a phantom page titled with the path).
+- **Foreign markup (Jira etc.) never goes raw into bullets — store drafts verbatim in fenced code blocks.**
 - **Dates are always `yyyy-MM-dd`.** Journal filenames use underscores: `journals/yyyy_MM_dd.md`.
 - **Writes are surgical** — use Edit to update specific sections, never rewrite whole pages. This minimizes Logseq Sync conflicts across devices (the whole point of the plugin is cross-device continuity).
 

@@ -79,6 +79,12 @@ export LOGSEQ_BRAIN_PATH=/tmp/scratch-brain
 10. **Config toggle.** Set `"journeyLog": false` in the user config file (`%APPDATA%\logseq-brain\config.json` on Windows; on macOS/Linux `$XDG_CONFIG_HOME/logseq-brain/config.json` if `XDG_CONFIG_HOME` is set, else `~/.config/logseq-brain/config.json`). Re-run any of the above. Verify `## Activity` does NOT gain a new bullet. Restore to `journeyLog: true` and verify activity logging resumes.
 11. **Durable config.** Resolve a path by answering the prompt; confirm it persists to the user config file. Simulate `/reload-plugins` (or delete the plugin cache) and re-run — confirm no re-prompt. Set `LOGSEQ_BRAIN_PATH` to a different graph and confirm it overrides the file.
 12. **Brain stats.** Run "brain stats" against a graph with ≥2 projects; confirm counts match the files and "brain status" still shows the plain dashboard.
+13. **Jira draft fencing.** Save a session containing a Jira comment draft — verify the draft lands fenced (pointer bullet + fenced code block), and the post-write verify grep reports clean.
+14. **Post-write verify catches a deliberate violation.** Deliberately compose a violation (bare `#12`) — verify the post-write verify step catches and fixes it.
+15. **brain-doctor residue + duplicate-entry accuracy.** Run brain-doctor — verify it reports unfenced Jira residue outside fences, and reports zero `duplicate-entry` false positives on repeating property lines (e.g. `skills-used::`) and same-day journal entries with distinct `HH:mm` prefixes.
+16. **Guided task-status backfill.** Run the guided backfill via brain-doctor against task pages missing `status::` — verify statuses are seeded on confirmation, "brain status" groups tasks correctly afterward, and a brief-mode `load <project>` skips the `done` task pages.
+17. **Session Log rotation.** Grow a project page past 64 KB or 40 Session Log entries — verify brain-save suggests rotation, and on confirmation entries older than 90 days move to `Projects___<Name>___SessionArchive.md` with `type:: session-archive` and a marker link on the main page.
+18. **Index refresh + decision prompt.** Run a normal save — verify the project's `Index.md` one-liner is refreshed unconditionally, and the decision prompt fires only when the session content is decision-shaped (not on unrelated saves).
 
 ## Releasing a new version
 
