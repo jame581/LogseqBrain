@@ -53,9 +53,16 @@
 - Save/load cycle against a Logseq graph
 - Initial graph layout (`pages/`, `journals/`, `Index.md`, `Meta.md`)
 
-## Current — v0.9.0 (TBD)
+## Current — v0.9.0 (in progress)
 
-Open candidates from the Future list will be promoted here once Logseq's roadmap clarifies which is closest to ready.
+Theme: prevention becomes mechanical, task pages get a lifecycle, the Index stays fresh. See `docs/superpowers/specs/2026-07-07-v0.9.0-design.md`.
+
+- `jira-markup` hygiene rule — Jira drafts stored verbatim in fenced code blocks; unfenced residue reported by brain-doctor
+- Mechanical post-write verify in brain-save (grep the files just written; fix + re-verify)
+- Task lifecycle: `status:: active|blocked|done` on task pages, brain-status grouping, brain-load brief skips done, one-time guided backfill via brain-doctor
+- Session-log rotation to `Projects/<Name>/SessionArchive` (suggestion-based, 64 KB / 40 entries / 90 days)
+- Findability: unconditional `Index.md` one-liner refresh on save; forward-only decision prompting
+- Rule quality: `duplicate-entry` false positives fixed; punctuation-aware `bare-hash-tag`
 
 See `docs/superpowers/specs/2026-05-31-v0.7.0-design.md` and `docs/superpowers/specs/2026-06-23-v0.8.0-design.md` for the v0.7.0 / v0.8.0 designs (now shipped).
 

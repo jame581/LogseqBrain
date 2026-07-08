@@ -68,16 +68,21 @@ Then say **"init brain"** to set up the graph structure, and **"init brain proje
 - "remember this" — save specific information
 - Automatically detects multi-project sessions and Jira task context
 - Updates Meta.md when new user preferences are discovered
+- Jira comment drafts are stored verbatim in fenced code blocks, then verified with a mechanical post-write check over the files just written
+- Seeds and updates task `status::` as work progresses, and suggests Session Log rotation to a `SessionArchive` page once a project page grows past 64 KB / 40 entries
+- Refreshes the project's `Index.md` one-liner on every save
 
 **brain-status** — Quick dashboard of all projects.
 - "brain status" — shows all projects with status, last activity, current focus
 - "show projects" — same as above
 - Flags stale projects that haven't been updated recently
+- Groups task pages by `status::` (active, blocked, done)
 
 **brain-doctor** — Lint and repair the graph (graph hygiene).
 - "brain doctor" / "check brain health" — scans for format problems and reports them
 - "fix brain" / "clean up brain" — repairs them after a backup and your confirmation
 - Catches the things that quietly create empty "phantom" pages or broken macros: code wrapped in `{{ }}`, bare `#number`/hex tags, un-namespaced `[[Task]]` links, `[[file://]]` links; also flags malformed properties, broken/duplicate entries, and structural gaps
+- Reports unfenced Jira markup residue and guides a one-time batch backfill of missing task `status::`
 
 ## Graph Structure
 
