@@ -150,16 +150,16 @@ For skills that write graph files (brain-save; reusable by brain-init): after **
    grep -nP "(?<![\w/&\x60#\]])#([0-9]{1,4}|[0-9A-Fa-f]{6})\b" $F
    grep -nE "\[\[(CRMGM|GLOPRICE)-[0-9]+\]\]" $F
    grep -nE "\[\[file:///" $F
-   for f in $F; do c=$(grep -o '`' "$f" | wc -l); [ $((c%2)) -ne 0 ] && echo "ODD backticks: $f"; done
+   for f in $F; do c=$(grep -o '`' "$f" | wc -l); [ $((c%2)) -ne 0 ] && echo "ODD backticks: $f"; done; true
    ```
-   (Apply each rule's masking notes when judging hits — e.g. a `#N` inside backticks or a `{{x}}` inside a fenced block is a false positive.)
+   (Apply each rule's masking notes when judging hits — e.g. a `#N` inside backticks or a `{{x}}` inside a fenced block is a false positive. The `grep -nP` line needs PCRE support — no `-P` on this host → use the ERE fallback documented in `bare-hash-tag`. If an odd backtick count traces into a fenced code block (e.g. a verbatim Jira draft), leave the fence content untouched — verbatim fenced content is exempt; investigate the lines this save wrote instead.)
 3. Any real hit → apply that rule's remediation with a surgical Edit → re-run that detection on that file; expect zero.
-4. Report in the skill's final confirmation: "post-write check: clean" or "post-write check fixed N issues". No user prompt — the skill is correcting its own just-written output, which the compose invariants already commit it to.
+4. Report in the skill's final confirmation: "post-write check: clean" or "post-write check fixed N issues". Hits on lines this save wrote → fix silently, it's the skill's own output. Hits clearly on pre-existing lines this save didn't touch → still safe-tier fixable, but call them out explicitly in the confirmation (e.g. "also fixed a pre-existing `#12` in Index.md") so the user knows content beyond this session's writes was touched — or report-and-defer to brain-doctor if the fix would be invasive. No user prompt needed for the silent case — the skill is correcting its own just-written output, which the compose invariants already commit it to.
 
 ## After repair — verify
 
 - Re-run each detection; expect zero (minus intentional forward-references).
 - Per-file backtick parity: every file should have an **even** number of `` ` `` characters (odd = a broken inline-code span introduced by the fix).
 ```
-for f in pages/*.md journals/*.md; do c=$(grep -o '`' "$f" | wc -l); [ $((c%2)) -ne 0 ] && echo "ODD: $f"; done
+for f in pages/*.md journals/*.md; do c=$(grep -o '`' "$f" | wc -l); [ $((c%2)) -ne 0 ] && echo "ODD: $f"; done; true
 ```

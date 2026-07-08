@@ -9,7 +9,7 @@ After appending a session entry to a project page, check (one Bash call: `wc -c`
 - file size > **64 KB**, or
 - more than **40** session entries.
 
-Either → suggest: "This page is <size>/<N> entries. Move session entries older than 90 days to `[[Projects/<Name>/SessionArchive]]`?" Judgment near the line is fine (don't nag at 63.9 KB every save).
+Either → suggest: "This page is <size>/<N> entries. Move session entries older than 90 days to `[[Projects/<Name>/SessionArchive]]`?" Judgment near the line is fine (don't nag at 63.9 KB every save). Before suggesting, check whether any Session Log entries are actually older than 90 days (the same date scan used in the rotation procedure's "Identify the cut" step) — if none qualify, don't suggest rotation and don't create anything; the page is large but all entries are recent, so there is nothing to move yet. Re-check on later saves once entries age past the cutoff.
 
 ## Rotation procedure (on confirmation)
 
