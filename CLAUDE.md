@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A Claude Code plugin (`logseq-brain`) that gives Claude persistent memory via a user-owned Logseq graph. There is **no build, no tests, no runtime code** — the plugin is entirely markdown skills (`skills/<name>/SKILL.md`) plus `.claude-plugin/plugin.json`. Claude itself is the runtime: skills instruct Claude to read/write markdown files in the user's `ClaudeBrain` graph using the standard Read/Write/Edit/Bash tools.
 
+**Target: Logseq OG (the markdown version) only.** Logseq split in 2026 — OG moved to <https://github.com/logseq/og> and is in maintenance mode (security and Electron upgrades, no new features), while the DB/SQLite version continues at the original repo. There is no API or CLI for file graphs (`@logseq/cli` serves DB graphs only), so all leverage here is file layout, property discipline, and ripgrep. Do not propose DB-version features.
+
 The plugin is distributed via the [skillsmith](https://github.com/jame581/skillsmith) marketplace, the Gemini extension URL, and (for Cowork) a locally-built `logseq-brain.plugin` zip. The `.plugin` archive is a **build artifact** — gitignored (`*.plugin`), not checked in. Edit files under `skills/` and `.claude-plugin/`, never inside an archive.
 
 ## Architecture
@@ -29,7 +31,9 @@ Current shared references:
 - `skills/_shared/staleness.md` — stale-project rules (used by `brain-load` and `brain-status`)
 - `skills/_shared/section-locator.md` — grep-anchored section-targeted reads (used by `brain-load`, `brain-save`, `brain-status` to avoid full-page reads)
 - `skills/_shared/logseq-format.md` — Logseq parse-time normalization behaviors + read-before-edit survival rules + compose-time content-generation invariants (used by brain-save, journey-log, brain-doctor; defers detection/remediation to hygiene-rules.md)
-- `skills/_shared/hygiene-rules.md` — canonical graph-hygiene rule catalog (detection + remediation for all 9 issue classes; used by `brain-doctor` to scan and by `brain-save` to self-check)
+- `skills/_shared/hygiene-rules.md` — canonical graph-hygiene rule catalog (detection + remediation for all 13 issue classes; used by `brain-doctor` to scan and by `brain-save` to self-check)
+- `skills/_shared/digest.md` — the digest contract: scope, the two surfaces, slot order, byte caps, the measured Map bullet, refresh vs. rebuild-from-source (used by `brain-load`, `brain-save`, `brain-doctor`, `brain-init`)
+- `skills/_shared/escalation.md` — the 0–5 lazy-retrieval ladder used once a digest is loaded (used by `brain-load`)
 
 When adding a new shared reference, prefer this directory. Per-skill references stay in `skills/<skill>/references/`.
 
@@ -51,6 +55,8 @@ Skills generate content that must round-trip through Logseq's outliner without c
 - **Foreign markup (Jira etc.) never goes raw into bullets — store drafts verbatim in fenced code blocks.**
 - **Dates are always `yyyy-MM-dd`.** Journal filenames use underscores: `journals/yyyy_MM_dd.md`.
 - **Writes are surgical** — use Edit to update specific sections, never rewrite whole pages. This minimizes Logseq Sync conflicts across devices (the whole point of the plugin is cross-device continuity).
+- **Project and task pages carry a digest** — page-top `focus::` / `next::` / `open::` / `digest-updated::` plus a `## Digest` section capped at **800 bytes**, whose last bullet is a **measured** map of the page. `brain-load` reads only this; `brain-save` refreshes it on every save. Full contract in `skills/_shared/digest.md`. Never author the map from memory — compute it.
+- **Partial reads must state their coverage.** Any bounded read says what it left out (`read 4 KB of 89 KB of ## Session Log`). Silent truncation is what lets the model reason from a fragment. See `skills/_shared/section-locator.md`.
 
 The compose-time rules (backticks, `#`-escaping, namespaced links, file links) are documented in full in `skills/_shared/logseq-format.md` and enforced reactively by the `brain-doctor` skill.
 

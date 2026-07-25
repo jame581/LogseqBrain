@@ -57,7 +57,8 @@ Then say **"init brain"** to set up the graph structure, and **"init brain proje
 - "init brain project MyProject" — adds a new project page
 
 **brain-load** — Load project context into the current session.
-- "load MyProject" — loads the project context (brief mode by default)
+- "load MyProject" — loads the project's **digest**: one read, under ~2 KB no matter how big the page is, and it tells you exactly what it *didn't* read
+- Anything it didn't read is one question away — ask and it greps for just that, announcing each step
 - "load MyProject full" — loads everything including decisions, implementation, linked tasks
 - "load brain" — loads a high-level overview of all projects
 - "what do we know about strategy pattern" — searches across the graph
@@ -71,18 +72,21 @@ Then say **"init brain"** to set up the graph structure, and **"init brain proje
 - Jira comment drafts are stored verbatim in fenced code blocks, then verified with a mechanical post-write check over the files just written
 - Seeds and updates task `status::` as work progresses, and suggests Session Log rotation to a `SessionArchive` page once a project page grows past 64 KB / 40 entries
 - Refreshes the project's `Index.md` one-liner on every save
+- Refreshes the page's digest on every save, so the cheap-recall surface never goes stale
 
 **brain-status** — Quick dashboard of all projects.
 - "brain status" — shows all projects with status, last activity, current focus
 - "show projects" — same as above
 - Flags stale projects that haven't been updated recently
 - Groups task pages by `status::` (active, blocked, done)
+- Builds the whole dashboard from a single search across digest properties
 
 **brain-doctor** — Lint and repair the graph (graph hygiene).
 - "brain doctor" / "check brain health" — scans for format problems and reports them
 - "fix brain" / "clean up brain" — repairs them after a backup and your confirmation
 - Catches the things that quietly create empty "phantom" pages or broken macros: code wrapped in `{{ }}`, bare `#number`/hex tags, un-namespaced `[[Task]]` links, `[[file://]]` links; also flags malformed properties, broken/duplicate entries, and structural gaps
 - Reports unfenced Jira markup residue and guides a one-time batch backfill of missing task `status::`
+- Reports pages with a missing, stale, or oversized digest, and can backfill them in one guided pass ("backfill digests")
 
 ## Graph Structure
 
@@ -102,3 +106,11 @@ ClaudeBrain/
 ## Journey Log
 
 Every brain operation (init / load / save / status / search) leaves a one-line `HH:mm`-prefixed bullet in today's journal under `## Activity` — a low-cost, time-ordered audit trail of what Claude did, when. Disable by adding `"journeyLog": false` to your user config file (`%APPDATA%\logseq-brain\config.json` on Windows; on macOS/Linux `$XDG_CONFIG_HOME/logseq-brain/config.json` if `XDG_CONFIG_HOME` is set, otherwise `~/.config/logseq-brain/config.json`).
+
+## Digest
+
+Every project and task page carries a small summary at the top — four properties (`focus::`, `next::`, `open::`, `digest-updated::`) and a `## Digest` section capped at 800 bytes. Loading a project reads *only* that, so a 109 KB page costs under 2 KB instead of ~27 KB.
+
+The last digest bullet is a **map** — `Session Log 89 KB (49 entries) · Decisions 12 · page 109 KB` — computed from the file, never written from memory. It does two jobs: it tells Claude what it doesn't have (so it can't quietly reason as though it read everything), and it's the index Claude uses when you ask for more.
+
+Pages without a digest keep working exactly as before, and get one the first time you load or save them. Run `brain-doctor` and say "backfill digests" to do the whole graph at once.
