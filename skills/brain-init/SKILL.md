@@ -79,12 +79,16 @@ When the user wants to add a project (e.g., "add MyProject to brain", "init brai
 
 1. Determine the project name from the user's request.
 
-2. Create the project page at `pages/Projects___<ProjectName>.md` using the template from `references/templates.md`. The triple underscore `___` is how Logseq represents the `/` namespace separator in filenames — so this page will appear as `Projects/ProjectName` in the Logseq sidebar.
+2. Ask the user for a brief description and any initial context for the project (tech stack, repo location, key info) — gather this **before** writing the page. The template (`references/templates.md`) uses the same description in three places: `focus::`, the Digest Identity bullet, and `## Overview`. If the description exceeds **120 bytes**, use a short form for `focus::` (the digest property cap — see `skills/_shared/digest.md`) and keep the full text in `## Overview` and the Digest Identity bullet.
 
-3. Update `pages/Index.md` — add a link to the new project under the Projects section:
+3. Create the project page at `pages/Projects___<ProjectName>.md` using the template from `references/templates.md`, substituting the gathered description into `focus::`, the Digest Identity bullet, and `## Overview`. The triple underscore `___` is how Logseq represents the `/` namespace separator in filenames — so this page will appear as `Projects/ProjectName` in the Logseq sidebar.
+
+4. **Measure the page and resolve `{{page_size}}`.** This is the one placeholder that can only be filled *after* the Write: run `wc -c` on the new file, round to the nearest 10 bytes, then Edit the literal `{{page_size}}` bullet to the rounded figure (`references/templates.md` has the rounding rule and why an exact figure would be a small lie). Do not skip this — a fresh page ships with `{{page_size}}` still in it until this step runs.
+
+5. **Confirm no `{{` placeholder survives.** `grep -c '{{' "pages/Projects___<ProjectName>.md"` must return `0`. If it doesn't, find and replace the remaining placeholder before continuing — a literal `{{...}}` left in the graph is a `code-in-braces` violation, exactly the kind of format break this plugin exists to prevent.
+
+6. Update `pages/Index.md` — add a link to the new project under the Projects section:
    - `[[Projects/<ProjectName>]] — <brief description>`
-
-4. Ask the user for a brief description and any initial context for the project (tech stack, repo location, key info). Populate the Overview section.
 
 Confirm the project page was created and remind the user they can now use "save to brain" during work sessions and "load [project]" to restore context.
 

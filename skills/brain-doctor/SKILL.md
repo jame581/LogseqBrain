@@ -4,8 +4,9 @@ description: >
   Lint and repair the Claude Brain Logseq graph — find and fix format
   violations that create phantom pages or broken macros. Triggers: "brain
   doctor", "lint brain", "check brain health", "clean up brain", "fix brain",
-  "graph hygiene", "why are there empty pages", "find broken pages". Don't fire
-  for loads (use brain-load), saves (use brain-save), status/analytics (use
+  "graph hygiene", "why are there empty pages", "find broken pages",
+  "backfill digests", "rebuild digest for <project>". Don't fire for loads
+  (use brain-load), saves (use brain-save), status/analytics (use
   brain-status), or first-time setup (use brain-init).
 ---
 
@@ -66,9 +67,9 @@ Triggered by "backfill digests" (or accepted from a `missing-digest` report). Sa
 
 3. **Offer a scope.** Default to **project pages only** (fewer, higher value); offer "all" to include task pages, or a specific list. Let the user cut the batch down.
 
-4. **Build each digest** per the rebuild-from-source procedure in `skills/_shared/digest.md` — section reads under budget, Session Log tail-first, Map computed, 800-byte cap enforced before writing. One page at a time, so an interruption leaves a consistent graph.
+4. **Back up first — unconditionally.** Digest writes are two surgical Edits per page (property block, `## Digest` section), so the standard backup rule in step 4 of the main Process applies to this flow exactly as it does to a repair. The graph is usually not git-tracked; there is no undo. If the backup fails, stop.
 
-5. **Back up first — unconditionally.** Digest writes are two surgical Edits per page (property block, `## Digest` section), so the standard backup rule in step 4 of the main Process applies to this flow exactly as it does to a repair. The graph is usually not git-tracked; there is no undo. If the backup fails, stop.
+5. **Build each digest** per the rebuild-from-source procedure in `skills/_shared/digest.md` — section reads under budget, Session Log tail-first, Map computed, 800-byte cap enforced before writing. One page at a time, so an interruption leaves a consistent graph.
 
 6. **Report the result** — pages built, pages skipped, total bytes read — and write a journey-log entry per `skills/_shared/journey-log.md`: `backfilled N digests`.
 

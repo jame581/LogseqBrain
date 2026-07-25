@@ -27,7 +27,9 @@ When the user says "load <project>" or similar:
 
    **Check before you use it: the read must contain a `Map:` bullet.** Task pages have no fixed template, so a property block can run long (extra task-specific properties push everything below it further down the file) — a `limit 20` read can land past the end of `## Digest` and return digest-shaped bullets with no Map. If `Map:` is not in what you read, the property block is longer than the bound, not that the page lacks a Map — re-read with a larger `limit` (e.g. 30), or `grep -nE '^(- )?## '` for the exact section span and read from there. **Never present a digest whose Map you did not see** — a digest without a Map is not a shorter digest, it is a page you cannot state coverage for.
 
-   **If there is no `## Digest`:** fall back to the pre-digest brief mode — property block, first 5 Overview bullets, full Current Plan, last 3 Session Log entries, section-targeted per `skills/_shared/section-locator.md` — and then offer to build one: *"This page has no digest yet — want me to build one? Future loads drop from ~4 KB to under 1 KB."* Build only on confirmation, per the rebuild-from-source procedure in `skills/_shared/digest.md`. Every existing graph therefore keeps working exactly as it does today until it is backfilled.
+   **Check for drift too — it's free.** The same property block already carries both `last-updated::` and `digest-updated::`; compare them. If `digest-updated::` is more than 30 days behind `last-updated::`, the digest may describe older content than the page now holds — e.g. another device still on v0.9.x saved without refreshing the digest, or the user hand-edited the page directly in Logseq. Note this in the step 8 coverage statement and **suggest** the rebuild procedure in `skills/_shared/digest.md` — never rebuild unprompted.
+
+   **If there is no `## Digest`:** fall back to the pre-digest brief mode — property block, first 5 Overview bullets, full Current Plan, last 3 Session Log entries, section-targeted per `skills/_shared/section-locator.md` — and then offer to build one, quoting the fallback read you just measured rather than a remembered constant: *"This page has no digest yet — want me to build one? This fallback read was ~<X> KB; a digest brings future loads to ≤ ~2 KB regardless of page size."* `<X>` is the sum of the byte counts the section-targeted reads already produced (measure-before-read, `skills/_shared/section-locator.md`) — never restate a figure measured on a different page. Build only on confirmation, per the rebuild-from-source procedure in `skills/_shared/digest.md`. Every existing graph therefore keeps working exactly as it does today until it is backfilled.
 
 3. **Stop reading — digest path only.** If the fallback in step 2 ran, it has already read what it needs; skip to step 4. On the digest path, do **not** pre-load Overview, Current Plan, Implementation, Decisions, Session Log, linked pages, or task pages. The Map bullet says what exists and how big it is; fetch from it on demand per `skills/_shared/escalation.md` (on the fallback path, escalation starts at level 2 — targeted grep — since levels 0–1 presuppose a digest and Map bullet) when the conversation actually needs it — announced, one level at a time.
 
@@ -50,6 +52,10 @@ When the user says "load <project>" or similar:
    > **Not read:** Session Log 89 KB (49 entries), Decisions 12, Implementation 4 KB. Ask and I'll grep any of it.
 
    This is mandatory, not decorative — see "Truncation honesty" in `skills/_shared/section-locator.md`. Presenting a digest without saying what it omits is what lets the model reason from a fragment as though it held the whole history.
+
+   **Digest drift.** If step 2 found `digest-updated::` more than 30 days behind `last-updated::`, add one line surfacing it and offering the rebuild — suggest only, never rebuild without confirmation:
+
+   > Digest last refreshed 2026-05-01; page last updated 2026-07-24 — it may be describing older content. Want me to rebuild it (`skills/_shared/digest.md`)?
 
    **Fallback path:** there is no Map bullet to quote, so state coverage from what the fallback deliberately skipped — measure it rather than guessing (`skills/_shared/section-locator.md`, measure-before-read):
 

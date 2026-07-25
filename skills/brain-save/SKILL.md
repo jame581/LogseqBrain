@@ -73,7 +73,7 @@ Six categories — see `references/categories.md` for each one's format and rule
    - **If the page has no digest yet**, build one now from what is already in context — this is the lazy backfill path. Say so in the step-13 confirmation and mention that a full rebuild-from-source is available for richer history.
    - **Task pages get a digest too**, thinner: Identity + Now + Map.
 
-   Two surgical Edits: one on the page-top property block, one on the `## Digest` section (creating it after the property block and before `## Overview` if absent).
+   Two surgical Edits: one on the page-top property block, one on the `## Digest` section (creating it, if absent, immediately after the property block and before the page's first `## ` section — `## Overview` on project pages; task pages have no fixed template, so it's simply whichever heading comes first).
 
 10. **Refresh `pages/Index.md`.** Every save rewrites the saved project's one-liner: keep the stable descriptor before the parenthetical untouched; replace the parenthetical with `(<latest version or milestone> — <current focus>)`, e.g. `(v0.8.0 shipped 2026-06-23 — v0.9.0 in design)`. One surgical single-line Edit. This is unconditional — Index rot comes precisely from "only when status changed" judgment calls. If the project's one-liner has no parenthetical yet, append one after the stable descriptor. If the project is missing from `pages/Index.md` entirely, add a one-liner under `## Projects` — descriptor taken from the project page's first Overview bullet, then the parenthetical.
 

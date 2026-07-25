@@ -37,7 +37,7 @@ Two Logseq OG behaviours worth knowing, so they are not rediscovered: with `:pro
 
 ## Surface 2 — the `## Digest` section
 
-Sits immediately after the property block, **before** `## Overview`.
+Sits immediately after the property block and before the first `## ` section, whatever it is called — `## Overview` on project pages. Task pages have no fixed template and often no `## Overview` at all, so the rule is general: right after the properties, before whatever section heading comes first in the file.
 
 ```markdown
 - ## Digest
