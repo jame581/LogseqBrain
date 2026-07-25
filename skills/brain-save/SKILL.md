@@ -65,13 +65,23 @@ Six categories — see `references/categories.md` for each one's format and rule
 
 8. **Update `pages/Meta.md`** if new user preferences emerged (see `references/categories.md` category 6).
 
-9. **Refresh `pages/Index.md`.** Every save rewrites the saved project's one-liner: keep the stable descriptor before the parenthetical untouched; replace the parenthetical with `(<latest version or milestone> — <current focus>)`, e.g. `(v0.8.0 shipped 2026-06-23 — v0.9.0 in design)`. One surgical single-line Edit. This is unconditional — Index rot comes precisely from "only when status changed" judgment calls. If the project's one-liner has no parenthetical yet, append one after the stable descriptor. If the project is missing from `pages/Index.md` entirely, add a one-liner under `## Projects` — descriptor taken from the project page's first Overview bullet, then the parenthetical.
+9. **Refresh the digest.** Unconditional on every save — the same discipline as the Index one-liner below, and for the same reason: rot comes precisely from "only when it changed" judgment calls. Follow `skills/_shared/digest.md`:
+   - **Recompute the Map** in one Bash call. Byte figures are authoritative; when the session-entry count comes back 0 but the Session Log has content, omit the count rather than writing `0 entries`.
+   - **Rewrite the page-top properties** `focus::`, `next::`, and `digest-updated::` (today). Write `open::` only when something is genuinely open — otherwise remove the line entirely.
+   - **Rewrite the `## Digest` bullets** from the same session knowledge that produced the Session Log entry and the Current Plan, in slot order: Identity, Now, Binding, Hazard, free, Map.
+   - **Check the 800-byte cap before writing** (`oversized-digest`, compose tier — `skills/_shared/hygiene-rules.md`). Over cap → recompress: drop the free slot first, then shorten Binding and Hazard. Never drop the Map.
+   - **If the page has no digest yet**, build one now from what is already in context — this is the lazy backfill path. Say so in the step-13 confirmation and mention that a full rebuild-from-source is available for richer history.
+   - **Task pages get a digest too**, thinner: Identity + Now + Map.
 
-10. **Post-write verify.** Run the "Post-write verify (scoped)" procedure in `skills/_shared/hygiene-rules.md` over exactly the files written in steps 6–9. Fix any hit per the catalog remediation and re-verify. This is mandatory — the compose self-check (step 5) is necessary but not sufficient.
+   Two surgical Edits: one on the page-top property block, one on the `## Digest` section (creating it after the property block and before `## Overview` if absent).
 
-11. **Write a journey-log entry** per `skills/_shared/journey-log.md` with activity line: `saved [[Projects/<ProjectName>]]`.
+10. **Refresh `pages/Index.md`.** Every save rewrites the saved project's one-liner: keep the stable descriptor before the parenthetical untouched; replace the parenthetical with `(<latest version or milestone> — <current focus>)`, e.g. `(v0.8.0 shipped 2026-06-23 — v0.9.0 in design)`. One surgical single-line Edit. This is unconditional — Index rot comes precisely from "only when status changed" judgment calls. If the project's one-liner has no parenthetical yet, append one after the stable descriptor. If the project is missing from `pages/Index.md` entirely, add a one-liner under `## Projects` — descriptor taken from the project page's first Overview bullet, then the parenthetical.
 
-12. **Confirm to the user** in plain language what was saved. List each thing written.
+11. **Post-write verify.** Run the "Post-write verify (scoped)" procedure in `skills/_shared/hygiene-rules.md` over exactly the files written in steps 6–10. Fix any hit per the catalog remediation and re-verify. This is mandatory — the compose self-check (step 5) is necessary but not sufficient.
+
+12. **Write a journey-log entry** per `skills/_shared/journey-log.md` with activity line: `saved [[Projects/<ProjectName>]]`.
+
+13. **Confirm to the user** in plain language what was saved. List each thing written.
 
 ## Auto-Suggest Save
 
