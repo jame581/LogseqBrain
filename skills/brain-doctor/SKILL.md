@@ -28,17 +28,18 @@ Resolve the graph path per `skills/_shared/path-resolution.md`.
 
 ## Process
 
-1. **Scan.** For each rule in `skills/_shared/hygiene-rules.md` with `enforced-at: scan` (all 10), run its detection across `pages/` and `journals/`. Collect counts and 1–2 example locations per rule. Stay read-only in this phase.
+1. **Scan.** For each rule in `skills/_shared/hygiene-rules.md` with `enforced-at: scan` (all 13), run its detection across `pages/` and `journals/`. Collect counts and 1–2 example locations per rule. Stay read-only in this phase.
 
 2. **Report.** Present a compact health summary grouped by the rule's `auto-fixable` field:
    - **Auto-fixable** (`yes` / `safe-only`): `code-in-braces`, `bare-hash-tag`, `unnamespaced-link`, `file-link`, `malformed-property` (safe tiers only).
-   - **Needs your call** (`report`): `description-link`, `broken-link` (with suggested matches), `duplicate-entry` (the duplicate groups), `structural-integrity` (missing props / stub sections), `jira-markup` (unfenced Jira residue — suggests the fence wrap).
+   - **Needs your call** (`report`): `description-link`, `broken-link` (with suggested matches), `duplicate-entry` (the duplicate groups), `structural-integrity` (missing props / stub sections), `jira-markup` (unfenced Jira residue — suggests the fence wrap), `missing-digest` (pages with no digest, largest first), `stale-digest` (digest older than the page), `oversized-digest` (digest over the 800 B cap — report only; never trim on-disk content automatically).
    Example:
    ```
    Brain health: 12 issues across 6 pages
    Auto-fixable (5):  3 {{code}}, 1 bare #tag, 1 malformed property
    Needs your call (7): 2 broken links (1 likely typo → suggests [[Tasks/CRMGM-1982]]),
                         3 duplicate Session Log entries, 2 pages missing last-updated::
+   Digests (4):       4 pages with no digest (Fat 109 KB, …) — say "backfill digests"
    ```
    If the graph is clean, say so and stop — no backup, journey-log just `ran brain-doctor (clean)`.
 
@@ -53,6 +54,24 @@ Resolve the graph path per `skills/_shared/path-resolution.md`.
 6. **Verify.** Re-run the detections. Confirm zero remaining (excluding intentional forward-references the user chose to keep) and that backtick counts per file are even (no broken inline-code spans).
 
 7. **Report results and write a journey-log entry** per `skills/_shared/journey-log.md` with activity line: `ran brain-doctor · fixed <N> issues` (or `ran brain-doctor (clean)`).
+
+## Guided digest backfill
+
+Triggered by "backfill digests" (or accepted from a `missing-digest` report). Same shape as the v0.9.0 task-status backfill: report, cost, one confirmation, then work.
+
+1. **Report what is missing.** Run the `missing-digest` detection from `skills/_shared/hygiene-rules.md`. Present every page with its byte size, largest first — the biggest pages pay a digest back soonest.
+
+2. **State the cost before spending it.** A rebuild reads real content. Estimate and say so plainly: *"14 pages, ~340 KB total — building all of them will read roughly 90 KB after the tail-first budgets in `skills/_shared/section-locator.md`. Proceed?"* Never begin without this.
+
+3. **Offer a scope.** Default to **project pages only** (fewer, higher value); offer "all" to include task pages, or a specific list. Let the user cut the batch down.
+
+4. **Build each digest** per the rebuild-from-source procedure in `skills/_shared/digest.md` — section reads under budget, Session Log tail-first, Map computed, 800-byte cap enforced before writing. One page at a time, so an interruption leaves a consistent graph.
+
+5. **Back up first if any page is being rewritten beyond an append.** Digest writes are two surgical Edits per page (property block, `## Digest` section), so the standard backup rule in step 4 of the main Process applies to this flow too.
+
+6. **Report the result** — pages built, pages skipped, total bytes read — and write a journey-log entry per `skills/_shared/journey-log.md`: `backfilled N digests`.
+
+**Never build a digest without confirmation.** It is a write, and it costs tokens; both are the user's call.
 
 ## Important Notes
 
