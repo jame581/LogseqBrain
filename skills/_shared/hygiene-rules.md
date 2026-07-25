@@ -147,7 +147,7 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
   for f in pages/Projects___*.md pages/Tasks___*.md; do
     case "$f" in *___SessionArchive.md) continue;; esac
     grep -q "^type:: session-archive" "$f" && continue
-    if ! head -12 "$f" | grep -q "^digest-updated:: " || ! grep -qE "^(- )?## Digest" "$f"; then
+    if ! awk '/^[[:space:]]*-/{exit} 1' "$f" | grep -q "^digest-updated:: " || ! grep -qE "^(- )?## Digest" "$f"; then
       echo "$(wc -c < "$f") $f missing digest"
     fi
   done | sort -rn
@@ -161,11 +161,14 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **detection:** `digest-updated::` more than 30 days behind `last-updated::` on the same page.
   ```
   for f in pages/Projects___*.md pages/Tasks___*.md; do
+    case "$f" in *___SessionArchive.md) continue;; esac
+    grep -q "^type:: session-archive" "$f" && continue
     d=$(grep -m1 "^digest-updated:: " "$f" | awk '{print $2}')
     l=$(grep -m1 "^last-updated:: " "$f" | awk '{print $2}')
     [ -n "$d" ] && [ -n "$l" ] || continue
     ds=$(date -d "$d" +%s 2>/dev/null) || continue
     ls=$(date -d "$l" +%s 2>/dev/null) || continue
+    [ "$ls" -gt "$ds" ] || continue   # digest newer than page is not stale
     [ $(( (ls - ds) / 86400 )) -gt 30 ] && echo "$f digest $d vs page $l"
   done
   ```
@@ -179,6 +182,8 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **detection:** the `## Digest` section exceeds 800 bytes, or any digest property value exceeds 120 bytes.
   ```
   for f in pages/Projects___*.md pages/Tasks___*.md; do
+    case "$f" in *___SessionArchive.md) continue;; esac
+    grep -q "^type:: session-archive" "$f" && continue
     b=$(awk '/^(- )?## Digest/{f=1;next} f&&/^(- )?## /{exit} f' "$f" | wc -c)
     [ "$b" -gt 800 ] && echo "$f digest ${b}B > 800B"
     grep -nE "^(focus|next|open):: .{121,}" "$f" | sed "s|^|$f |"
