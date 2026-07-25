@@ -3,7 +3,7 @@
 The single source of truth for the format violations that corrupt a Logseq brain graph. Two consumers read this file:
 
 - **`skills/brain-doctor/SKILL.md`** — iterates every rule whose `enforced-at` includes `scan` (reactive whole-graph lint + repair).
-- **`skills/brain-save/SKILL.md`** — applies rules whose `enforced-at` includes `compose` and `auto-fixable` is `yes`/`safe-only` as a write-time self-check on its own composed text. It also follows the compose-time *composition instructions* of `compose`+`report` rules — currently only `jira-markup`, whose "Compose (brain-save):" line tells it how to format content in the first place (fence it up front) rather than fixing it after the fact. It never runs the scan-only `report` rules (`description-link`, `broken-link`, `duplicate-entry`, `structural-integrity`), which need whole-graph context brain-save doesn't have. It (and later `brain-init`) also runs the `## Post-write verify (scoped)` procedure below after writing files, re-checking on disk what the compose self-check checked in memory.
+- **`skills/brain-save/SKILL.md`** — applies rules whose `enforced-at` includes `compose` and `auto-fixable` is `yes`/`safe-only` as a write-time self-check on its own composed text. It also follows the compose-time *composition instructions* of `compose`+`report` rules — currently only `jira-markup`, whose "Compose (brain-save):" line tells it how to format content in the first place (fence it up front) rather than fixing it after the fact. It never runs the scan-only `report` rules (`description-link`, `broken-link`, `duplicate-entry`, `structural-integrity`, `missing-digest`, `stale-digest`), which need whole-graph context brain-save doesn't have. It *does* apply `oversized-digest` at compose time, recompressing its own digest before writing — see that rule's remediation. It (and later `brain-init`) also runs the `## Post-write verify (scoped)` procedure below after writing files, re-checking on disk what the compose self-check checked in memory.
 
 The narrative "why" and the compose-time guidance live in `skills/_shared/logseq-format.md`; this file is the operational catalog.
 
@@ -137,6 +137,54 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **remediation:** report. One **optional** safe suggestion: backfill a missing `last-updated::` from the newest `## Session Log` date (offer, do not auto-apply).
 
   For missing task `status::`, offer the **guided batch backfill**: list every flagged task page with the date of its most recent Session Log entry; propose `done` for each, **except** propose `active` when the task is *visibly active* — a session entry within the last 30 days, **or** the task is listed in any project page's `## Active Tasks` / `## Current Plan` section. Present the full proposal table, apply on one confirmation (surgical Edit inserting the `status::` line into each page-top block). Never write without the confirmation.
+
+## `missing-digest`
+- **severity:** data-quality
+- **enforced-at:** scan
+- **auto-fixable:** report
+- **detection:** a project or task page carrying no digest. Excludes session-archive pages and the singletons.
+  ```
+  for f in pages/Projects___*.md pages/Tasks___*.md; do
+    case "$f" in *___SessionArchive.md) continue;; esac
+    grep -q "^type:: session-archive" "$f" && continue
+    if ! head -12 "$f" | grep -q "^digest-updated:: " || ! grep -qE "^(- )?## Digest" "$f"; then
+      echo "$(wc -c < "$f") $f missing digest"
+    fi
+  done | sort -rn
+  ```
+- **remediation:** report each page with its byte size, largest first (biggest pages pay back a digest soonest). Offer the rebuild-from-source procedure in `skills/_shared/digest.md`. **Report-tier**: building a digest is a judgment call with real token cost — never auto-spent. For a whole-graph pass use brain-doctor's guided digest backfill.
+
+## `stale-digest`
+- **severity:** data-quality
+- **enforced-at:** scan
+- **auto-fixable:** report
+- **detection:** `digest-updated::` more than 30 days behind `last-updated::` on the same page.
+  ```
+  for f in pages/Projects___*.md pages/Tasks___*.md; do
+    d=$(grep -m1 "^digest-updated:: " "$f" | awk '{print $2}')
+    l=$(grep -m1 "^last-updated:: " "$f" | awk '{print $2}')
+    [ -n "$d" ] && [ -n "$l" ] || continue
+    ds=$(date -d "$d" +%s 2>/dev/null) || continue
+    ls=$(date -d "$l" +%s 2>/dev/null) || continue
+    [ $(( (ls - ds) / 86400 )) -gt 30 ] && echo "$f digest $d vs page $l"
+  done
+  ```
+  (`date -d` is GNU — available in Git Bash and on Linux. On macOS/BSD use `date -j -f %Y-%m-%d "$d" +%s`. If neither is available, compare the `yyyy-MM-dd` strings lexicographically for ordering and report the gap in months rather than days.)
+- **remediation:** report both dates and the gap; suggest rebuild-from-source. Never rebuild without confirmation — a rebuild reads real content and costs real tokens.
+
+## `oversized-digest`
+- **severity:** data-quality
+- **enforced-at:** compose, scan
+- **auto-fixable:** safe-only
+- **detection:** the `## Digest` section exceeds 800 bytes, or any digest property value exceeds 120 bytes.
+  ```
+  for f in pages/Projects___*.md pages/Tasks___*.md; do
+    b=$(awk '/^(- )?## Digest/{f=1;next} f&&/^(- )?## /{exit} f' "$f" | wc -c)
+    [ "$b" -gt 800 ] && echo "$f digest ${b}B > 800B"
+    grep -nE "^(focus|next|open):: .{121,}" "$f" | sed "s|^|$f |"
+  done
+  ```
+- **remediation:** the safe subset is **compose-time only** — `brain-save` recompresses its own composed digest before writing it: drop the free slot first, then shorten Binding and Hazard; **never drop the Map**. At **scan** time this rule is **report-only**: trimming content already on disk is never safe to automate, because the excess may be the only place something is recorded. Same scoping discipline as `malformed-property`.
 
 ## Post-write verify (scoped)
 
