@@ -31,7 +31,7 @@ When the user says "load <project>" or similar:
 
 4. **Read today's journal** (`journals/yyyy_MM_dd.md`) if it exists — captures session notes from earlier today.
 
-5. **Active tasks.** Name the task IDs the digest mentions and stop there. Do not read `pages/Tasks___<ID>.md` or any external `plan.md` in brief mode — escalate on demand per `skills/_shared/escalation.md`. In full mode, read a referenced task page's digest (one Read) rather than its body, and skip pages whose page-top `status::` is `done`. A task page with no digest of its own falls back to its page-top property block plus its first section — never its whole body.
+5. **Active tasks.** Name the task IDs the digest mentions and stop there. Do not read `pages/Tasks___<ID>.md` or any external `plan.md` in brief mode — escalate on demand per `skills/_shared/escalation.md`. In full mode, read a referenced task page's digest (one Read) rather than its body, and skip pages whose page-top `status::` is `done`. A task page with no digest of its own falls back to its page-top property block plus its first section — **measured first and capped at 8 KB** per `skills/_shared/section-locator.md`. Task pages have no fixed template, so a "first section" can be arbitrarily long; over the cap, grep inside it instead (`skills/_shared/escalation.md` level 2). Never read its whole body.
 
    **Fallback path:** with no digest, take task IDs from the `## Current Plan` section step 2 already read, and skip task pages whose page-top `status::` is `done` — the same rule the digest path inherits. Do not read task page bodies either way.
 
@@ -52,7 +52,9 @@ When the user says "load <project>" or similar:
    **Fallback path:** there is no Map bullet to quote, so state coverage from what the fallback deliberately skipped — measure it rather than guessing (`skills/_shared/section-locator.md`, measure-before-read):
 
    > Loaded brief context for SELOS (active, updated 2026-07-21).
-   > **Not read:** Implementation, Decisions, Session Log beyond the last 3 entries, linked pages, done task pages. Say "load full" for all of it, or ask and I'll grep.
+   > **Not read:** Implementation, Decisions, Session Log beyond the last 3 entries (46 of 49), linked pages, done task pages. Say "load full" for all of it, or ask and I'll grep.
+
+   Quantify what you can — the sizes and counts come free from the measure-before-read step, and a number is harder to gloss over than a section name.
 
    The requirement is identical on both paths: never present partial content without saying what is missing.
 

@@ -34,7 +34,7 @@ Resolve the graph path per `skills/_shared/path-resolution.md`.
 
    One result set gives, per page: its type, status, freshness, current focus, next action, and any open blocker. Exclude session-archive pages (filename ending `___SessionArchive.md`, or `type:: session-archive` in the result).
 
-2. **Fall back per project, not wholesale.** A project page with no `focus::` / `next::` has not been backfilled yet. For **those pages only**, use the section-targeted reads in `skills/_shared/section-locator.md` — property block, first bullet of `## Current Plan`, last entry of `## Session Log` — exactly as before. A partially-backfilled graph therefore degrades one page at a time, never all at once. Mention the count once at the end: "3 projects have no digest — run brain-doctor to backfill."
+2. **Fall back per project, not wholesale.** A project page with no `focus::` / `next::` has not been backfilled yet. For **those pages only**, use the section-targeted reads in `skills/_shared/section-locator.md` — property block, first bullet of `## Current Plan`, last entry of `## Session Log` — exactly as before. A partially-backfilled graph therefore degrades one page at a time, never all at once. Mention the count once at the end: "<N> projects have no digest — run brain-doctor to backfill." Report the real count; never a placeholder digit.
 
 3. **Apply staleness rules.** Use `skills/_shared/staleness.md` to flag stale or abandoned projects.
 
