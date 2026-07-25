@@ -142,14 +142,18 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **severity:** data-quality
 - **enforced-at:** scan
 - **auto-fixable:** report
-- **detection:** a project or task page carrying no digest. Excludes session-archive pages and the singletons.
+- **detection:** a project or task page carrying no digest, **or one whose `## Digest` section has no `Map:` bullet** — the Map is a required slot (`skills/_shared/digest.md`), so a digest missing it is a missing digest, not a shorter one. Excludes session-archive pages and the singletons.
   ```
   for f in pages/Projects___*.md pages/Tasks___*.md; do
     case "$f" in *___SessionArchive.md) continue;; esac
     grep -q "^type:: session-archive" "$f" && continue
-    if ! awk '/^[[:space:]]*-/{exit} 1' "$f" | grep -q "^digest-updated:: " || ! grep -qE "^(- )?## Digest" "$f"; then
-      echo "$(wc -c < "$f") $f missing digest"
+    ok=1
+    awk '/^[[:space:]]*-/{exit} 1' "$f" | grep -q "^digest-updated:: " || ok=0
+    grep -qE "^(- )?## Digest" "$f" || ok=0
+    if [ "$ok" -eq 1 ]; then
+      awk '/^(- )?## Digest/{f=1;next} f&&/^(- )?## /{exit} f' "$f" | grep -q "Map:" || ok=0
     fi
+    [ "$ok" -eq 1 ] || echo "$(wc -c < "$f") $f missing digest"
   done | sort -rn
   ```
 - **remediation:** report each page with its byte size, largest first (biggest pages pay back a digest soonest). Offer the rebuild-from-source procedure in `skills/_shared/digest.md`. **Report-tier**: building a digest is a judgment call with real token cost — never auto-spent. For a whole-graph pass use brain-doctor's guided digest backfill.
@@ -179,7 +183,7 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **severity:** data-quality
 - **enforced-at:** scan
 - **auto-fixable:** report
-- **detection:** pure arithmetic — recompute the Map figures for a page using the **same scoped commands** as `skills/_shared/digest.md`'s Map snippet, parse the figures the page's `Map:` bullet actually claims, and diff. Any claimed figure off from the measured one by more than a rounding step is stale. Scope is identical to the other three digest rules: skip `___SessionArchive.md` and `type:: session-archive`.
+- **detection:** pure arithmetic — recompute the Map figures for a page using the **same scoped commands** as `skills/_shared/digest.md`'s Map snippet (byte figures **and** the entry count), parse the figures the page's `Map:` bullet actually claims, and diff. The tolerance is derived from the **unit the Map claims**, not a percentage of the measured size: a figure stated in KB rounds to (or truncates to) the nearest whole kilobyte, so its worst case is a fixed drift of ≤ 1023 B no matter how large the section is — tolerate **1024 B**. A figure stated in bytes carries no rounding step and should match closely — tolerate **20 B**. The entry count has no rounding step at all — a claimed count that doesn't exactly equal the measured count is stale, full stop. Scope is identical to the other three digest rules: skip `___SessionArchive.md` and `type:: session-archive`.
   ```
   for f in pages/Projects___*.md pages/Tasks___*.md; do
     case "$f" in *___SessionArchive.md) continue;; esac
@@ -193,6 +197,8 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
     impl=$(awk '/^(- )?## Implementation/{f=1;next} f&&/^(- )?## /{exit} f' "$f" | wc -c)
     dec=$(awk  '/^(- )?## Decisions/{f=1;next}       f&&/^(- )?## /{exit} f' "$f" \
           | grep -cE '^[[:space:]]+- \[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}')
+    ent=$(awk  '/^(- )?## Session Log/{f=1;next}    f&&/^(- )?## /{exit} f' "$f" \
+          | grep -cE '^[[:space:]]+- \[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}')
 
     claim() { echo "$map" | grep -oE "$1 [0-9]+ ?(KB|B)" | head -1 | grep -oE '[0-9]+ ?(KB|B)$'; }
     to_bytes() { v=$(echo "$1" | grep -oE '[0-9]+'); case "$1" in *KB) echo $((v * 1024));; *) echo "$v";; esac; }
@@ -200,7 +206,7 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
       c=$(claim "$1"); [ -n "$c" ] || return 0
       cb=$(to_bytes "$c"); m="$2"
       diff=$(( cb > m ? cb - m : m - cb ))
-      tol=$(( m / 20 + 20 ))   # ~5% of measured, floor 20B — a "rounding step"
+      case "$c" in *KB) tol=1024;; *) tol=20;; esac
       [ "$diff" -gt "$tol" ] && echo "$f: $1 claims $c, measured ${m}B"
     }
     check "Session Log" "$sl"
@@ -209,9 +215,12 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 
     cdec=$(echo "$map" | grep -oE 'Decisions [0-9]+' | grep -oE '[0-9]+$')
     [ -n "$cdec" ] && [ "$cdec" != "$dec" ] && echo "$f: Decisions claims $cdec, measured $dec"
+
+    centries=$(echo "$map" | grep -oE 'Session Log [0-9]+ ?(KB|B) \([0-9]+ entries\)' | grep -oE '[0-9]+ entries' | grep -oE '[0-9]+')
+    [ -n "$centries" ] && [ "$centries" != "$ent" ] && echo "$f: Session Log claims ($centries entries), measured $ent"
   done
   ```
-  This is the rule that catches what the other three digest rules cannot: `digest-updated::` and `## Digest`'s mere presence say nothing about whether the *bytes it claims* still match the page. Rotation is the primary offender (see `skills/brain-save/references/rotation.md`) — it moves tens of KB out of `## Session Log` and, absent the digest-refresh step added there, leaves the Map quoting a page that no longer exists.
+  This is the rule that catches what the other three digest rules cannot: `digest-updated::` and `## Digest`'s mere presence say nothing about whether the *bytes it claims* — or the *entry count* it claims, the figure `brain-load` quotes most prominently ("49 sessions of log not read") — still match the page. Rotation is the primary offender (see `skills/brain-save/references/rotation.md`) — it moves tens of KB out of `## Session Log` and, absent the digest-remap step added there, leaves the Map quoting a page that no longer exists.
 - **remediation:** report each mismatched figure (claimed vs. measured) and suggest a rebuild per `skills/_shared/digest.md`. Report-tier, like the other digest rules — a rebuild reads real content and costs real tokens, never spent without confirmation.
 
 ## `oversized-digest`

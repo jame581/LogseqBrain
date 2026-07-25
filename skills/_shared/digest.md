@@ -98,13 +98,21 @@ Rules:
 - Include the `Archive` pointer only when `pages/Projects___<Name>___SessionArchive.md` exists.
 - Placeholder stubs (`_Session entries are added by brain-save._` and friends) denote an empty section — a section holding only its stub counts as **0** and is omitted.
 
-## Building a digest — two paths
+## Building a digest — three paths
 
 ### Refresh (cheap, every save)
 
 Rewrite the properties and bullets from the session knowledge that produced the Session Log entry and Current Plan, then recompute the Map. Unconditional — see `brain-save` step 9. Cost: ~1 read + 1 edit.
 
 Unconditional by design: v0.9.0 recorded the lesson for the `Index.md` one-liner — *rot comes precisely from "only when it changed" judgment calls.*
+
+### Remap (cheapest, byte-moving writes only)
+
+Recompute **only** the Map bullet and `digest-updated::`; leave every prose slot (Identity, Now, Binding, Hazard, the free slot) exactly as it was. This is the correct response to a write that moved or changed the page's *bytes* without changing what the page *means* — the Session Log got smaller (rotation) or a format violation got fixed (a `brain-doctor` repair), but the project itself didn't change. Cost: the same one Bash call as the Map computation above, plus one Edit touching only the Map bullet and `digest-updated::`.
+
+Neither of the other two paths fits a byte-moving write. Refresh rewrites the prose slots **from the session knowledge that produced this save** — rotation and a doctor repair have no such session, so calling either of them "Refresh" would mean rewriting prose from nothing (silently blanking it) or silently reusing stale prose under a freshly-stamped `digest-updated::` (looking current while saying nothing new). Rebuild re-reads the page section by section, which is exactly the cost a write that only moved bytes doesn't need to pay.
+
+**Triggers:** `skills/brain-save/references/rotation.md` step 6, after a confirmed rotation (on the project page and on the archive page too, if it carries a digest); `brain-doctor`'s repair verify step, for every page whose bytes changed during a fix.
 
 ### Rebuild from source (expensive, corrective)
 
