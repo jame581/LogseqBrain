@@ -25,12 +25,16 @@ Resolve the graph path per `skills/_shared/path-resolution.md`.
 
 ## Dashboard Generation
 
-1. **List all projects.** Glob for `pages/Projects___*.md` in the graph folder and extract project names, **excluding** session-archive pages (filename ending `___SessionArchive.md`, or `type:: session-archive` in the page-top block).
+1. **Collect every project's state in one call.** Digest properties make the whole dashboard greppable:
 
-2. **Read each project page selectively** using the section-targeted-read pattern in `skills/_shared/section-locator.md`. For the dashboard you only need:
-   - `status::` and `last-updated::` properties (in the property block at offset 0, limit 10)
-   - First bullet of `## Current Plan` (current focus)
-   - Last entry of `## Session Log` (when last touched, with any `open-questions::`)
+   ```
+   rg "^(type|status|last-updated|focus|next|open|digest-updated):: " pages/ \
+      -g "Projects___*.md" -g "Tasks___*.md"
+   ```
+
+   One result set gives, per page: its type, status, freshness, current focus, next action, and any open blocker. Exclude session-archive pages (filename ending `___SessionArchive.md`, or `type:: session-archive` in the result).
+
+2. **Fall back per project, not wholesale.** A project page with no `focus::` / `next::` has not been backfilled yet. For **those pages only**, use the section-targeted reads in `skills/_shared/section-locator.md` — property block, first bullet of `## Current Plan`, last entry of `## Session Log` — exactly as before. A partially-backfilled graph therefore degrades one page at a time, never all at once. Mention the count once at the end: "3 projects have no digest — run brain-doctor to backfill."
 
 3. **Apply staleness rules.** Use `skills/_shared/staleness.md` to flag stale or abandoned projects.
 
@@ -38,7 +42,7 @@ Resolve the graph path per `skills/_shared/path-resolution.md`.
 
 5. **Read Meta date.** Check `pages/Meta.md` `last-updated::` only — don't read the whole file.
 
-6. **Task summary.** Glob `pages/Tasks___*.md`; read only each page-top `status::` (offset 0, limit 5). Group: **active** and **blocked** tasks are listed by ID with their status; **done** tasks collapse to a single count line ("N done"); tasks with no `status::` are listed as "legacy — run brain-doctor to backfill".
+6. **Task summary — no extra reads.** The single ripgrep in step 1 already covered `pages/Tasks___*.md`. Group from those results: **active** and **blocked** tasks listed by ID with their status; **done** tasks collapsed to one count line ("N done"); tasks with no `status::` listed as "legacy — run brain-doctor to backfill". Where a task has a `focus::`, show it; otherwise show the ID alone.
 
 7. **Present the dashboard.** For each project: name, status, staleness annotation (if any), current focus, open questions/blockers. Then: task summary (from step 6), recent cross-project decisions, total counts.
 
