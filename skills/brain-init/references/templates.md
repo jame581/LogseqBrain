@@ -24,7 +24,14 @@ type:: project
 status:: active
 created:: {{today}}
 last-updated:: {{today}}
+focus:: {{project_description}}
+next:: _No next action yet._
+digest-updated:: {{today}}
 
+- ## Digest
+  - {{project_description}}
+  - Now: just created; no work logged yet.
+  - Map: page 0 KB
 - ## Overview
   - {{project_description}}
 - ## Current Plan
@@ -37,8 +44,14 @@ last-updated:: {{today}}
   - _Session entries are added by brain-save._
 ```
 
-Replace `{{today}}` with current date in `yyyy-MM-dd` format.
-Replace `{{project_description}}` with user-provided description or placeholder.
+Replace `{{today}}` with the current date in `yyyy-MM-dd` format.
+Replace `{{project_description}}` with the user-provided description or placeholder.
+
+Note the deliberate omissions: **no `open::` line** (nothing is open on a fresh page — the property is omitted, never written as `open:: none`), and the Map carries only the page size because every section is still a placeholder stub. Both follow `skills/_shared/digest.md`. `brain-save` replaces all of this on the first real save.
+
+## Task Page Digest
+
+Task pages have no fixed template, but when `brain-save` or `brain-doctor` gives one a digest it is the thin form — Identity + Now + Map — plus the page-top properties `focus::`, `next::`, `digest-updated::` and the existing `status:: active | blocked | done`. See `skills/_shared/digest.md`.
 
 ## Session Log Entry Template
 
