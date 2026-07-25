@@ -3,7 +3,7 @@
 The single source of truth for the format violations that corrupt a Logseq brain graph. Two consumers read this file:
 
 - **`skills/brain-doctor/SKILL.md`** — iterates every rule whose `enforced-at` includes `scan` (reactive whole-graph lint + repair).
-- **`skills/brain-save/SKILL.md`** — applies rules whose `enforced-at` includes `compose` and `auto-fixable` is `yes`/`safe-only` as a write-time self-check on its own composed text. It also follows the compose-time *composition instructions* of `compose`+`report` rules — currently only `jira-markup`, whose "Compose (brain-save):" line tells it how to format content in the first place (fence it up front) rather than fixing it after the fact. It never runs the scan-only `report` rules (`description-link`, `broken-link`, `duplicate-entry`, `structural-integrity`, `missing-digest`, `stale-digest`), which need whole-graph context brain-save doesn't have. It *does* apply `oversized-digest` at compose time, recompressing its own digest before writing — see that rule's remediation. It (and later `brain-init`) also runs the `## Post-write verify (scoped)` procedure below after writing files, re-checking on disk what the compose self-check checked in memory.
+- **`skills/brain-save/SKILL.md`** — applies rules whose `enforced-at` includes `compose` and `auto-fixable` is `yes`/`safe-only` as a write-time self-check on its own composed text. It also follows the compose-time *composition instructions* of `compose`+`report` rules — currently only `jira-markup`, whose "Compose (brain-save):" line tells it how to format content in the first place (fence it up front) rather than fixing it after the fact. It never runs the scan-only `report` rules (`description-link`, `broken-link`, `duplicate-entry`, `structural-integrity`, `missing-digest`, `stale-digest`, `stale-map`), which need whole-graph context brain-save doesn't have. It *does* apply `oversized-digest` at compose time, recompressing its own digest before writing — see that rule's remediation. It (and later `brain-init`) also runs the `## Post-write verify (scoped)` procedure below after writing files, re-checking on disk what the compose self-check checked in memory.
 
 The narrative "why" and the compose-time guidance live in `skills/_shared/logseq-format.md`; this file is the operational catalog.
 
@@ -175,20 +175,60 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
   (`date -d` is GNU — available in Git Bash and on Linux. On macOS/BSD use `date -j -f %Y-%m-%d "$d" +%s`. If neither is available, compare the `yyyy-MM-dd` strings lexicographically for ordering and report the gap in months rather than days.)
 - **remediation:** report both dates and the gap; suggest rebuild-from-source. Never rebuild without confirmation — a rebuild reads real content and costs real tokens.
 
+## `stale-map`
+- **severity:** data-quality
+- **enforced-at:** scan
+- **auto-fixable:** report
+- **detection:** pure arithmetic — recompute the Map figures for a page using the **same scoped commands** as `skills/_shared/digest.md`'s Map snippet, parse the figures the page's `Map:` bullet actually claims, and diff. Any claimed figure off from the measured one by more than a rounding step is stale. Scope is identical to the other three digest rules: skip `___SessionArchive.md` and `type:: session-archive`.
+  ```
+  for f in pages/Projects___*.md pages/Tasks___*.md; do
+    case "$f" in *___SessionArchive.md) continue;; esac
+    grep -q "^type:: session-archive" "$f" && continue
+    grep -qE "^(- )?## Digest" "$f" || continue
+    map=$(awk '/^(- )?## Digest/{f=1;next} f&&/^(- )?## /{exit} f' "$f" | grep -m1 "Map:")
+    [ -n "$map" ] || continue
+
+    total=$(wc -c < "$f")
+    sl=$(awk   '/^(- )?## Session Log/{f=1;next}    f&&/^(- )?## /{exit} f' "$f" | wc -c)
+    impl=$(awk '/^(- )?## Implementation/{f=1;next} f&&/^(- )?## /{exit} f' "$f" | wc -c)
+    dec=$(awk  '/^(- )?## Decisions/{f=1;next}       f&&/^(- )?## /{exit} f' "$f" \
+          | grep -cE '^[[:space:]]+- \[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}')
+
+    claim() { echo "$map" | grep -oE "$1 [0-9]+ ?(KB|B)" | head -1 | grep -oE '[0-9]+ ?(KB|B)$'; }
+    to_bytes() { v=$(echo "$1" | grep -oE '[0-9]+'); case "$1" in *KB) echo $((v * 1024));; *) echo "$v";; esac; }
+    check() {  # $1 = label as it appears in the Map, $2 = measured bytes
+      c=$(claim "$1"); [ -n "$c" ] || return 0
+      cb=$(to_bytes "$c"); m="$2"
+      diff=$(( cb > m ? cb - m : m - cb ))
+      tol=$(( m / 20 + 20 ))   # ~5% of measured, floor 20B — a "rounding step"
+      [ "$diff" -gt "$tol" ] && echo "$f: $1 claims $c, measured ${m}B"
+    }
+    check "Session Log" "$sl"
+    check "Implementation" "$impl"
+    check "page" "$total"
+
+    cdec=$(echo "$map" | grep -oE 'Decisions [0-9]+' | grep -oE '[0-9]+$')
+    [ -n "$cdec" ] && [ "$cdec" != "$dec" ] && echo "$f: Decisions claims $cdec, measured $dec"
+  done
+  ```
+  This is the rule that catches what the other three digest rules cannot: `digest-updated::` and `## Digest`'s mere presence say nothing about whether the *bytes it claims* still match the page. Rotation is the primary offender (see `skills/brain-save/references/rotation.md`) — it moves tens of KB out of `## Session Log` and, absent the digest-refresh step added there, leaves the Map quoting a page that no longer exists.
+- **remediation:** report each mismatched figure (claimed vs. measured) and suggest a rebuild per `skills/_shared/digest.md`. Report-tier, like the other digest rules — a rebuild reads real content and costs real tokens, never spent without confirmation.
+
 ## `oversized-digest`
 - **severity:** data-quality
 - **enforced-at:** compose, scan
 - **auto-fixable:** safe-only
-- **detection:** the `## Digest` section exceeds 800 bytes, or any digest property value exceeds 120 bytes.
+- **detection:** the `## Digest` section exceeds 800 bytes, or any digest property value exceeds 120 **bytes**.
   ```
   for f in pages/Projects___*.md pages/Tasks___*.md; do
     case "$f" in *___SessionArchive.md) continue;; esac
     grep -q "^type:: session-archive" "$f" && continue
     b=$(awk '/^(- )?## Digest/{f=1;next} f&&/^(- )?## /{exit} f' "$f" | wc -c)
     [ "$b" -gt 800 ] && echo "$f digest ${b}B > 800B"
-    grep -nE "^(focus|next|open):: .{121,}" "$f" | sed "s|^|$f |"
+    LC_ALL=C grep -nE "^(focus|next|open):: .{121,}" "$f" | sed "s|^|$f |"
   done
   ```
+  **`LC_ALL=C` on the property check is load-bearing, not decoration.** `.` in a regex matches one *character*, and under a UTF-8 locale (`LC_ALL=en_US.UTF-8` etc.) a multi-byte character (`—`, `·` — both appear in this file's own digest examples) counts as one `.`, so a value that is genuinely 121 **bytes** but only 120 **characters** silently passes `.{121,}` and the cap is missed. The section-size check above already uses `wc -c`, which is byte-exact regardless of locale — forcing `LC_ALL=C` makes the property check agree with it on the same machine instead of drifting apart under whatever locale the shell happens to have.
 - **remediation:** the safe subset is **compose-time only** — `brain-save` recompresses its own composed digest before writing it: drop the free slot first, then shorten Binding and Hazard; **never drop the Map**. At **scan** time this rule is **report-only**: trimming content already on disk is never safe to automate, because the excess may be the only place something is recorded. Same scoping discipline as `malformed-property`.
 
 ## Post-write verify (scoped)

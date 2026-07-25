@@ -26,6 +26,7 @@ Either → suggest: "This page is <size>/<N> entries. Move session entries older
 3. **Move in one confirmed batch:** append the moving entries (verbatim, oldest-first) under `## Archived Session Log`, then delete them from the project page — surgical Edits on both sides, respecting `skills/_shared/logseq-format.md` survival rules (read-before-edit, anchor on heading text).
 4. **Marker bullet:** ensure the project page's `## Session Log` has as its first child: `- Older entries: [[Projects/<Name>/SessionArchive]]` (add once; don't duplicate on later rotations).
 5. **Verify:** entry count before == entries kept + entries archived; run the "Post-write verify (scoped)" procedure from `skills/_shared/hygiene-rules.md` over both files.
+6. **Refresh the digest — on both pages.** A rotation moves tens of KB out of the project page and into the archive page; if the digest is not refreshed, its Map keeps claiming bytes the project page no longer holds (and the archive page's own digest, if it has one, undercounts what it now holds). Recompute the Map and rewrite `digest-updated::` on the project page per `skills/_shared/digest.md`, and do the same on the archive page if it carries a digest. **Rotation without this step leaves the Map as a fabrication** — the next load quotes it as the mandatory "what I did not read" statement, so a stale Map is worse than no Map.
 
 ## Exclusions (enforced elsewhere)
 

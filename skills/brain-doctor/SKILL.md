@@ -28,11 +28,11 @@ Resolve the graph path per `skills/_shared/path-resolution.md`.
 
 ## Process
 
-1. **Scan.** For each rule in `skills/_shared/hygiene-rules.md` with `enforced-at: scan` (all 13), run its detection across `pages/` and `journals/`. Collect counts and 1–2 example locations per rule. Stay read-only in this phase.
+1. **Scan.** For each rule in `skills/_shared/hygiene-rules.md` with `enforced-at: scan` (all 14), run its detection across `pages/` and `journals/`. Collect counts and 1–2 example locations per rule. Stay read-only in this phase.
 
 2. **Report.** Present a compact health summary grouped by the rule's `auto-fixable` field:
    - **Auto-fixable** (`yes` / `safe-only`): `code-in-braces`, `bare-hash-tag`, `unnamespaced-link`, `file-link`, `malformed-property` (safe tiers only).
-   - **Needs your call** (`report`): `description-link`, `broken-link` (with suggested matches), `duplicate-entry` (the duplicate groups), `structural-integrity` (missing props / stub sections), `jira-markup` (unfenced Jira residue — suggests the fence wrap), `missing-digest` (pages with no digest, largest first), `stale-digest` (digest older than the page), `oversized-digest` (digest over the 800 B cap — report only; never trim on-disk content automatically).
+   - **Needs your call** (`report`): `description-link`, `broken-link` (with suggested matches), `duplicate-entry` (the duplicate groups), `structural-integrity` (missing props / stub sections), `jira-markup` (unfenced Jira residue — suggests the fence wrap), `missing-digest` (pages with no digest, largest first), `stale-digest` (digest older than the page), `stale-map` (Map claims figures that no longer match the page's measured bytes), `oversized-digest` (digest over the 800 B cap — report only; never trim on-disk content automatically).
    Example:
    ```
    Brain health: 16 issues across 8 pages
@@ -52,7 +52,7 @@ Resolve the graph path per `skills/_shared/path-resolution.md`.
    - **Auto-fixable group:** on one confirmation, apply the remediation from `skills/_shared/hygiene-rules.md`. For high-volume mechanical classes (`code-in-braces`, `bare-hash-tag`) a single scripted pass over the affected files is appropriate — this is one-time maintenance, not the per-session surgical save path, and a backup was taken. For `malformed-property`, auto-fix only the page-top property block; report inline `key: value` hits for user approval (an inline line may be prose). Hand-fix the brace/backtick edge cases noted in the catalog.
    - **Needs-your-call group:** walk each finding with the user (per-item or batch), applying only what they approve. Never auto-write `broken-link`, `duplicate-entry`, or `structural-integrity` changes.
 
-6. **Verify.** Re-run the detections. Confirm zero remaining (excluding intentional forward-references the user chose to keep) and that backtick counts per file are even (no broken inline-code spans).
+6. **Verify.** Re-run the detections. Confirm zero remaining (excluding intentional forward-references the user chose to keep) and that backtick counts per file are even (no broken inline-code spans). Then, for every page whose bytes changed during repair, refresh its digest per `skills/_shared/digest.md` — a repair is exactly the kind of byte-moving write that leaves a stale Map behind (see `stale-map`) if the digest isn't recomputed alongside it.
 
 7. **Report results and write a journey-log entry** per `skills/_shared/journey-log.md` with activity line: `ran brain-doctor · fixed <N> issues` (or `ran brain-doctor (clean)`).
 

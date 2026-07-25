@@ -76,7 +76,7 @@ p="pages/Projects___<Name>.md"
 total=$(wc -c < "$p")
 sl=$(awk '/^(- )?## Session Log/{f=1;next} f&&/^(- )?## /{exit} f' "$p" | wc -c)
 dec=$(awk '/^(- )?## Decisions/{f=1;next} f&&/^(- )?## /{exit} f' "$p" \
-      | grep -E '^[[:space:]]+- ' | grep -cvE '^[[:space:]]+- (_.*_$|[a-z][a-z0-9-]*:: )')
+      | grep -cE '^[[:space:]]+- \[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}')
 impl=$(awk '/^(- )?## Implementation/{f=1;next} f&&/^(- )?## /{exit} f' "$p" | wc -c)
 ent=$(awk '/^(- )?## Session Log/{f=1;next} f&&/^(- )?## /{exit} f' "$p" \
       | grep -cE '^[[:space:]]+- \[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}')
@@ -93,7 +93,7 @@ Rules:
 - **Byte figures are authoritative and always emitted.** Round to whole KB above 1 KB; below that use bytes.
 - **Entry counts are best-effort.** Session-entry bullet formatting varies across real graphs. When `ent` is 0 but the Session Log has content, emit the bytes and **omit the count entirely** — `0 entries` would be a lie, and the map's whole job is to be trustworthy.
 - **Every figure is scoped to its own section.** `sl`, `ent`, `dec`, and `impl` all bound their `awk` at the next `## ` heading. An unscoped `ent` grep silently counts dated `## Decisions` bullets as sessions — the Binding slot recommends dated decision lines, so this is the normal case, not an edge case. Scope first, count second.
-- **`dec` counts decision *entries*, not lines.** The grep chain excludes child property bullets (`context::`, `alternatives::`, `rationale::`, `status::`) and italic placeholder stubs — a page with 2 decisions reports `2`, not the 8 bullets they occupy.
+- **`dec` counts keyed off the dated headline**, mirroring the Decision Entry Template (`{{date}}: {{decision_title}}`) — it counts lines matching a `yyyy-MM-dd`-prefixed bullet, not lines in general. That is what keeps free-form children (a `**Consequences:**` sub-list, extra prose) out of the count without needing to enumerate every property key a decision might carry: a page with 2 decisions reports `2`, not the 8 bullets — headline, properties, and any free-form children combined — they occupy. The trade-off is the same one `ent` already makes: an **undated** decision entry will not be counted. `dec` is therefore best-effort like `ent`, and the same rule applies — when the Decisions section has content but the dated-headline count comes back 0, omit the count rather than report `dec: 0`, which would be a lie about a non-empty section.
 - **Absent sections are omitted**, never reported as zero.
 - Include the `Archive` pointer only when `pages/Projects___<Name>___SessionArchive.md` exists.
 - Placeholder stubs (`_Session entries are added by brain-save._` and friends) denote an empty section — a section holding only its stub counts as **0** and is omitted.

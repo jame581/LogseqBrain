@@ -25,6 +25,8 @@ When the user says "load <project>" or similar:
 
 2. **Read the digest — one Read.** `Read(page, offset 0, limit 20)` captures the page-top property block and the whole `## Digest` (see `skills/_shared/digest.md`). It may overshoot a few lines into `## Overview`; that is acceptable and bounded. This is the entire brief-mode read.
 
+   **Check before you use it: the read must contain a `Map:` bullet.** Task pages have no fixed template, so a property block can run long (extra task-specific properties push everything below it further down the file) — a `limit 20` read can land past the end of `## Digest` and return digest-shaped bullets with no Map. If `Map:` is not in what you read, the property block is longer than the bound, not that the page lacks a Map — re-read with a larger `limit` (e.g. 30), or `grep -nE '^(- )?## '` for the exact section span and read from there. **Never present a digest whose Map you did not see** — a digest without a Map is not a shorter digest, it is a page you cannot state coverage for.
+
    **If there is no `## Digest`:** fall back to the pre-digest brief mode — property block, first 5 Overview bullets, full Current Plan, last 3 Session Log entries, section-targeted per `skills/_shared/section-locator.md` — and then offer to build one: *"This page has no digest yet — want me to build one? Future loads drop from ~4 KB to under 1 KB."* Build only on confirmation, per the rebuild-from-source procedure in `skills/_shared/digest.md`. Every existing graph therefore keeps working exactly as it does today until it is backfilled.
 
 3. **Stop reading — digest path only.** If the fallback in step 2 ran, it has already read what it needs; skip to step 4. On the digest path, do **not** pre-load Overview, Current Plan, Implementation, Decisions, Session Log, linked pages, or task pages. The Map bullet says what exists and how big it is; fetch from it on demand per `skills/_shared/escalation.md` (on the fallback path, escalation starts at level 2 — targeted grep — since levels 0–1 presuppose a digest and Map bullet) when the conversation actually needs it — announced, one level at a time.
@@ -77,8 +79,9 @@ When the user asks "what do we know about X" or similar, follow the algorithm in
 
 **Digest mode** (default — "load <project>"):
 1. One `Read(page, offset 0, limit 20)` — properties + `## Digest`.
-2. Nothing else. ≤ ~2 KB regardless of page size.
-3. Everything else arrives through `skills/_shared/escalation.md`, announced, when the conversation needs it.
+2. **The read must contain a `Map:` bullet.** If it does not, the property block ran longer than the bound — re-read with a larger `limit`, or `grep -nE '^(- )?## '` for the exact span. Never present a digest whose Map you did not see.
+3. Nothing else. ≤ ~2 KB regardless of page size.
+4. Everything else arrives through `skills/_shared/escalation.md`, announced, when the conversation needs it.
 
 **Brief mode** (automatic fallback — the page has no `## Digest`): the pre-digest behaviour, unchanged:
 1. Properties (type, status, last-updated)
