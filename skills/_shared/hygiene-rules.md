@@ -145,6 +145,7 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **detection:** a project or task page carrying no digest, **or one whose `## Digest` section has no `Map:` bullet** — the Map is a required slot (`skills/_shared/digest.md`), so a digest missing it is a missing digest, not a shorter one. Excludes session-archive pages and the singletons.
   ```
   for f in pages/Projects___*.md pages/Tasks___*.md; do
+    [ -e "$f" ] || continue    # unexpanded glob on a graph with no task pages
     case "$f" in *___SessionArchive.md) continue;; esac
     grep -q "^type:: session-archive" "$f" && continue
     ok=1
@@ -165,6 +166,7 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **detection:** `digest-updated::` more than 30 days behind `last-updated::` on the same page.
   ```
   for f in pages/Projects___*.md pages/Tasks___*.md; do
+    [ -e "$f" ] || continue    # unexpanded glob on a graph with no task pages
     case "$f" in *___SessionArchive.md) continue;; esac
     grep -q "^type:: session-archive" "$f" && continue
     d=$(grep -m1 "^digest-updated:: " "$f" | awk '{print $2}')
@@ -183,9 +185,10 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **severity:** data-quality
 - **enforced-at:** scan
 - **auto-fixable:** report
-- **detection:** pure arithmetic — recompute the Map figures for a page using the **same scoped commands** as `skills/_shared/digest.md`'s Map snippet (byte figures **and** the entry count), parse the figures the page's `Map:` bullet actually claims, and diff. The tolerance is derived from the **unit the Map claims**, not a percentage of the measured size: a figure stated in KB rounds to (or truncates to) the nearest whole kilobyte, so its worst case is a fixed drift of ≤ 1023 B no matter how large the section is — tolerate **1024 B**. A figure stated in bytes carries no rounding step and should match closely — tolerate **20 B**. The entry count has no rounding step at all — a claimed count that doesn't exactly equal the measured count is stale, full stop. Scope is identical to the other three digest rules: skip `___SessionArchive.md` and `type:: session-archive`.
+- **detection:** pure arithmetic — recompute the Map figures for a page using the **same scoped commands** as `skills/_shared/digest.md`'s Map snippet (byte figures **and** the entry count), parse the figures the page's `Map:` bullet actually claims, and diff. The tolerance is derived from the **unit the Map claims**, not a percentage of the measured size: a figure stated in KB rounds to (or truncates to) the nearest whole kilobyte, so its worst case is a fixed drift of ≤ 1023 B no matter how large the section is — tolerate **1024 B**. A figure stated in bytes carries no rounding step, but the `page` figure carries a **self-reference error**: `brain-save` step 9 measures the page and *then* edits the Map bullet, so the claim is stale by the bullet's own length delta the moment it lands (measured: 32 B on a fresh project's first save). Tolerate **64 B** for byte-denominated figures — enough to absorb that, far below any real drift. Above 1 KB the KB tier's 1024 B absorbs it already, so this only ever applies to sub-1 KB pages. The entry count has no rounding step at all — a claimed count that doesn't exactly equal the measured count is stale, full stop. Scope is identical to the other three digest rules: skip `___SessionArchive.md` and `type:: session-archive`.
   ```
   for f in pages/Projects___*.md pages/Tasks___*.md; do
+    [ -e "$f" ] || continue    # unexpanded glob on a graph with no task pages
     case "$f" in *___SessionArchive.md) continue;; esac
     grep -q "^type:: session-archive" "$f" && continue
     grep -qE "^(- )?## Digest" "$f" || continue
@@ -206,7 +209,7 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
       c=$(claim "$1"); [ -n "$c" ] || return 0
       cb=$(to_bytes "$c"); m="$2"
       diff=$(( cb > m ? cb - m : m - cb ))
-      case "$c" in *KB) tol=1024;; *) tol=20;; esac
+      case "$c" in *KB) tol=1024;; *) tol=64;; esac
       [ "$diff" -gt "$tol" ] && echo "$f: $1 claims $c, measured ${m}B"
     }
     check "Session Log" "$sl"
@@ -230,6 +233,7 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **detection:** the `## Digest` section exceeds 800 bytes, or any digest property value exceeds 120 **bytes**.
   ```
   for f in pages/Projects___*.md pages/Tasks___*.md; do
+    [ -e "$f" ] || continue    # unexpanded glob on a graph with no task pages
     case "$f" in *___SessionArchive.md) continue;; esac
     grep -q "^type:: session-archive" "$f" && continue
     b=$(awk '/^(- )?## Digest/{f=1;next} f&&/^(- )?## /{exit} f' "$f" | wc -c)
