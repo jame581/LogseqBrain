@@ -74,11 +74,12 @@ Prose can be wrong in ways arithmetic cannot, so compute the map at write time. 
 ```bash
 p="pages/Projects___<Name>.md"
 total=$(wc -c < "$p")
-sl=$(awk '/^(- )?## Session Log/{f=1} f' "$p" | wc -c)
+sl=$(awk '/^(- )?## Session Log/{f=1;next} f&&/^(- )?## /{exit} f' "$p" | wc -c)
 dec=$(awk '/^(- )?## Decisions/{f=1;next} f&&/^(- )?## /{exit} f' "$p" \
       | grep -E '^[[:space:]]+- ' | grep -cvE '^[[:space:]]+- (_.*_$|[a-z][a-z0-9-]*:: )')
 impl=$(awk '/^(- )?## Implementation/{f=1;next} f&&/^(- )?## /{exit} f' "$p" | wc -c)
-ent=$(grep -cE '^[[:space:]]+- \[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}' "$p")
+ent=$(awk '/^(- )?## Session Log/{f=1;next} f&&/^(- )?## /{exit} f' "$p" \
+      | grep -cE '^[[:space:]]+- \[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}')
 ```
 
 Format:
@@ -91,6 +92,7 @@ Rules:
 
 - **Byte figures are authoritative and always emitted.** Round to whole KB above 1 KB; below that use bytes.
 - **Entry counts are best-effort.** Session-entry bullet formatting varies across real graphs. When `ent` is 0 but the Session Log has content, emit the bytes and **omit the count entirely** — `0 entries` would be a lie, and the map's whole job is to be trustworthy.
+- **Every figure is scoped to its own section.** `sl`, `ent`, `dec`, and `impl` all bound their `awk` at the next `## ` heading. An unscoped `ent` grep silently counts dated `## Decisions` bullets as sessions — the Binding slot recommends dated decision lines, so this is the normal case, not an edge case. Scope first, count second.
 - **`dec` counts decision *entries*, not lines.** The grep chain excludes child property bullets (`context::`, `alternatives::`, `rationale::`, `status::`) and italic placeholder stubs — a page with 2 decisions reports `2`, not the 8 bullets they occupy.
 - **Absent sections are omitted**, never reported as zero.
 - Include the `Archive` pointer only when `pages/Projects___<Name>___SessionArchive.md` exists.
