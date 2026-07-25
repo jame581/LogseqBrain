@@ -9,7 +9,7 @@ The digest (`skills/_shared/digest.md`) is a floor, not a ceiling. When the conv
 | 0 | Digest — already loaded | ~1 KB | — |
 | 1 | Consult the Map bullet: does this even exist on this page? | 0 | no |
 | 2 | Targeted grep — `rg -n "<term>" <page>` | ~100 B | **yes** |
-| 3 | Bounded read around the hits (± 10 lines) | ~1–2 KB | yes |
+| 3 | Bounded read around the hits (± 10 lines) — **only while the windows total ≤ 8 KB** (rule 7) | ~1–2 KB | yes |
 | 4 | Whole-section read — only if that section measures ≤ 8 KB | ≤ 8 KB | yes |
 | 5 | Whole-page read | up to ~109 KB | **ask the user first** |
 
@@ -21,6 +21,15 @@ The digest (`skills/_shared/digest.md`) is a floor, not a ceiling. When the conv
 4. **Measure before you climb.** `wc -c` and `grep -c` are effectively free — use the measure-before-read step in `skills/_shared/section-locator.md` to pick the level rather than guessing.
 5. **Every bounded read states its coverage** (`skills/_shared/section-locator.md`). No silent truncation, at any level.
 6. **Escalation is read-only.** It never triggers a write, a digest refresh, or a rebuild. Those are `brain-save`'s and `brain-doctor`'s business.
+7. **Hit density changes the move.** Level 3 works when hits are *clustered*. It fails silently when they are not: a common term hits once per session entry, so 49 evenly-spaced hits have ±10-line windows that union to nearly the whole page — a whole-page read wearing a level-3 badge, announced but never consent-gated. Measured on a real fixture: a 51-hit grep expanded to 85,401 of 85,479 bytes.
+
+   Count the hits (`rg -c`) before reading around them. When the count is high:
+   - **Pick the section that structurally answers the question** — "why did we…" → `## Decisions`; "when did we…" → `## Session Log`. The Map bullet's counts tell you which is plausible.
+   - **Narrow the term**, don't widen the read. Grep the specific thing, not the topic.
+   - **Scope the grep to one section** using the line range from the section map.
+   - Failing all that, **state the hit count and the byte cost and let the user choose** — the same courtesy level 5 requires.
+
+   **A level-3 read whose windows exceed 8 KB is not a level-3 read.** Treat it as level 4 (and check the section cap) or level 5 (and ask). Never serially read around every hit.
 
 ## Worked example
 
