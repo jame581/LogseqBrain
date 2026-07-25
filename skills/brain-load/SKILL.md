@@ -27,15 +27,19 @@ When the user says "load <project>" or similar:
 
    **If there is no `## Digest`:** fall back to the pre-digest brief mode — property block, first 5 Overview bullets, full Current Plan, last 3 Session Log entries, section-targeted per `skills/_shared/section-locator.md` — and then offer to build one: *"This page has no digest yet — want me to build one? Future loads drop from ~4 KB to under 1 KB."* Build only on confirmation, per the rebuild-from-source procedure in `skills/_shared/digest.md`. Every existing graph therefore keeps working exactly as it does today until it is backfilled.
 
-3. **Stop reading.** Do **not** pre-load Overview, Current Plan, Implementation, Decisions, Session Log, linked pages, or task pages. The Map bullet says what exists and how big it is; fetch from it on demand per `skills/_shared/escalation.md` when the conversation actually needs it — announced, one level at a time.
+3. **Stop reading — digest path only.** If the fallback in step 2 ran, it has already read what it needs; skip to step 4. On the digest path, do **not** pre-load Overview, Current Plan, Implementation, Decisions, Session Log, linked pages, or task pages. The Map bullet says what exists and how big it is; fetch from it on demand per `skills/_shared/escalation.md` (on the fallback path, escalation starts at level 2 — targeted grep — since levels 0–1 presuppose a digest and Map bullet) when the conversation actually needs it — announced, one level at a time.
 
 4. **Read today's journal** (`journals/yyyy_MM_dd.md`) if it exists — captures session notes from earlier today.
 
-5. **Active tasks.** Name the task IDs the digest mentions and stop there. Do not read `pages/Tasks___<ID>.md` or any external `plan.md` in brief mode — escalate on demand per `skills/_shared/escalation.md`. In full mode, read a referenced task page's digest (one Read) rather than its body, and skip pages whose page-top `status::` is `done`.
+5. **Active tasks.** Name the task IDs the digest mentions and stop there. Do not read `pages/Tasks___<ID>.md` or any external `plan.md` in brief mode — escalate on demand per `skills/_shared/escalation.md`. In full mode, read a referenced task page's digest (one Read) rather than its body, and skip pages whose page-top `status::` is `done`. A task page with no digest of its own falls back to its page-top property block plus its first section — never its whole body.
+
+   **Fallback path:** with no digest, take task IDs from the `## Current Plan` section step 2 already read, and skip task pages whose page-top `status::` is `done` — the same rule the digest path inherits. Do not read task page bodies either way.
 
 6. **Apply staleness rules.** Use `skills/_shared/staleness.md` against the project's `last-updated::` and `status::`.
 
 7. **Surface session continuity hints — from the digest, not the Session Log.** `focus::` is what was being worked on, `next::` is the immediate next action, `open::` (when present) is the blocker. Frame as: "Picking up where you left off — focus: [focus]. Next: [next]. Open: [open]." No Session Log read is required to say this.
+
+   **Fallback path:** with no digest there are no `focus::` / `next::` / `open::` properties. Build the same hint from the most recent Session Log entry step 2 already read — what was last worked on, plus any `open-questions::` on that entry. Frame it identically, so the two paths are indistinguishable to the user.
 
 8. **Present a context summary, with an explicit coverage statement.** Give project name, status, staleness annotation, the digest bullets, and the continuity hint from step 7 — then say what was *not* read, from the Map bullet:
 
@@ -44,6 +48,13 @@ When the user says "load <project>" or similar:
    > **Not read:** Session Log 89 KB (49 entries), Decisions 12, Implementation 4 KB. Ask and I'll grep any of it.
 
    This is mandatory, not decorative — see "Truncation honesty" in `skills/_shared/section-locator.md`. Presenting a digest without saying what it omits is what lets the model reason from a fragment as though it held the whole history.
+
+   **Fallback path:** there is no Map bullet to quote, so state coverage from what the fallback deliberately skipped — measure it rather than guessing (`skills/_shared/section-locator.md`, measure-before-read):
+
+   > Loaded brief context for SELOS (active, updated 2026-07-21).
+   > **Not read:** Implementation, Decisions, Session Log beyond the last 3 entries, linked pages, done task pages. Say "load full" for all of it, or ask and I'll grep.
+
+   The requirement is identical on both paths: never present partial content without saying what is missing.
 
 9. **Write a journey-log entry** per `skills/_shared/journey-log.md` with activity line: `loaded [[Projects/<MatchedName>]] (digest)` when the digest path ran, `loaded [[Projects/<MatchedName>]] (brief)` when the fallback ran, `loaded [[Projects/<MatchedName>]] (full)` in full mode.
 
@@ -74,7 +85,7 @@ When the user asks "what do we know about X" or similar, follow the algorithm in
 4. Session Log (last 3 entries only)
 5. Skip Implementation, Decisions, linked context, `done` task pages, and session-archive pages (`type:: session-archive`)
 
-Then offer to build a digest.
+Then state coverage as in step 8, mention that more is available — "Say 'load full' for decisions, implementation details, and full history" — and offer to build a digest.
 
 **Full mode** ("load <project> full", "load everything about <project>"):
 1. All properties and the digest
@@ -90,6 +101,6 @@ In digest mode, mention what more is available: "Loaded the digest. Ask about an
 
 ## Important Notes
 
-- Be selective about reads. Token budget matters — use the section-targeted-read pattern in step 2 of "Loading a Specific Project" rather than reading whole pages.
+- Be selective about reads. Token budget matters — on the digest path step 2 is a single bounded Read; on the fallback path use the section-targeted-read pattern in `skills/_shared/section-locator.md`. Never read a whole page to answer a question.
 - After loading, confirm what's available and suggest next actions.
 - All graph content is Logseq outliner format. See `CLAUDE.md` for invariants.
