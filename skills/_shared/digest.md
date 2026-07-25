@@ -48,7 +48,7 @@ Sits immediately after the property block, **before** `## Overview`.
   - Map: Session Log 89 KB (49 entries) · Decisions 12 · Implementation 4 KB · Archive [[Projects/Unicorn-Globus/SessionArchive]] · page 109 KB
 ```
 
-**Slots** — 3 to 6 bullets, in this order. Slot 1 and the Map are required; 2–5 are used as the page warrants.
+**Slots** — 2 to 6 bullets, in this order. **Identity (slot 1) and Map are required.** Include **Now** whenever the page has any state to report — in practice almost always, since it is derivable from `## Current Plan`. Slots 3–5 as the page warrants. Never pad to hit a count: a two-bullet digest on a page with nothing to say is correct, and a hollow "Now: no updates" bullet is not.
 
 1. **Identity** — what this project or task *is*. The most stable line; changes rarely.
 2. **Now** — current state and phase.
