@@ -43,26 +43,29 @@ Then choose: a 3 KB section is fine to read whole; an 89 KB one is not — grep 
 
 ## Reading a section's tail
 
-The algorithm above reads *forward* from a heading — fine when the whole section is small, but `digest.md` mandates reading `## Session Log` **tail-first** (recent entries carry more signal per byte), and brain-load's fallback path needs "last 3 entries." Neither is a forward read, and getting the tail of an 84 KB section without reading it whole needs its own recipe:
+The algorithm above reads *forward* from a heading — fine when the whole section is small, but `digest.md` mandates reading `## Session Log` **tail-first** (recent entries carry more signal per byte), and brain-load's no-digest fallback needs a **byte-bounded** tail: last 3 entries **or ~4 KB, whichever is smaller**. A count alone assumes average-sized bullets — measured on a real page, three recent entries averaging ~3 KB each cost 9.1 KB, blowing straight past any stated ceiling. Neither is a forward read, and getting the tail of a large section without reading it whole needs its own recipe:
 
 1. **Find every entry-start line, cheaply.** `grep -n` on the entry-start pattern costs a few hundred bytes of line-number output, not the section itself:
    ```bash
    p="pages/Projects___<Name>.md"
    grep -nE '^[[:space:]]+- \[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}' "$p"
    ```
-2. **Take the last N line numbers** — for "last 3 entries":
+2. **Take the last N line numbers, largest N first, then shrink to fit any byte cap the caller states.** For a plain count target ("last 3 entries," no cap), take the last 3 and move on. When a caller also states a byte cap — brain-load's fallback: last 3 entries *or* ~4 KB, whichever is smaller — measure before committing to N instead of assuming 3 is safe:
    ```bash
-   grep -nE '^[[:space:]]+- \[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}' "$p" | tail -3
+   grep -nE '^[[:space:]]+- \[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}' "$p" | tail -3   # candidate: 3 entries
    ```
-3. **Read from the earliest of those N lines.** If the section is last in the file (as `## Session Log` usually is), read to EOF — no next heading to bound against:
+   Try the largest N (3) first: take the earliest of those 3 line numbers, `tail -n +<that line>` and `wc -c` the result. Under the cap → read it, done — report "3 of M". Over the cap → drop to N=2 (earliest of the last 2), re-measure. Still over → drop to N=1 and read it regardless of size — **never return zero entries**, and say so even when that single entry alone exceeds the cap. State the N you actually landed on; never assume 3 without checking.
+3. **Read from the earliest of the N lines you settled on.** If the section is last in the file (as `## Session Log` usually is), read to EOF — no next heading to bound against:
    ```bash
-   start=$(grep -nE '^[[:space:]]+- \[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}' "$p" | tail -3 | head -1 | cut -d: -f1)
+   start=$(grep -nE '^[[:space:]]+- \[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}' "$p" | tail -N | head -1 | cut -d: -f1)   # N = the count settled on in step 2
    tail -n +"$start" "$p"            # or Read(offset = start-1, limit = total_lines - start + 1)
    ```
    If another heading follows the section, bound the read at `next-heading-line − 1` instead, exactly as step 4 of the main algorithm does.
 4. **State the coverage** as elsewhere — "read N of M entries, X KB of Y KB" — using the byte counts from `wc -c` on the tail read versus the whole-section measurement from "Measure before you read."
 
-Worked example, against a 49-entry, 84.6 KB `## Session Log`: the three commands above return entry line numbers, the earliest of the last 3 is line 485 of a 514-line file, and `tail -n +485` reads 5.2 KB — the last 3 entries, at ~6% of the section's bytes, without reading the other 46.
+Worked example (count-only, no cap), against a 49-entry, 84.6 KB `## Session Log`: the three commands above return entry line numbers, the earliest of the last 3 is line 485 of a 514-line file, and `tail -n +485` reads 5.2 KB — the last 3 entries, at ~6% of the section's bytes, without reading the other 46.
+
+Worked example (byte-bounded, brain-load's fallback cap) — against a real 29.6 KB `## Session Log` (12 entries, ~2.8 KB average recent entry): the last-3 candidate (from line 176 of a 207-line file) reads **9,098 B** — already past the ~4 KB fallback cap. Dropping to the last 2 (from line 188) reads 6,271 B — still over. Dropping to the last 1 (from line 199) reads **2,815 B** — under the cap. Read that one entry and report "1 of 12 entries, 2.8 KB of 29.6 KB" rather than silently reading the 9 KB the count-only rule alone would have produced.
 
 ## Truncation honesty (mandatory)
 
@@ -80,7 +83,9 @@ Three places enforce it, at different granularities:
 
 ## Token-frugality target
 
-With a digest present, a brief load is **one** Read of ≤ ~2 KB regardless of page size. Without one, a fat page's brief load is ≤ 8 KB of section-targeted reads. A save reads only the sections it will touch.
+With a digest present, a brief load is **one** Read of ≤ ~2 KB regardless of page size. A save reads only the sections it will touch.
+
+Without a digest, the fallback has a **stated per-component budget**, not one soft ceiling a real page can quietly blow past: property block ≤ ~2 KB (`limit 10`) + Overview first 5 bullets ≤ ~2 KB + Current Plan ≤ 8 KB (the per-section cap above) + Session Log tail ≤ ~4 KB (byte-bounded — see "Reading a section's tail" above: last 3 entries or ~4 KB, whichever is smaller). That is ≤ ~16 KB worst case; real pages land well under it because Current Plan and Overview rarely approach their caps. Measured on a real 59.8 KB page with no digest (`Projects___SELOS.md`): property block 1.1 KB + Overview 1.0 KB + Current Plan 3.7 KB + Session Log tail 2.8 KB (1 of 12 entries, capped down from the 9.1 KB "last 3 entries" alone would have read) = **8.7 KB**. The byte cap on the tail read is what makes any of this hold — "last 3 entries" is denominated in entries, not bytes, and a page whose recent entries run large (this one averages ~3 KB each) blows through any stated ceiling without it. Raising the old ≤ 8 KB target to cover the 15 KB this same page cost before the cap existed would not have fixed anything; the tail read itself had to shrink.
 
 ## Failure modes
 

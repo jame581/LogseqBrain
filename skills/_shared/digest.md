@@ -45,7 +45,7 @@ Sits immediately after the property block and before the first `## ` section, wh
   - Now: unifying 5 Hangfire schedulers behind one dispatcher (phase 2 of 4)
   - Binding: 2026-04-17 DEV Mongo removed; whole-DEV decommission still undecided
   - Hazard: GLOPRICE-399 migration overlaps Price Checker hosts
-  - Map: Session Log 89 KB (49 entries) · Decisions 12 · Implementation 4 KB · Archive [[Projects/Unicorn-Globus/SessionArchive]] · page 109 KB
+  - Map: Session Log 87 KB (47 entries) · Active Tasks 10 KB · Current Plan 3 KB · Decisions 2 KB (2) · Archive [[Projects/Unicorn-Globus/SessionArchive]] · page 107 KB
 ```
 
 **Slots** — 2 to 6 bullets, in this order. **Identity (slot 1) and Map are required.** Include **Now** whenever the page has any state to report — in practice almost always, since it is derivable from `## Current Plan`. Slots 3–5 as the page warrants. Never pad to hit a count: a two-bullet digest on a page with nothing to say is correct, and a hollow "Now: no updates" bullet is not.
@@ -55,7 +55,7 @@ Sits immediately after the property block and before the first `## ` section, wh
 3. **Binding** — dated decisions that still constrain the work. Prefer a *pointer* (`2026-04-17 DEV Mongo removed`) over restated reasoning; the reasoning lives in `## Decisions` and is one grep away.
 4. **Hazard** — gotchas, overlaps, traps.
 5. *(free)* — anything the slots above miss.
-6. **Map** — computed, always last, always present.
+6. **Map** — computed, always last, always present, derived from the page's own section map (see below) rather than a fixed field list.
 
 **Hard cap: 800 bytes** for the whole section, map included. Measure before writing:
 
@@ -63,40 +63,92 @@ Sits immediately after the property block and before the first `## ` section, wh
 awk '/^(- )?## Digest/{f=1;next} f&&/^(- )?## /{exit} f' "$p" | wc -c
 ```
 
-Over cap → recompress: drop the free slot first, then shorten Binding and Hazard. **Never drop the Map.** Never write an over-cap digest — see `oversized-digest` in `skills/_shared/hygiene-rules.md`.
+Over cap → recompress in this order:
+
+1. **Shrink the Map first, not the prose.** The Map's own "fitting the 800-byte cap" rule (below) drops its smallest above-threshold entries and says `+N more` — this loses only a byte figure Claude can re-measure on demand, cheaper than losing prose nobody will reconstruct.
+2. If the Map alone (down to its single largest entry, the Archive pointer, and the page total — never fewer) still leaves no room, drop the free slot.
+3. Still over → shorten Binding and Hazard.
+
+**Never drop the Map wholesale** — it can shrink internally, but a digest with no Map at all is a missing digest (`missing-digest`), not a compressed one. Never write an over-cap digest — see `oversized-digest` in `skills/_shared/hygiene-rules.md`.
 
 Task-page digests run thinner — typically Identity + Now + Map — because task pages have no fixed template.
 
 ## The Map bullet is measured, never remembered
 
-Prose can be wrong in ways arithmetic cannot, so compute the map at write time. One Bash call:
+Prose can be wrong in ways arithmetic cannot, so compute the map at write time — and compute it from the page's **actual** section map, not a fixed field list. A fixed list (the earlier `Session Log · Decisions · Implementation · Archive · page`) under-describes any page whose real structure has grown past it: measured live, `## Active Tasks` was a project page's second-largest section (10,608 B, 10% of the page) and never appeared in the map at all, so `brain-load`'s "not read" statement — which presents itself as a complete account of what was skipped — silently omitted 11% of the page. The map must describe the page it is actually attached to, not the shape of a template.
+
+### Derivation shell
+
+Enumerate the page's real sections (excluding `## Digest` itself, which is the map, not a mapped section), measure each, keep the ones at or above a **1 KB threshold** — below that they are noise, not signal — and sort largest first:
 
 ```bash
 p="pages/Projects___<Name>.md"
+threshold=1024
 total=$(wc -c < "$p")
-sl=$(awk '/^(- )?## Session Log/{f=1;next} f&&/^(- )?## /{exit} f' "$p" | wc -c)
-dec=$(awk '/^(- )?## Decisions/{f=1;next} f&&/^(- )?## /{exit} f' "$p" \
-      | grep -cE '^[[:space:]]+- \[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}')
-impl=$(awk '/^(- )?## Implementation/{f=1;next} f&&/^(- )?## /{exit} f' "$p" | wc -c)
-ent=$(awk '/^(- )?## Session Log/{f=1;next} f&&/^(- )?## /{exit} f' "$p" \
-      | grep -cE '^[[:space:]]+- \[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}')
+totallines=$(wc -l < "$p")
+
+grep -nE '^(- )?## ' "$p" | grep -v '## Digest$' > /tmp/secmap.txt
+nsecs=$(wc -l < /tmp/secmap.txt)
+
+: > /tmp/sizes.txt
+i=1
+while [ "$i" -le "$nsecs" ]; do
+  line=$(sed -n "${i}p" /tmp/secmap.txt)
+  lineno=$(echo "$line" | cut -d: -f1)
+  heading=$(echo "$line" | sed -E 's/^[0-9]+:(- )?## //')
+  next=$((i+1))
+  if [ "$next" -le "$nsecs" ]; then
+    endline=$(( $(sed -n "${next}p" /tmp/secmap.txt | cut -d: -f1) - 1 ))
+  else
+    endline=$totallines
+  fi
+  bytes=$(sed -n "$((lineno+1)),${endline}p" "$p" | wc -c)
+  echo "$bytes|$heading|$lineno|$endline" >> /tmp/sizes.txt
+  i=$((i+1))
+done
+
+awk -F'|' -v t="$threshold" '$1+0>=t' /tmp/sizes.txt | sort -t'|' -k1,1 -rn > /tmp/candidates.txt
 ```
 
-Format:
+`/tmp/candidates.txt` is now every section at or above 1 KB, largest first, as `bytes|heading|lineno|endline`. For whichever of `Session Log` and `Decisions` clear the threshold, add the same scoped count this file has always computed — `grep -cE '^[[:space:]]+- \[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}'` over that section's own `lineno+1`–`endline` range — as a parenthetical.
+
+### Fitting the 800-byte cap
+
+Append candidates to the Map bullet **largest first**, tracking the running byte total of the whole `## Digest` section (prose bullets already composed + `Map: ` + candidates appended so far). The moment the next candidate would push the section past 800 B, stop: drop the remaining candidates — by construction the smallest, since the list is sorted largest-first — and append `+N more`, N being the count dropped. Sections that never cleared the 1 KB threshold in the first place are not part of `N`; they were noise, not an omission worth flagging. The `Archive` pointer (when the archive page exists) and the page total are appended after the candidates and are never subject to this drop.
+
+Worked example: forcing a real page's candidates through an artificially tight budget kept only the single largest entry and reported `+3 more` — three smaller-but-still-above-threshold sections dropped, largest-first order preserved, nothing invented.
+
+### Format
 
 ```
-  - Map: Session Log 89 KB (49 entries) · Decisions 12 · Implementation 4 KB · Archive [[Projects/<Name>/SessionArchive]] · page 109 KB
+  - Map: Session Log 87 KB (47 entries) · Active Tasks 10 KB · Current Plan 3 KB · Decisions 2 KB (2) · page 107 KB
 ```
 
-Rules:
+Worked example, measured live on `Projects___Unicorn-Globus.md` (109,786 B total): the derivation shell found 10 real sections, kept the 4 at or above 1 KB (`Session Log` 89,171 B, `Active Tasks` 10,590 B, `Current Plan` 3,153 B, `Decisions` 2,622 B), dropped 6 as noise (`Overview` 415 B, `Tech Stack` 322 B, `Key Projects` 555 B, `Architecture` 526 B, `Conventions` 426 B, `Implementation` 361 B — none of these ever reaches the map at this page's current sizes), and produced the line above at 119 bytes total — comfortably inside the 800 B cap alongside four prose slots.
 
-- **Byte figures are authoritative and always emitted.** Round to whole KB above 1 KB; below that use bytes.
-- **Entry counts are best-effort.** Session-entry bullet formatting varies across real graphs. When `ent` is 0 but the Session Log has content, emit the bytes and **omit the count entirely** — `0 entries` would be a lie, and the map's whole job is to be trustworthy.
-- **Every figure is scoped to its own section.** `sl`, `ent`, `dec`, and `impl` all bound their `awk` at the next `## ` heading. An unscoped `ent` grep silently counts dated `## Decisions` bullets as sessions — the Binding slot recommends dated decision lines, so this is the normal case, not an edge case. Scope first, count second.
-- **`dec` counts keyed off the dated headline**, mirroring the Decision Entry Template (`{{date}}: {{decision_title}}`) — it counts lines matching a `yyyy-MM-dd`-prefixed bullet, not lines in general. That is what keeps free-form children (a `**Consequences:**` sub-list, extra prose) out of the count without needing to enumerate every property key a decision might carry: a page with 2 decisions reports `2`, not the 8 bullets — headline, properties, and any free-form children combined — they occupy. The trade-off is the same one `ent` already makes: an **undated** decision entry will not be counted. `dec` is therefore best-effort like `ent`, and the same rule applies — when the Decisions section has content but the dated-headline count comes back 0, omit the count rather than report `dec: 0`, which would be a lie about a non-empty section.
+### Rules
+
+- **Byte figures are authoritative and always emitted** for every section that clears the threshold. Round down to whole KB above 1 KB (truncate, don't round to nearest — see "The `page` figure" below for why the direction matters); below 1 KB use bytes.
+- **The 1 KB threshold is a hard floor for inclusion**, independent of the 800 B cap — a section under 1 KB is omitted from the map even when there is room to spare. It isn't signal.
+- **Entry counts (`Session Log`) and decision counts (`Decisions`) are best-effort**, exactly as before F2, keyed off the dated-headline shape (`grep -cE '^[[:space:]]+- \[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}'`), mirroring the Decision Entry Template (`{{date}}: {{decision_title}}`) so that free-form children (a `**Consequences:**` sub-list, an undated aside) don't get counted as their own entries. This is unchanged in mechanism, just now applied to whichever sections actually clear the threshold rather than to a fixed pair. As before: an **undated** entry is not counted, so when a section has content but the dated-headline count comes back 0, omit the count rather than write `0 entries`/`(0)` — that would be a lie about a non-empty section.
+- **Every figure is scoped to its own section** — the same `lineno`–`endline` boundaries the derivation shell computes, never a blind whole-file grep. An unscoped count over the whole page would, for instance, count dated `## Decisions` bullets as Session Log entries.
 - **Absent sections are omitted**, never reported as zero.
-- Include the `Archive` pointer only when `pages/Projects___<Name>___SessionArchive.md` exists.
-- Placeholder stubs (`_Session entries are added by brain-save._` and friends) denote an empty section — a section holding only its stub counts as **0** and is omitted.
+- **Include the `Archive` pointer only when** `pages/Projects___<Name>___SessionArchive.md` exists — unchanged, and never subject to the drop-for-space rule.
+- **The page total is always emitted** and never subject to the drop-for-space rule — it's the one figure that lets `brain-load` say "this is everything, and here's how much of it I read."
+- **Placeholder stubs** (`_Session entries are added by brain-save._` and friends) still denote an empty section — a section holding only its stub measures near-zero and is naturally filtered out by the 1 KB threshold, no special-casing needed.
+
+### The `page` figure needs a second pass — the other figures don't
+
+Writing the digest is itself a write to the page: the property-block Edit and the `## Digest` Edit both change the file's own byte count. Every other figure in the map (`Session Log`, `Active Tasks`, whatever cleared the threshold) measures a section the digest edit does not touch, so computing it once, before writing, stays correct. `page` is different — it measures the whole file, including the very bullet being edited to state it — so a `page` figure computed before the write and never revisited is stale the moment the write lands.
+
+Measured live: a Map computed *before* a first-digest write claimed `page 106 KB`; the digest edits added the usual few hundred bytes; the file measured 109,786 B = 107 KB immediately afterward. That crossed a KB boundary, and the 1,242 B drift exceeded `stale-map`'s 1,024 B KB-tier tolerance — a correctly-computed Map, false-flagged as stale by an artifact of write order. Widening the tolerance again is not the fix (it has already been widened twice for this one figure); the fix is to close the gap the same way `brain-init` already closes it for `{{page_size}}` on a brand-new page — measure again *after* the write:
+
+1. Compute the map (above) using the page's byte count **before** this save's edits — this is what makes `sl`/`dec`/etc. cheap: one measurement, taken alongside everything else.
+2. Write the property-block edit and the `## Digest` edit.
+3. Re-measure the page: `wc -c < "$p"`.
+4. If the new total's rounded figure differs from the `page` figure just written, Edit that one bullet again to correct it. On a page above 1 KB this is a single `wc -c` plus, at most, a one-character digit swap (`106 KB` → `107 KB`) — cheap enough to do unconditionally rather than only when a boundary crossing is suspected.
+
+This is a numbered step in `skills/brain-save/SKILL.md` step 9, not a footnote — every flow that writes a digest (Refresh, Rebuild, Remap) inherits it from here.
 
 ## Building a digest — three paths
 

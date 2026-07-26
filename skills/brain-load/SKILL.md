@@ -31,7 +31,7 @@ When the user says "load <project>" or similar:
 
    **Check for drift too — it's free.** The same property block already carries both `last-updated::` and `digest-updated::`; compare them. If `digest-updated::` is more than 30 days behind `last-updated::`, the digest may describe older content than the page now holds — e.g. another device still on v0.9.x saved without refreshing the digest, or the user hand-edited the page directly in Logseq. Note this in the step 8 coverage statement and **suggest** the rebuild procedure in `skills/_shared/digest.md` — never rebuild unprompted.
 
-   **If there is no `## Digest`:** fall back to the pre-digest brief mode — property block, first 5 Overview bullets, full Current Plan, last 3 Session Log entries, section-targeted per `skills/_shared/section-locator.md` — and then offer to build one, quoting the fallback read you just measured rather than a remembered constant: *"This page has no digest yet — want me to build one? This fallback read was ~<X> KB; a digest brings future loads to ≤ ~2 KB regardless of page size."* `<X>` is the sum of the byte counts the section-targeted reads already produced (measure-before-read, `skills/_shared/section-locator.md`) — never restate a figure measured on a different page. Build only on confirmation, per the rebuild-from-source procedure in `skills/_shared/digest.md`. Every existing graph therefore keeps working exactly as it does today until it is backfilled.
+   **If there is no `## Digest`:** fall back to the pre-digest brief mode — property block, first 5 Overview bullets, full Current Plan, and the Session Log **tail** (bounded to last 3 entries *or* ~4 KB, whichever is smaller — the byte-bounded tail recipe in `skills/_shared/section-locator.md`: take fewer than 3 entries when recent ones run large, never zero, and report how many of how many you read), section-targeted per `skills/_shared/section-locator.md` — and then offer to build one, quoting the fallback read you just measured rather than a remembered constant: *"This page has no digest yet — want me to build one? This fallback read was ~<X> KB; a digest brings future loads to ≤ ~2 KB regardless of page size."* `<X>` is the sum of the byte counts the section-targeted reads already produced (measure-before-read, `skills/_shared/section-locator.md`) — never restate a figure measured on a different page. Build only on confirmation, per the rebuild-from-source procedure in `skills/_shared/digest.md`. Every existing graph therefore keeps working exactly as it does today until it is backfilled.
 
 3. **Stop reading — digest path only.** If the fallback in step 2 ran, it has already read what it needs; skip to step 4. On the digest path, do **not** pre-load Overview, Current Plan, Implementation, Decisions, Session Log, linked pages, or task pages. The Map bullet says what exists and how big it is; fetch from it on demand per `skills/_shared/escalation.md` (on the fallback path, escalation starts at level 2 — targeted grep — since levels 0–1 presuppose a digest and Map bullet) when the conversation actually needs it — announced, one level at a time.
 
@@ -51,7 +51,9 @@ When the user says "load <project>" or similar:
 
    > Loaded digest for Unicorn-Globus (active, updated 2026-07-24).
    > Focus: Hangfire unification — phase 2 of 4. Next: CRMGM-2016 rollout to STAGE.
-   > **Not read:** Session Log 89 KB (49 entries), Decisions 12, Implementation 4 KB. Ask and I'll grep any of it.
+   > **Not read:** Session Log 87 KB (47 entries), Active Tasks 10 KB, Current Plan 3 KB, Decisions 2 KB (2). Ask and I'll grep any of it.
+
+   Quote whatever the Map actually lists — the field list is derived per page (`skills/_shared/digest.md`), not the fixed four shown here; a page whose Map surfaces `Active Tasks` or any other section says so, because that section is what the digest chose not to read on that particular page.
 
    This is mandatory, not decorative — see "Truncation honesty" in `skills/_shared/section-locator.md`. Presenting a digest without saying what it omits is what lets the model reason from a fragment as though it held the whole history.
 
@@ -62,7 +64,7 @@ When the user says "load <project>" or similar:
    **Fallback path:** there is no Map bullet to quote, so state coverage from what the fallback deliberately skipped — measure it rather than guessing (`skills/_shared/section-locator.md`, measure-before-read):
 
    > Loaded brief context for SELOS (active, updated 2026-07-21).
-   > **Not read:** Implementation, Decisions, Session Log beyond the last 3 entries (46 of 49), linked pages, done task pages. Say "load full" for all of it, or ask and I'll grep.
+   > **Not read:** Implementation, Decisions, Session Log beyond the tail actually read (1 of 12 entries, 2.8 KB of 29.6 KB — capped below 3 because recent entries run large), linked pages, done task pages. Say "load full" for all of it, or ask and I'll grep.
 
    Quantify what you can — the sizes and counts come free from the measure-before-read step, and a number is harder to gloss over than a section name.
 
@@ -95,7 +97,7 @@ When the user asks "what do we know about X" or similar, follow the algorithm in
 1. Properties (type, status, last-updated)
 2. Overview (first 5 bullets only)
 3. Current Plan (full)
-4. Session Log (last 3 entries only)
+4. Session Log tail — last 3 entries *or* ~4 KB, whichever is smaller (byte-bounded; see the tail recipe in `skills/_shared/section-locator.md`)
 5. Skip Implementation, Decisions, linked context, `done` task pages, and session-archive pages (`type:: session-archive`)
 
 Then state coverage as in step 8, mention that more is available — "Say 'load full' for decisions, implementation details, and full history" — and offer to build a digest.

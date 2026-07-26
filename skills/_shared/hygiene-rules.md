@@ -185,7 +185,13 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **severity:** data-quality
 - **enforced-at:** scan
 - **auto-fixable:** report
-- **detection:** pure arithmetic — recompute the Map figures for a page using the **same scoped commands** as `skills/_shared/digest.md`'s Map snippet (byte figures **and** the entry count), parse the figures the page's `Map:` bullet actually claims, and diff. The tolerance is derived from the **unit the Map claims**, not a percentage of the measured size: a figure stated in KB rounds to (or truncates to) the nearest whole kilobyte, so its worst case is a fixed drift of ≤ 1023 B no matter how large the section is — tolerate **1024 B**. A figure stated in bytes carries no rounding step, but the `page` figure carries a **self-reference error**: `brain-save` step 9 measures the page and *then* edits the Map bullet, so the claim is stale by the bullet's own length delta the moment it lands (measured: 32 B on a fresh project's first save). Tolerate **64 B** for byte-denominated figures — enough to absorb that, far below any real drift. Above 1 KB the KB tier's 1024 B absorbs it already, so this only ever applies to sub-1 KB pages. The entry count has no rounding step at all — a claimed count that doesn't exactly equal the measured count is stale, full stop. Scope is identical to the other three digest rules: skip `___SessionArchive.md` and `type:: session-archive`.
+- **detection:** pure arithmetic — recompute the page's **real** section sizes (the same enumerate-and-measure approach as `skills/_shared/digest.md`'s derivation shell, since F2 the Map's field list is derived per page, not fixed), parse **whatever labels the page's own `Map:` bullet actually claims** — however many there are, whatever they're called — and diff each claimed figure against the measured size of the section with that name, keyed by name rather than by a fixed position. A claimed label that matches no real section on the page is its own finding: the Map is describing something that isn't there.
+
+  The tolerance is derived from the **unit the Map claims**, not a percentage of the measured size: a figure stated in KB truncates to the nearest whole kilobyte (see `digest.md`), so its worst case is a fixed drift of ≤ 1023 B no matter how large the section is — tolerate **1024 B**. A figure stated in bytes carries no rounding step and gets **64 B** — enough to absorb ordinary noise, far below any real drift.
+
+  The `page` figure used to be a special case beyond ordinary rounding: `brain-save` step 9 measured the page and *then* edited the Map bullet, so the just-written claim went stale by the edit's own length delta the instant it landed — 32 B on a fresh project's first save (sub-1 KB, absorbed by the 64 B byte tier), but on a large page the same self-reference can straddle a KB boundary and drift past even the 1024 B KB tier: measured live, a 106 KB pre-write claim against a 109,786 B post-write total drifted 1,242 B — a correctly-computed Map, false-flagged as stale by write order. That is now fixed at the source, not by tolerance: every Map-writing flow re-measures the page *after* writing and corrects `page` if it changed (`skills/_shared/digest.md`'s "second pass" step; `skills/brain-save/SKILL.md` step 9). With that in place, `page`'s residual drift is like any other figure's — the tolerances above cover genuine rounding error only, and widening them again would just hide a bigger version of the same bug on the next boundary crossing.
+
+  The entry count (`(N entries)` on `Session Log`) and decision count (`(N)` on `Decisions`) have no rounding step at all — a claimed count that doesn't exactly equal the measured count is stale, full stop — while still honoring the omit-when-zero-but-nonempty rule from `digest.md`: a Map that correctly omits a count is not compared. Scope is identical to the other three digest rules: skip `___SessionArchive.md` and `type:: session-archive`.
   ```
   for f in pages/Projects___*.md pages/Tasks___*.md; do
     [ -e "$f" ] || continue    # unexpanded glob on a graph with no task pages
@@ -196,35 +202,80 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
     [ -n "$map" ] || continue
 
     total=$(wc -c < "$f")
-    sl=$(awk   '/^(- )?## Session Log/{f=1;next}    f&&/^(- )?## /{exit} f' "$f" | wc -c)
-    impl=$(awk '/^(- )?## Implementation/{f=1;next} f&&/^(- )?## /{exit} f' "$f" | wc -c)
-    dec=$(awk  '/^(- )?## Decisions/{f=1;next}       f&&/^(- )?## /{exit} f' "$f" \
-          | grep -cE '^[[:space:]]+- \[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}')
-    ent=$(awk  '/^(- )?## Session Log/{f=1;next}    f&&/^(- )?## /{exit} f' "$f" \
-          | grep -cE '^[[:space:]]+- \[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}')
+    totallines=$(wc -l < "$f")
 
-    claim() { echo "$map" | grep -oE "$1 [0-9]+ ?(KB|B)" | head -1 | grep -oE '[0-9]+ ?(KB|B)$'; }
-    to_bytes() { v=$(echo "$1" | grep -oE '[0-9]+'); case "$1" in *KB) echo $((v * 1024));; *) echo "$v";; esac; }
-    check() {  # $1 = label as it appears in the Map, $2 = measured bytes
-      c=$(claim "$1"); [ -n "$c" ] || return 0
-      cb=$(to_bytes "$c"); m="$2"
-      diff=$(( cb > m ? cb - m : m - cb ))
-      case "$c" in *KB) tol=1024;; *) tol=64;; esac
-      [ "$diff" -gt "$tol" ] && echo "$f: $1 claims $c, measured ${m}B"
+    # Real section map (excluding Digest itself), used to measure whatever the Map claims
+    grep -nE '^(- )?## ' "$f" | grep -v '## Digest$' > /tmp/sm_secmap.txt
+    nsecs=$(wc -l < /tmp/sm_secmap.txt)
+
+    measure_section() {   # $1 = heading text exactly as it appears after "## "
+      i=1
+      while [ "$i" -le "$nsecs" ]; do
+        line=$(sed -n "${i}p" /tmp/sm_secmap.txt)
+        lineno=$(echo "$line" | cut -d: -f1)
+        heading=$(echo "$line" | sed -E 's/^[0-9]+:(- )?## //')
+        if [ "$heading" = "$1" ]; then
+          next=$((i+1))
+          if [ "$next" -le "$nsecs" ]; then
+            endline=$(( $(sed -n "${next}p" /tmp/sm_secmap.txt | cut -d: -f1) - 1 ))
+          else
+            endline=$totallines
+          fi
+          sed -n "$((lineno+1)),${endline}p" "$f"
+          return 0
+        fi
+        i=$((i+1))
+      done
+      return 1
     }
-    check "Session Log" "$sl"
-    check "Implementation" "$impl"
-    check "page" "$total"
 
-    cdec=$(echo "$map" | grep -oE 'Decisions [0-9]+' | grep -oE '[0-9]+$')
-    [ -n "$cdec" ] && [ "$cdec" != "$dec" ] && echo "$f: Decisions claims $cdec, measured $dec"
+    # Split "Map: A x KB (n) · B y KB · page z KB" on " · " and check each clause
+    echo "$map" | sed 's/.*Map: //' | sed 's/ · /\n/g' | while IFS= read -r clause; do
+      case "$clause" in
+        Archive*) continue ;;   # pointer, not a figure
+      esac
+      label=$(echo "$clause" | sed -E 's/ [0-9].*$//')     # everything before the first " <digit>"
+      figure=$(echo "$clause" | grep -oE '[0-9]+(\.[0-9]+)? ?(KB|B)')
+      [ -n "$figure" ] || continue
+      v=$(echo "$figure" | grep -oE '[0-9]+(\.[0-9]+)?')
+      case "$figure" in
+        *KB) cb=$(awk -v v="$v" 'BEGIN{printf "%d", v*1024}'); tol=1024 ;;
+        *)   cb=$(awk -v v="$v" 'BEGIN{printf "%d", v}');       tol=64 ;;
+      esac
 
-    centries=$(echo "$map" | grep -oE 'Session Log [0-9]+ ?(KB|B) \([0-9]+ entries\)' | grep -oE '[0-9]+ entries' | grep -oE '[0-9]+')
-    [ -n "$centries" ] && [ "$centries" != "$ent" ] && echo "$f: Session Log claims ($centries entries), measured $ent"
+      if [ "$label" = "page" ]; then
+        m=$total
+      else
+        if ! measure_section "$label" >/dev/null; then
+          echo "$f: Map claims '$label' but no such section exists on the page"
+          continue
+        fi
+        m=$(measure_section "$label" | wc -c)
+      fi
+
+      diff=$(( cb > m ? cb - m : m - cb ))
+      [ "$diff" -gt "$tol" ] && echo "$f: $label claims $figure, measured ${m}B"
+
+      # Exact count check — only fires when the clause actually carries a count
+      case "$clause" in
+        *"entries)"*)
+          cc=$(echo "$clause" | grep -oE '\([0-9]+ entries\)' | grep -oE '[0-9]+')
+          mc=$(measure_section "$label" | grep -cE '^[[:space:]]+- \[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}')
+          [ -n "$cc" ] && [ "$cc" != "$mc" ] && echo "$f: $label claims ($cc entries), measured $mc"
+          ;;
+        *"("*")"*)
+          cc=$(echo "$clause" | grep -oE '\([0-9]+\)' | grep -oE '[0-9]+')
+          if [ -n "$cc" ]; then
+            mc=$(measure_section "$label" | grep -cE '^[[:space:]]+- \[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}')
+            [ "$cc" != "$mc" ] && echo "$f: $label claims ($cc), measured $mc"
+          fi
+          ;;
+      esac
+    done
   done
   ```
-  This is the rule that catches what the other three digest rules cannot: `digest-updated::` and `## Digest`'s mere presence say nothing about whether the *bytes it claims* — or the *entry count* it claims, the figure `brain-load` quotes most prominently ("49 sessions of log not read") — still match the page. Rotation is the primary offender (see `skills/brain-save/references/rotation.md`) — it moves tens of KB out of `## Session Log` and, absent the digest-remap step added there, leaves the Map quoting a page that no longer exists.
-- **remediation:** report each mismatched figure (claimed vs. measured) and suggest a rebuild per `skills/_shared/digest.md`. Report-tier, like the other digest rules — a rebuild reads real content and costs real tokens, never spent without confirmation.
+  This is the rule that catches what the other three digest rules cannot: `digest-updated::` and `## Digest`'s mere presence say nothing about whether the *bytes it claims* — or the *entry count* it claims, the figure `brain-load` quotes most prominently ("49 sessions of log not read") — still match the page, and F2 means that check must now hold for however many sections a real page's Map actually lists, not just a fixed four. Rotation is the primary offender (see `skills/brain-save/references/rotation.md`) — it moves tens of KB out of `## Session Log` and, absent the digest-remap step added there, leaves the Map quoting a page that no longer exists.
+- **remediation:** report each mismatched figure (claimed vs. measured), report any claimed label that matches no real section, and suggest a rebuild per `skills/_shared/digest.md`. Report-tier, like the other digest rules — a rebuild reads real content and costs real tokens, never spent without confirmation.
 
 ## `oversized-digest`
 - **severity:** data-quality

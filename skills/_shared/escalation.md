@@ -35,7 +35,7 @@ The digest (`skills/_shared/digest.md`) is a floor, not a ceiling. When the conv
 
 > After `load Unicorn-Globus`, the user asks: *"Why did we drop DEV Mongo?"*
 
-- **Level 1** — the Map says `Decisions 12 · Session Log 89 KB`. Plausibly here; no read yet.
+- **Level 1** — the Map says `Session Log 87 KB (47 entries) · Active Tasks 10 KB`. Plausibly here; no read yet.
 - **Level 2** — announce, then `rg -n "Mongo" pages/Projects___Unicorn-Globus.md` → 6 hits at lines 84, 108–112, 341.
 - **Level 3** — `Read(page, offset 104, limit 14)` → the decision entry itself. Answer, and state coverage: *"read 1.2 KB around 6 matches; 89 KB of Session Log still unread."*
 - Stop. Levels 4 and 5 never run.
