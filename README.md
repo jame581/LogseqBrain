@@ -109,7 +109,7 @@ Every brain operation (init / load / save / status / search) leaves a one-line `
 
 ## Digest
 
-Every project and task page carries a small summary at the top — four properties (`focus::`, `next::`, `open::`, `digest-updated::`) and a `## Digest` section capped at 800 bytes. Loading a project reads *only* that, so a 109 KB page costs under 2 KB instead of ~27 KB.
+Every project and task page carries a small summary at the top — four properties (`focus::`, `next::`, `open::`, `digest-updated::`) and a `## Digest` section capped at 800 bytes. Loading a project reads *only* that, so a 107 KB page costs under 2 KB instead of reading it whole.
 
 The last digest bullet is a **map** — e.g. `Session Log 87 KB (47 entries) · Active Tasks 10 KB · Current Plan 3 KB · Decisions 2 KB (2) · page 107 KB` — computed from the file, never written from memory, and derived from whatever sections the page actually has (not a fixed list — a page whose real second-largest section is `Active Tasks` shows `Active Tasks`). It does two jobs: it tells Claude what it doesn't have (so it can't quietly reason as though it read everything), and it's the index Claude uses when you ask for more.
 

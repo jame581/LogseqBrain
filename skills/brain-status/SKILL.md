@@ -25,7 +25,7 @@ Resolve the graph path per `skills/_shared/path-resolution.md`.
 
 ## Dashboard Generation
 
-1. **Census first — this decides what appears.** Glob (or `ls`) `pages/Projects___*.md` and `pages/Tasks___*.md` — one free call. This file list, not the ripgrep in step 2, is authoritative for "what's in my brain": a page belongs on the dashboard because it exists, not because a later grep happened to match its content. Exclude session-archive pages (filename ending `___SessionArchive.md`).
+1. **Census first — this decides what appears.** Glob (or `ls`) `pages/Projects___*.md` and `pages/Tasks___*.md` — one free call. This file list, not the ripgrep in step 2, is authoritative for "what's in my brain": a page belongs on the dashboard because it exists, not because a later grep happened to match its content. Exclude session-archive pages (filename ending `___SessionArchive.md`). Also exclude `Projects___*.md` pages whose `type::` isn't `project` — e.g. `type:: task-index` (a project's task inventory, like `Projects___Unicorn-Globus___Tasks.md`) or `type:: project-note` (a standalone note, like `Projects___Unicorn-Globus___ClaudeCodeAutomation.md`). Both match the glob but are not projects; counting them would inflate both the dashboard and the "N projects have no digest" line in step 4 with pages that were never supposed to carry one (`skills/_shared/digest.md`'s scope rule).
 
 2. **Collect every census page's state in one call.** Digest properties make the whole dashboard greppable:
 
@@ -76,7 +76,7 @@ Read-only aggregate view. Writes nothing except the journey-log entry. Stay toke
 
 When counting, **exclude template placeholder stubs** — the italic markers a fresh `brain-init` page seeds, e.g. `_Project-specific decisions._` under `## Decisions`, `_Session entries are added by brain-save._` under `## Session Log`, and `_No active plan yet._` under `## Current Plan`. They denote an empty section, so a section that contains only its stub counts as **0**, not 1.
 
-1. **Projects.** Glob `pages/Projects___*.md`. Count total. Apply `skills/_shared/staleness.md`, then collapse its four levels into two buckets for the count: **active** = `fresh` + `aging`, **stale** = `stale` + `abandoned`. Exclude session-archive pages from the project count.
+1. **Projects.** Glob `pages/Projects___*.md`. Count total. Apply `skills/_shared/staleness.md`, then collapse its four levels into two buckets for the count: **active** = `fresh` + `aging`, **stale** = `stale` + `abandoned`. Exclude session-archive pages from the project count, and exclude pages whose `type::` isn't `project` (`task-index`, `project-note`, etc. — same exclusion as Dashboard step 1) — they match the glob but aren't projects.
 2. **Decisions.** Count two distinct figures, because cross-project decisions are intentionally duplicated in both places (so never sum them): (a) **cross-project** decisions in `pages/Decisions.md`, and (b) decisions recorded on project pages (in their `## Decisions` sections; this includes the project-page copy of any cross-project decision). Break each down by `status::` value (e.g. accepted, superseded).
 3. **Sessions.** For each project page, count real entries under `## Session Log` (section-targeted read; skip the placeholder stub). Sum across projects.
 4. **Activity (recent window).** Glob `journals/*.md`. For journals dated within the last 30 days (filename `yyyy_MM_dd.md`), count bullets under `## Activity`. Report the total as the recent activity signal.

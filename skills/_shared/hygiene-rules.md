@@ -148,6 +148,7 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
     [ -e "$f" ] || continue    # unexpanded glob on a graph with no task pages
     case "$f" in *___SessionArchive.md) continue;; esac
     grep -q "^type:: session-archive" "$f" && continue
+    case "$f" in pages/Projects___*.md) grep -q "^type:: project$" "$f" || continue;; esac   # excludes type:: task-index / project-note / etc. — matches the glob but isn't a project
     ok=1
     awk '/^[[:space:]]*-/{exit} 1' "$f" | grep -q "^digest-updated:: " || ok=0
     grep -qE "^(- )?## Digest" "$f" || ok=0
@@ -169,6 +170,7 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
     [ -e "$f" ] || continue    # unexpanded glob on a graph with no task pages
     case "$f" in *___SessionArchive.md) continue;; esac
     grep -q "^type:: session-archive" "$f" && continue
+    case "$f" in pages/Projects___*.md) grep -q "^type:: project$" "$f" || continue;; esac   # excludes type:: task-index / project-note / etc. — matches the glob but isn't a project
     d=$(grep -m1 "^digest-updated:: " "$f" | awk '{print $2}')
     l=$(grep -m1 "^last-updated:: " "$f" | awk '{print $2}')
     [ -n "$d" ] && [ -n "$l" ] || continue
@@ -205,6 +207,7 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
     [ -e "$f" ] || continue    # unexpanded glob on a graph with no task pages
     case "$f" in *___SessionArchive.md) continue;; esac
     grep -q "^type:: session-archive" "$f" && continue
+    case "$f" in pages/Projects___*.md) grep -q "^type:: project$" "$f" || continue;; esac   # excludes type:: task-index / project-note / etc. — matches the glob but isn't a project
     grep -qE "^(- )?## Digest" "$f" || continue
     map=$(awk '/^(- )?## Digest/{f=1;next} f&&/^(- )?## /{exit} f' "$f" | grep -m1 "Map:")
     [ -n "$map" ] || continue
@@ -269,7 +272,7 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
     labels_seen=""
     echo "$map" | sed 's/.*Map: //' | sed 's/ · /\n/g' | while IFS= read -r clause; do
       case "$clause" in
-        "Archive | "*) continue ;;                    # pointer, not a figure
+        "Archive | [["*) continue ;;                  # pointer clause — recognized by its value starting `[[` (digest.md's own rule), never by the label alone. A real section literally named "## Archive" has a byte-figure value instead ("Archive | 3 KB") and does NOT match this pattern, so it falls through and is diffed normally.
         "+"*"smaller sections"*) continue ;;           # reconciling residual, not a section name
       esac
 
@@ -338,7 +341,7 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
     done
   done
   ```
-  This is the rule that catches what the other three digest rules cannot: `digest-updated::` and `## Digest`'s mere presence say nothing about whether the *bytes it claims* — or the *entry count* it claims, the figure `brain-load` quotes most prominently ("49 sessions of log not read") — still match the page, and F2 means that check must now hold for however many sections a real page's Map actually lists, not just a fixed four. Rotation is the primary offender (see `skills/brain-save/references/rotation.md`) — it moves tens of KB out of `## Session Log` and, absent the digest-remap step added there, leaves the Map quoting a page that no longer exists.
+  This is the rule that catches what the other three digest rules cannot: `digest-updated::` and `## Digest`'s mere presence say nothing about whether the *bytes it claims* — or the *entry count* it claims, the figure `brain-load` quotes most prominently ("47 sessions of log not read") — still match the page, and F2 means that check must now hold for however many sections a real page's Map actually lists, not just a fixed four. Rotation is the primary offender (see `skills/brain-save/references/rotation.md`) — it moves tens of KB out of `## Session Log` and, absent the digest-remap step added there, leaves the Map quoting a page that no longer exists.
 - **remediation:** report each mismatched figure (claimed vs. measured), report any claimed label that matches no real section (or matches more than one), report any duplicate label, report any claimed section now under the 1 KB inclusion floor, and suggest a rebuild per `skills/_shared/digest.md`. Report-tier, like the other digest rules — a rebuild reads real content and costs real tokens, never spent without confirmation.
 
 ## `oversized-digest`
@@ -351,6 +354,7 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
     [ -e "$f" ] || continue    # unexpanded glob on a graph with no task pages
     case "$f" in *___SessionArchive.md) continue;; esac
     grep -q "^type:: session-archive" "$f" && continue
+    case "$f" in pages/Projects___*.md) grep -q "^type:: project$" "$f" || continue;; esac   # excludes type:: task-index / project-note / etc. — matches the glob but isn't a project
     b=$(awk '/^(- )?## Digest/{f=1;next} f&&/^(- )?## /{exit} f' "$f" | wc -c)
     [ "$b" -gt 800 ] && echo "$f digest ${b}B > 800B"
     LC_ALL=C grep -nE "^(focus|next|open):: .{121,}" "$f" | sed "s|^|$f |"

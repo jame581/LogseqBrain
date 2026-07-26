@@ -9,7 +9,7 @@
 - Truncation honesty: byte-denominated budgets, measure-before-read, and a mandatory coverage statement on every partial read (`skills/_shared/section-locator.md` rewritten)
 - brain-save refreshes the digest unconditionally on every save; rebuild-from-source is the corrective path
 - brain-status dashboard from a single ripgrep over digest properties
-- 3 new hygiene rules (`missing-digest`, `stale-digest`, `oversized-digest`) + brain-doctor guided digest backfill
+- 4 new hygiene rules (`missing-digest`, `stale-digest`, `stale-map`, `oversized-digest`) + brain-doctor guided digest backfill
 - Explicit **Logseq OG only** targeting
 - See `docs/superpowers/specs/2026-07-25-v0.10.0-design.md`
 

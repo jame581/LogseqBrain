@@ -9,6 +9,7 @@ Measured on a real brain graph (2026-07-25): bullets average **195 bytes**; the 
 | Operation | Budget |
 |---|---|
 | Brief load (digest) | ≤ 1 KB of digest content; ≤ ~2 KB actually read |
+| Today's journal, on load (this project's `## Sessions` mention only) | ≤ ~2 KB — grep-scoped to the bullet naming `[[Projects/<Name>]]`, never the whole journal file. A whole journal aggregates every project worked on that day and can run large — measured on the reference graph, up to **10,152 B** — so reading it unbounded would blow the digest-mode budget on its own. |
 | Targeted section read | ≤ 8 KB per section |
 | Full load | ≤ 24 KB soft ceiling — Session Log tail is byte-bounded (last 10 entries *or* ~8 KB, whichever is smaller — see "Reading a section's tail"); **state the measured total and ask before reading** when it would exceed the ceiling, then report any remaining overflow rather than truncating silently |
 | Whole-page read | consent-gated (`skills/_shared/escalation.md`, level 5) |
@@ -84,7 +85,7 @@ Worked example (wrong-section risk and the zero-match branch), against `Tasks___
 
 Any read bounded by `limit`, and any section read only in part, **must** report what it covered before you reason on it:
 
-> `read 4 KB of 89 KB of ## Session Log (entries 47–49 of 49)`
+> `read 4 KB of 89 KB of ## Session Log (entries 45–47 of 47)`
 
 If the bound cannot be characterized that precisely, say so instead — `read the first 4 KB of ## Session Log; the remaining 85 KB is unread`. **Never present a partial section as if it were complete.** This is the rule that stops the model confabulating the 46 entries it did not see.
 
