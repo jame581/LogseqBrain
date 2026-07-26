@@ -45,7 +45,7 @@ Sits immediately after the property block and before the first `## ` section, wh
   - Now: unifying 5 Hangfire schedulers behind one dispatcher (phase 2 of 4)
   - Binding: 2026-04-17 DEV Mongo removed; whole-DEV decommission still undecided
   - Hazard: GLOPRICE-399 migration overlaps Price Checker hosts
-  - Map: Session Log | 87 KB (47 entries) · Active Tasks | 10 KB · Current Plan | 3 KB · Decisions | 2 KB (2) · +6 smaller sections, 2 KB · Archive | [[Projects/Unicorn-Globus/SessionArchive]] · page | 107 KB
+  - Map: Session Log | 87 KB (47 entries) · Active Tasks | 10 KB · Current Plan | 3 KB · Decisions | 2 KB (2) · +6 smaller sections, 2 KB · page | 107 KB
 ```
 
 Each clause is `<label> | <figure>` — see "Format" below for why the ` | ` is there and not just a space.
@@ -154,20 +154,20 @@ Older worked example (pre-reservation, kept for the "drop smallest first" mechan
 ### Format
 
 ```
-  - Map: Session Log | 87 KB (47 entries) · Active Tasks | 10 KB · Current Plan | 3 KB · Decisions | 2 KB (2) · +6 smaller sections, 2 KB · Archive | [[Projects/Unicorn-Globus/SessionArchive]] · page | 107 KB
+  - Map: Session Log | 87 KB (47 entries) · Active Tasks | 10 KB · Current Plan | 3 KB · Decisions | 2 KB (2) · +6 smaller sections, 2 KB · page | 107 KB
 ```
 
 Each clause is `<label> | <figure>`, clauses still joined by ` · `. The ` | ` is a **reserved separator** — split on it, not on "the first space followed by a digit." A cut like the latter breaks the instant a label contains its own digits, which real task-page headings do constantly (`2026-04-23 — Step 2 isolated, real root cause found`, `PROD 2.6 — EXECUTED 2026-06-01 …`): the old approach cut mid-label and produced a truncated, sometimes-colliding key. Splitting on the reserved token instead never depends on what characters a label happens to contain.
 
 - **Label** — the section heading verbatim, **capped at 40 characters**. Longer than that: cut to the first 40 characters and append `…`. The truncated string doubles as the *diff key* — `stale-map` re-truncates the real heading the same way (first 40 characters) before comparing labels, so cutting for display never loses the ability to relocate the section, only its display length.
 - **Figure** — `N KB` or `N B`. **`KB` here means KiB — `bytes / 1024`, truncated (integer division), never rounded to nearest** (full rule under "Rules" below — stated again here because this is the point where the figure is actually composed, not just cross-referenced); `Session Log` and `Decisions` carry their count immediately after the figure — `N KB (M entries)` / `N KB (M)`.
-- **`Archive`** — `Archive | [[Projects/<Name>/SessionArchive]]` (a pointer, not a figure — recognized by its value starting `[[`, never by clause position).
+- **`Archive`** — `Archive | [[Projects/<Name>/SessionArchive]]` (a pointer, not a figure — recognized by its value starting `[[`, never by clause position). Present **only when that archive page exists**; the worked examples below are from a page that has never been rotated, so they correctly carry no `Archive` clause.
 - **`page`** — `page | N KB`, always last.
 - **The reconciling residual** — `+N smaller sections, X KB` (or `X B` under 1 KB), present whenever `noise_n` ≥ 1 (at least one real section fell under the 1 KB threshold). Not a section name: it's recognized by its `+N smaller sections` prefix and never looked up as a heading. This is what lets the Map's figures — candidates, `+N more`, residual, `page` — account for the *whole* page, not just the sections that individually cleared the threshold: measured live on `Tasks___CRMGM-1937.md`, 8 sections totaling 4,121 B cleared no threshold and, before this clause existed, appeared in the Map nowhere at all.
 
 **Duplicate labels are a finding, not a collision to key through.** Two headings can truncate to the same 40 characters — measured live, two same-day task-page entries both start `2026-04-23 — Step 2…` and differ only after character 20, so a too-short cap would collide them. Before finalizing the Map, check whether any two included labels are identical after truncation; if so, widen *that pair's* truncation only, as far as needed to disambiguate (up to the full heading length), rather than let either one silently key to the wrong section. `skills/_shared/hygiene-rules.md`'s `stale-map` performs the same check on whatever a Map actually claims: two clauses parsing to the same label is reported as its own finding, and neither of that pair is diffed — the key is ambiguous, not wrong, and guessing which is which would be worse than saying so.
 
-Worked example, measured live on `Projects___Unicorn-Globus.md` (109,786 B total): the derivation shell found 10 real sections, kept the 4 at or above 1 KB (`Session Log` 89,171 B, `Active Tasks` 10,590 B, `Current Plan` 3,153 B, `Decisions` 2,622 B), and summarized the other 6 as noise (`Overview` 415 B, `Tech Stack` 322 B, `Key Projects` 555 B, `Architecture` 526 B, `Conventions` 426 B, `Implementation` 361 B — 2,605 B total) in a single reconciling clause, `+6 smaller sections, 2 KB`, rather than omitting them. The full line — four candidates, the residual, the Archive pointer, the page total — runs comfortably inside the 800 B cap alongside four prose slots.
+Worked example, measured live on `Projects___Unicorn-Globus.md` (109,760 B total): the derivation shell found 10 real sections, kept the 4 at or above 1 KB (`Session Log` 89,171 B, `Active Tasks` 10,590 B, `Current Plan` 3,153 B, `Decisions` 2,622 B), and summarized the other 6 as noise (`Overview` 415 B, `Tech Stack` 322 B, `Key Projects` 555 B, `Architecture` 526 B, `Conventions` 426 B, `Implementation` 361 B — 2,605 B total) in a single reconciling clause, `+6 smaller sections, 2 KB`, rather than omitting them. The full line — four candidates, the residual, the Archive pointer, the page total — runs comfortably inside the 800 B cap alongside four prose slots.
 
 ### Rules
 
