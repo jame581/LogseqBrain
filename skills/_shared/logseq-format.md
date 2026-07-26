@@ -8,9 +8,11 @@ When Logseq parses pages and journals that a brain skill wrote, it **normalizes*
 - **Leading-space indents become tabs.** Two-space child indents (`  - foo`) are converted to a tab-indented bullet — a literal tab character before `- foo`.
 - **Empty section headings are stripped.** An empty `## Sessions` heading with no children may be removed entirely.
 - **Trailing whitespace and blank-line runs are collapsed.**
+- **Files are written with NO trailing newline.** Measured on the reference graph: **49 of 49** pages. This breaks any shell that bounds a range on `wc -l`, which undercounts by one and silently drops the file's last line — and the last line usually belongs to `## Session Log`, the largest section on the page. Count lines with `awk 'END{print NR}'`, or bound sections by pattern (`f&&/^(- )?## /{exit}`) so the range runs to true EOF. This cost a real Map figure 441 B (18 KB reported where 19 KB was true) during v0.10.0 validation.
 
 ## Survival rules (always follow before an Edit)
 
+0. **Never anchor an Edit on a partial line.** An `old_string` that stops mid-line leaves the rest of that line in the file, orphaned onto the end of whatever you inserted. Observed during v0.10.0 validation: an anchor ending at `residue?` carried the line's remaining clause onto the tail of a newly appended session entry, silently merging two entries' `open-questions::`. Anchor on whole lines, always.
 1. **Read immediately before Edit.** Never build an `old_string` from remembered or previously-written content. Read the target region in the same turn as the Edit so it reflects Logseq's current normalized form.
 2. **Anchor on heading text, not the bullet prefix.** Match on `## Activity` / `## Session Log` / `## Current Plan` — never assume a leading `- `. The same heading may appear as `- ## Activity` (freshly written by us) or `## Activity` (after Logseq round-trip); your anchor must tolerate both, so anchor on the `## <Name>` substring.
 3. **Don't assume the indent character.** When matching child bullets, prefer the heading + first/last child you actually read rather than hardcoding two spaces vs. a tab.
