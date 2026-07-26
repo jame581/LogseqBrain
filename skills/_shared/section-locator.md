@@ -9,7 +9,7 @@ Measured on a real brain graph (2026-07-25): bullets average **195 bytes**; the 
 | Operation | Budget |
 |---|---|
 | Brief load (digest) | ≤ 1 KB of digest content; ≤ ~2 KB actually read |
-| Today's journal, on load (this project's `## Sessions` mention only) | ≤ ~2 KB — grep-scoped to the bullet naming `[[Projects/<Name>]]`, never the whole journal file. A whole journal aggregates every project worked on that day and can run large — measured on the reference graph, up to **10,152 B** — so reading it unbounded would blow the digest-mode budget on its own. |
+| Today's journal, on load (this project's mention(s), shrunk to fit) | **Target** ~2 KB via shrink-to-fit (`skills/brain-load/SKILL.md` step 4), not a hard ceiling — the grep is whole-file, keyed on `^[[:space:]]*- \[\[Projects/<Name>\]\]`, never scoped to a `## Sessions` heading (10 of 69 real journals lack one entirely, 8 of those still carry real session bullets orphaned under a bare `-`). All matches are read, then the oldest are dropped one at a time until under budget — a single oversized match is still read whole rather than dropped to zero. Measured: `2026_04_25` shrinks from 8,468 B (4 matches, one project) to 1,248 B (the most recent 1). Reading the whole journal file, unbounded, can run to **10,152 B** on the reference graph — this is why the grep is targeted, never a whole-file read. |
 | Targeted section read | ≤ 8 KB per section |
 | Full load | ≤ 24 KB soft ceiling — Session Log tail is byte-bounded (last 10 entries *or* ~8 KB, whichever is smaller — see "Reading a section's tail"); **state the measured total and ask before reading** when it would exceed the ceiling, then report any remaining overflow rather than truncating silently |
 | Whole-page read | consent-gated (`skills/_shared/escalation.md`, level 5) |
@@ -53,7 +53,7 @@ The algorithm above reads *forward* from a heading — fine when the whole secti
    ```bash
    p="pages/Projects___<Name>.md"
    sed -n "$((lineno+1)),${endline}p" "$p" \
-     | grep -nE '^[[:space:]]*- (#{2,6} +)?\[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}'
+     | grep -nE '^[[:space:]]*- (#{3,6} +)?\[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}'
    ```
    Use the widened pattern verbatim from `skills/_shared/digest.md` — it matches a `### `-style dated sub-heading as well as a plain dash-bullet. Retyping a narrower version is how this regresses: the plain-dash-only form matches **zero** entries in a Session Log written entirely as `- ### yyyy-mm-dd — …` (real shape, several task pages), even though the section is full of dated entries.
 
@@ -65,7 +65,7 @@ The algorithm above reads *forward* from a heading — fine when the whole secti
 4. **Take the last N line numbers (relative to the section), largest N first, then shrink to fit any byte cap the caller states.** For a plain count target ("last 3 entries," no cap), take the last 3 and move on. When a caller also states a byte cap — fallback: last 3 *or* ~4 KB, whichever is smaller; full mode: last 10 *or* ~8 KB, whichever is smaller — measure before committing to N instead of assuming the stated count is safe:
    ```bash
    sed -n "$((lineno+1)),${endline}p" "$p" \
-     | grep -nE '^[[:space:]]*- (#{2,6} +)?\[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}' | tail -3   # or tail -10 for full mode
+     | grep -nE '^[[:space:]]*- (#{3,6} +)?\[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}' | tail -3   # or tail -10 for full mode
    ```
    Try the largest N first: convert the earliest of those N to an absolute line (step 2), `tail -n +<that line>` bounded at `endline` (or EOF if the section is last), and `wc -c` the result. Under the cap → read it, done — report "N of M entries". Over the cap → drop N by one, re-measure. Keep dropping until under the cap or N=1; at N=1, read it regardless of size — **never return zero entries when at least one exists** (step 3 covers the case where none do), and say so even when that single entry alone exceeds the cap. State the N you actually landed on; never assume the starting count without checking.
 5. **Read from the earliest of the N lines you settled on, bounded at `endline`** (or EOF if the section is last in the file — no next heading to bound against):

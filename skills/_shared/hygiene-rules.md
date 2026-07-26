@@ -191,7 +191,7 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 
   **Parsing keys off the reserved ` | ` separator (`skills/_shared/digest.md` "Format"), not off "the first space before a digit."** The earlier parser split a clause on the first space-then-digit, which breaks the instant a label contains its own digits — and real task-page headings do, constantly: `'2026-04-23 — Step 2 isolated, real root cause found'` and `'2026-04-23 — Step 2 patch VALIDATED on PROD'` both cut down to the label `'2026-04-23 — Step'`, a false "no such section" finding on the first and a silent same-key collision with the second — whose byte diff then never ran, because the mis-parse `continue`d past it. Splitting on the reserved token instead of guessing where prose ends is what makes the split unambiguous regardless of what a heading contains.
 
-  **A label may be truncated for display (`skills/_shared/digest.md`'s 40-character cap, `…` marker).** Resolve it by **exact match** when it carries no `…`; when it does, treat the text before `…` as a **prefix** and find the one real heading whose own first N characters equal it. Exactly one match → resolved, diff proceeds. Zero matches → "no such section." **More than one match → its own finding** ("ambiguous — ").
+  **A label may be truncated for display (`skills/_shared/digest.md`'s 40-byte cap, `…` marker).** Resolve it by **exact match** when it carries no `…`; when it does, treat the text before `…` as a **prefix** and find the one real heading whose own first N **bytes** — not characters — equal it, measuring both sides with `LC_ALL=C` so "N bytes" means the same thing on the composer's side and here (see the rule's own correction note below for why this must be forced, not assumed). Exactly one match → resolved, diff proceeds. Zero matches → "no such section." **More than one match → its own finding** ("ambiguous — ").
 
   **A duplicate label — two clauses parsing to the identical string — is its own finding, not a collision to key through.** Track every label already seen in this Map; the second occurrence is reported and **neither** of the pair is diffed, because the key no longer identifies one section.
 
@@ -201,7 +201,7 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 
   The `page` figure used to be a special case beyond ordinary rounding: `brain-save` step 9 measured the page and *then* edited the Map bullet, so the just-written claim went stale by the edit's own length delta the instant it landed — 32 B on a fresh project's first save (sub-1 KB, absorbed by the 64 B byte tier), but on a large page the same self-reference can straddle a KB boundary and drift past even the 1024 B KB tier: measured live, a 106 KB pre-write claim against a 109,786 B post-write total drifted 1,242 B — a correctly-computed Map, false-flagged as stale by write order. That is now fixed at the source, not by tolerance: every Map-writing flow re-measures the page *after* writing and corrects `page` if it changed (`skills/_shared/digest.md`'s "second pass" step; `skills/brain-save/SKILL.md` step 9). With that in place, `page`'s residual drift is like any other figure's — the tolerances above cover genuine rounding error only, and widening them again would just hide a bigger version of the same bug on the next boundary crossing.
 
-  The entry count (`(N entries)` on `Session Log`) and decision count (`(N)` on `Decisions`) have no rounding step at all — a claimed count that doesn't exactly equal the measured count is stale, full stop — while still honoring the omit-when-zero-but-nonempty rule from `digest.md`: a Map that correctly omits a count is not compared. The count itself is scoped with the same widened pattern `digest.md` uses — `grep -cE '^[[:space:]]*- (#{2,6} +)?\[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}'`, matching a `### `-style dated sub-heading as well as a plain dash-bullet — so this check agrees with what the Map was built from, rather than re-litigating the count with the narrower pattern the Map has already moved past. The reconciling residual (`+N smaller sections, X KB`) is recognized by its `+…smaller sections` prefix and skipped like `Archive` — it names no single section to diff. Scope is identical to the other three digest rules: skip `___SessionArchive.md` and `type:: session-archive`.
+  The entry count (`(N entries)` on `Session Log`) and decision count (`(N)` on `Decisions`) have no rounding step at all — a claimed count that doesn't exactly equal the measured count is stale, full stop — while still honoring the omit-when-zero-but-nonempty rule from `digest.md`: a Map that correctly omits a count is not compared. The count itself is scoped with the same widened pattern `digest.md` uses — `grep -cE '^[[:space:]]*- (#{3,6} +)?\[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}'`, matching a `### `-style dated sub-heading as well as a plain dash-bullet — so this check agrees with what the Map was built from, rather than re-litigating the count with the narrower pattern the Map has already moved past. The reconciling residual (`+N smaller sections, X KB`) is recognized by its `+…smaller sections` prefix and skipped like `Archive` — it names no single section to diff. Scope is identical to the other three digest rules: skip `___SessionArchive.md` and `type:: session-archive`.
   ```
   for f in pages/Projects___*.md pages/Tasks___*.md; do
     [ -e "$f" ] || continue    # unexpanded glob on a graph with no task pages
@@ -219,50 +219,72 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
     grep -nE '^(- )?## ' "$f" | grep -v '## Digest$' > /tmp/sm_secmap.txt
     nsecs=$(wc -l < /tmp/sm_secmap.txt)
 
-    measure_section() {   # $1 = exact real heading text (after "## ") -> section body on stdout
-      i=1
-      while [ "$i" -le "$nsecs" ]; do
-        line=$(sed -n "${i}p" /tmp/sm_secmap.txt)
-        lineno=$(echo "$line" | cut -d: -f1)
-        heading=$(echo "$line" | sed -E 's/^[0-9]+:(- )?## //')
-        if [ "$heading" = "$1" ]; then
-          next=$((i+1))
-          if [ "$next" -le "$nsecs" ]; then
-            endline=$(( $(sed -n "${next}p" /tmp/sm_secmap.txt | cut -d: -f1) - 1 ))
-          else
-            endline=$totallines
-          fi
-          sed -n "$((lineno+1)),${endline}p" "$f"
-          return 0
-        fi
-        i=$((i+1))
-      done
-      return 1
+    # Build the bytes|heading|lineno|endline table ONCE per file — the same table
+    # skills/_shared/digest.md's derivation shell already emits, reused here instead
+    # of re-deriving lineno/endline and re-measuring section bytes on every clause.
+    # Before this fix, measure_section() re-scanned /tmp/sm_secmap.txt AND re-ran
+    # sed+wc -c on every call (up to 3x per clause: the byte diff plus, for Session
+    # Log/Decisions, the entry-count check), and find_section() re-scanned it again,
+    # with its own per-heading cut/compare subshell, for every …-truncated label —
+    # O(clauses x nsecs) subshell forks. Measured live (Git Bash): 68.2s for
+    # Tasks___CRMGM-1937.md alone (13 clauses), 17.6s for Unicorn-Globus; a
+    # whole-graph run timed out past 2 minutes.
+    : > /tmp/sm_sizes.txt
+    i=1
+    while [ "$i" -le "$nsecs" ]; do
+      line=$(sed -n "${i}p" /tmp/sm_secmap.txt)
+      lineno=$(echo "$line" | cut -d: -f1)
+      heading=$(echo "$line" | sed -E 's/^[0-9]+:(- )?## //')
+      next=$((i+1))
+      if [ "$next" -le "$nsecs" ]; then
+        endline=$(( $(sed -n "${next}p" /tmp/sm_secmap.txt | cut -d: -f1) - 1 ))
+      else
+        endline=$totallines
+      fi
+      bytes=$(sed -n "$((lineno+1)),${endline}p" "$f" | wc -c)
+      echo "${bytes}|${heading}|${lineno}|${endline}" >> /tmp/sm_sizes.txt
+      i=$((i+1))
+    done
+
+    # Table-driven lookups replace measure_section/find_section's repeated
+    # re-scans — one small awk pass over the precomputed table, never a
+    # re-derivation of lineno/endline and never a re-measurement of section bytes.
+    row_by_heading() {   # $1 = exact real heading text -> "bytes|heading|lineno|endline" on stdout
+      awk -F'|' -v h="$1" '$2==h{print; f=1} END{exit !f}' /tmp/sm_sizes.txt
+    }
+    section_body() {     # $1 = exact real heading text -> section body on stdout (still one sed extraction per USE, not per candidate scanned)
+      row=$(row_by_heading "$1") || return 1
+      lineno=$(printf '%s' "$row" | cut -d'|' -f3)
+      endline=$(printf '%s' "$row" | cut -d'|' -f4)
+      sed -n "$((lineno+1)),${endline}p" "$f"
     }
 
-    # Resolve a claimed (possibly truncated) label to exactly one real heading.
-    # Prints the real heading on success. Return: 0 resolved, 1 no match, 2 ambiguous.
+    # Resolve a claimed (possibly truncated) label to exactly one real heading, via
+    # ONE awk pass over the table rather than a per-clause shell loop over nsecs
+    # headings. LC_ALL=C makes wc -m and substr() byte-based — matching the
+    # composer's byte-safe 40-byte cut (skills/_shared/digest.md's Label rule)
+    # instead of a locale-dependent character cut that could key differently than
+    # what was actually written (a multi-byte label can otherwise disagree on where
+    # its own prefix ends, depending on the host's locale handling of `cut -c`).
+    # Return: 0 resolved (echoes the real heading), 1 no match, 2 ambiguous.
     find_section() {
       claim="$1"
       case "$claim" in
         *…)
           prefix="${claim%…}"
-          plen=$(printf '%s' "$prefix" | wc -m)
-          matches=0; match_heading=""
-          i=1
-          while [ "$i" -le "$nsecs" ]; do
-            line=$(sed -n "${i}p" /tmp/sm_secmap.txt)
-            heading=$(echo "$line" | sed -E 's/^[0-9]+:(- )?## //')
-            head_prefix=$(printf '%s' "$heading" | cut -c1-"$plen")
-            [ "$head_prefix" = "$prefix" ] && { matches=$((matches+1)); match_heading="$heading"; }
-            i=$((i+1))
-          done
+          plen=$(LC_ALL=C printf '%s' "$prefix" | wc -m)
+          result=$(LC_ALL=C awk -F'|' -v p="$prefix" -v n="$plen" '
+            { hp=substr($2,1,n); if (hp==p) { c++; last=$2 } }
+            END { print c "|" last }
+          ' /tmp/sm_sizes.txt)
+          matches=$(printf '%s' "$result" | cut -d'|' -f1)
+          match_heading=$(printf '%s' "$result" | cut -d'|' -f2-)
           [ "$matches" -eq 1 ] && { echo "$match_heading"; return 0; }
           [ "$matches" -eq 0 ] && return 1
           return 2
           ;;
         *)
-          measure_section "$claim" >/dev/null && { echo "$claim"; return 0; }
+          row_by_heading "$claim" >/dev/null && { echo "$claim"; return 0; }
           return 1
           ;;
       esac
@@ -274,6 +296,20 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
       case "$clause" in
         "Archive | [["*) continue ;;                  # pointer clause — recognized by its value starting `[[` (digest.md's own rule), never by the label alone. A real section literally named "## Archive" has a byte-figure value instead ("Archive | 3 KB") and does NOT match this pattern, so it falls through and is diffed normally.
         "+"*"smaller sections"*) continue ;;           # reconciling residual, not a section name
+      esac
+
+      # A clause with no reserved " | " separator at all is an old-format (pre-E1)
+      # Map clause — every check below keys off that separator, so without this
+      # guard each clause fails its anchored match and silently `continue`s past it
+      # with zero output. Verified against a real pre-E1-format Map (space instead
+      # of ` | `): every clause skipped, zero findings, even though every figure was
+      # stale. `missing-digest` doesn't catch this either — the page does carry a
+      # bullet with `Map:` in it, just not one in the current format — so an
+      # old-format Map (cross-device sync from an older build, a hand-edit) was
+      # checked by nothing at all. This is now its own finding.
+      case "$clause" in
+        *" | "*) : ;;
+        *) echo "$f: Map claims '$clause' with no ' | ' separator — malformed Map (old format?)"; continue ;;
       esac
 
       # Reserved-separator split: label is everything before the LAST " | " —
@@ -306,7 +342,8 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
           echo "$f: Map claims '$label' but it matches more than one section — ambiguous"
           continue
         fi
-        m=$(measure_section "$resolved" | wc -c)
+        row=$(row_by_heading "$resolved")
+        m=$(printf '%s' "$row" | cut -d'|' -f1)
       fi
 
       # One-sided KB tolerance (truncation-only): 0 <= measured - claimed_floor <= 1023.
@@ -327,13 +364,13 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
       case "$clause" in
         *"entries)"*)
           cc=$(echo "$clause" | grep -oE '\([0-9]+ entries\)' | grep -oE '[0-9]+')
-          mc=$(measure_section "$resolved" | grep -cE '^[[:space:]]*- (#{2,6} +)?\[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}')
+          mc=$(section_body "$resolved" | grep -cE '^[[:space:]]*- (#{3,6} +)?\[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}')
           [ -n "$cc" ] && [ "$cc" != "$mc" ] && echo "$f: $label claims ($cc entries), measured $mc"
           ;;
         *"("*")"*)
           cc=$(echo "$clause" | grep -oE '\([0-9]+\)' | grep -oE '[0-9]+')
           if [ -n "$cc" ]; then
-            mc=$(measure_section "$resolved" | grep -cE '^[[:space:]]*- (#{2,6} +)?\[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}')
+            mc=$(section_body "$resolved" | grep -cE '^[[:space:]]*- (#{3,6} +)?\[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}')
             [ "$cc" != "$mc" ] && echo "$f: $label claims ($cc), measured $mc"
           fi
           ;;
@@ -343,6 +380,7 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
   ```
   This is the rule that catches what the other three digest rules cannot: `digest-updated::` and `## Digest`'s mere presence say nothing about whether the *bytes it claims* — or the *entry count* it claims, the figure `brain-load` quotes most prominently ("47 sessions of log not read") — still match the page, and F2 means that check must now hold for however many sections a real page's Map actually lists, not just a fixed four. Rotation is the primary offender (see `skills/brain-save/references/rotation.md`) — it moves tens of KB out of `## Session Log` and, absent the digest-remap step added there, leaves the Map quoting a page that no longer exists.
 - **remediation:** report each mismatched figure (claimed vs. measured), report any claimed label that matches no real section (or matches more than one), report any duplicate label, report any claimed section now under the 1 KB inclusion floor, and suggest a rebuild per `skills/_shared/digest.md`. Report-tier, like the other digest rules — a rebuild reads real content and costs real tokens, never spent without confirmation.
+- **Post-launch correction (wave E4, 2026-07-26 — final review):** four gaps found. (1) A Map clause with no reserved ` | ` separator at all — the pre-E1 format, or any hand-edited/cross-device-synced page still carrying it — failed every anchored check below and `continue`d silently; every clause on such a page was skipped with zero output, and no other digest rule caught it either. Now its own finding. (2) `find_section`'s prefix resolution measured a claimed label's length with plain `wc -m` and cut the real heading with plain `cut -c` — both locale-dependent, and disagreeing with each other on a UTF-8 host where `wc -m` counts characters but `cut -c` counts bytes, so a multi-byte label's key could fail to resolve even though the composer (`skills/_shared/digest.md`) wrote it correctly. Both calls now force `LC_ALL=C`, matching the composer's own byte-safe cut. (3) The entry-count pattern `#{2,6}` also matches a genuine `## yyyy-mm-dd` dated *section* heading (10 real instances in the reference graph, e.g. `- ## 2026-04-22 — New PROD OOM…`) — latent only because every use is scoped to a specific section's own `lineno+1`–`endline` range, but copied verbatim into three files with an instruction to reuse it verbatim, so the trap would outlive the scoping that currently protects it. Now `#{3,6}` — identical counts on every real page checked (12 / 13 / 47), since a genuine dated sub-entry is always written with three or more hashes (`### `), never two. (4) `measure_section` and `find_section` each independently re-scanned `/tmp/sm_secmap.txt` and re-ran `sed`+`wc -c` per clause — up to 3 calls per clause for the byte diff and count checks, plus a full per-heading scan for every `…`-truncated label — O(clauses × sections). Measured live (Git Bash): 68.2s for `Tasks___CRMGM-1937.md` alone, 17.6s for Unicorn-Globus. Fixed by building the `bytes|heading|lineno|endline` table once per file (the derivation shell already emits exactly that) and looking up by name — reproduced on the same host: 73.4s → 14.9s for CRMGM-1937.md (13-clause Map), 17.5s → 7.8s for Unicorn-Globus, same findings before and after in both cases.
 
 ## `oversized-digest`
 - **severity:** data-quality
