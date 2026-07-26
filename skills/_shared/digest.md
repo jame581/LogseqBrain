@@ -45,8 +45,10 @@ Sits immediately after the property block and before the first `## ` section, wh
   - Now: unifying 5 Hangfire schedulers behind one dispatcher (phase 2 of 4)
   - Binding: 2026-04-17 DEV Mongo removed; whole-DEV decommission still undecided
   - Hazard: GLOPRICE-399 migration overlaps Price Checker hosts
-  - Map: Session Log 87 KB (47 entries) · Active Tasks 10 KB · Current Plan 3 KB · Decisions 2 KB (2) · Archive [[Projects/Unicorn-Globus/SessionArchive]] · page 107 KB
+  - Map: Session Log | 87 KB (47 entries) · Active Tasks | 10 KB · Current Plan | 3 KB · Decisions | 2 KB (2) · +6 smaller sections, 2 KB · Archive | [[Projects/Unicorn-Globus/SessionArchive]] · page | 107 KB
 ```
+
+Each clause is `<label> | <figure>` — see "Format" below for why the ` | ` is there and not just a space.
 
 **Slots** — 2 to 6 bullets, in this order. **Identity (slot 1) and Map are required.** Include **Now** whenever the page has any state to report — in practice almost always, since it is derivable from `## Current Plan`. Slots 3–5 as the page warrants. Never pad to hit a count: a two-bullet digest on a page with nothing to say is correct, and a hollow "Now: no updates" bullet is not.
 
@@ -65,8 +67,8 @@ awk '/^(- )?## Digest/{f=1;next} f&&/^(- )?## /{exit} f' "$p" | wc -c
 
 Over cap → recompress in this order:
 
-1. **Shrink the Map first, not the prose.** The Map's own "fitting the 800-byte cap" rule (below) drops its smallest above-threshold entries and says `+N more` — this loses only a byte figure Claude can re-measure on demand, cheaper than losing prose nobody will reconstruct.
-2. If the Map alone (down to its single largest entry, the Archive pointer, and the page total — never fewer) still leaves no room, drop the free slot.
+1. **Shrink the Map first, not the prose.** The Map's own "fitting the 800-byte cap" rule (below) reserves room for its own tail *before* accepting a single candidate, so this case is now rare — but if the prose slots alone already exceed the cap, drop the Map's above-threshold candidates smallest-first and say `+N more`.
+2. If the Map alone (down to its single largest entry, the reconciling residual, the Archive pointer, and the page total — never fewer) still leaves no room, drop the free slot.
 3. Still over → shorten Binding and Hazard.
 
 **Never drop the Map wholesale** — it can shrink internally, but a digest with no Map at all is a missing digest (`missing-digest`), not a compressed one. Never write an over-cap digest — see `oversized-digest` in `skills/_shared/hygiene-rules.md`.
@@ -112,32 +114,67 @@ while [ "$i" -le "$nsecs" ]; do
 done
 
 awk -F'|' -v t="$threshold" '$1+0>=t' /tmp/sizes.txt | sort -t'|' -k1,1 -rn > /tmp/candidates.txt
+awk -F'|' -v t="$threshold" '$1+0<t'  /tmp/sizes.txt > /tmp/noise.txt
+noise_n=$(wc -l < /tmp/noise.txt)
+noise_bytes=$(awk -F'|' '{s+=$1} END{print s+0}' /tmp/noise.txt)
 ```
 
-`/tmp/candidates.txt` is now every section at or above 1 KB, largest first, as `bytes|heading|lineno|endline`. For whichever of `Session Log` and `Decisions` clear the threshold, add the same scoped count this file has always computed — `grep -cE '^[[:space:]]+- \[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}'` over that section's own `lineno+1`–`endline` range — as a parenthetical.
+`/tmp/candidates.txt` is now every section at or above 1 KB, largest first, as `bytes|heading|lineno|endline`. `/tmp/noise.txt` is everything that didn't clear the threshold — `noise_n` and `noise_bytes` feed the reconciling residual clause (see "Fitting" below), so the Map's figures account for the whole page, not just its above-threshold sections.
+
+For whichever of `Session Log` and `Decisions` clear the threshold, add an entry/decision count as a parenthetical, scoped to that section's own `lineno+1`–`endline` range:
+
+```bash
+grep -cE '^[[:space:]]*- (#{2,6} +)?\[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}'
+```
+
+**The pattern must match a `### `-style dated sub-heading, not only a plain dash-bullet.** Measured live: a task page wrote every Session Log entry as `- ### 2026-05-25 — …`; the plain-dash-only form (`^[[:space:]]+- \[?\[?[0-9]{4}-…`, no optional `#{2,6}`) counted 5 where the section actually held 12 — a Map that understates by more than half, and the old honesty rule (below) only fires on a count of exactly 0, so a wrong-but-nonzero count published as if it were true. The pattern above matches either form.
+
+**Cross-check before publishing the count — a widened pattern is not a guarantee against the next unseen entry shape.** Compute the section's own top-level child-bullet count: the bullets at the section's shallowest indentation level (its immediate children), excluding property-style lines (`^[a-z][a-z0-9-]*:: `) and italic-only stub lines (`_..._`) — the same two exclusions the entry count has always honored. If the dated-entry count comes back **lower** than this child-bullet count, treat the shortfall as a signal the pattern is still missing some entry shape on this particular page, and **omit the count** rather than publish a number already known to be a floor. A dated entry legitimately nested one level deeper than its siblings (an addendum under a same-day entry, say) makes the count *exceed* the child-bullet count — that is not a floor and is not flagged; the check only fires on undercounting. This is additive to the existing zero-only rule below, not a replacement for it.
 
 ### Fitting the 800-byte cap
 
-Append candidates to the Map bullet **largest first**, tracking the running byte total of the whole `## Digest` section (prose bullets already composed + `Map: ` + candidates appended so far). The moment the next candidate would push the section past 800 B, stop: drop the remaining candidates — by construction the smallest, since the list is sorted largest-first — and append `+N more`, N being the count dropped. Sections that never cleared the 1 KB threshold in the first place are not part of `N`; they were noise, not an omission worth flagging. The `Archive` pointer (when the archive page exists) and the page total are appended after the candidates and are never subject to this drop.
+The pieces appended **after** the candidate list — `+N more`, the reconciling residual, the `Archive` pointer, and the page total — are never optional once they apply, so their length must be **reserved before the first candidate is accepted**, not discovered after they've already pushed the section past the cap:
 
-Worked example: forcing a real page's candidates through an artificially tight budget kept only the single largest entry and reported `+3 more` — three smaller-but-still-above-threshold sections dropped, largest-first order preserved, nothing invented.
+1. **Compute the fixed tail first**, independent of which candidates get kept: the `Archive` clause (if the archive page exists), the reconciling residual `+N smaller sections, X KB` (if `noise_n` ≥ 1 — see "Format" below), and the `page` clause. Measure each including its leading ` · `.
+2. **Reserve worst-case room for `+N more`.** The largest N could ever be is `(candidate count − 1)` — every candidate but the single largest gets dropped. Measure ` · +<that N> more` once; this is a reservation, not necessarily what gets printed.
+3. `budget_for_candidates = 800 − (prose bullets already composed) − len("Map: ") − archive_bytes − residual_bytes − page_bytes − reserved_more_bytes`.
+4. Append candidates **largest first** against `budget_for_candidates`, tracking the running total exactly as before. The moment the next candidate would exceed it, stop — the remainder are the smallest, by construction of the largest-first sort.
+5. Append, in order: kept candidates, `+N more` (only if any were actually dropped — using the *actual* N, always ≤ the step-2 reservation), the reconciling residual, the `Archive` pointer, the page total.
+
+Reserving worst-case for `+N more` can leave a few bytes of slack unused when fewer candidates are dropped than the reservation assumed — that is the correct trade: a Map a few bytes under 800 is safe, a Map at 808 B is not.
+
+Worked example, `Tasks___CRMGM-1937.md` (81,399 B, 157 B prose head, no archive page, 13 candidates clear the 1 KB threshold): reserving for the worst case (`+12 more`, 12 B), the residual clause (`+8 smaller sections, 4 KB`, 29 B with its separator) and `page | 79 KB` (16 B with its separator) leaves 581 B for candidates. Capping every label at 40 characters (§Format) shrinks the candidate clauses enough that **all 13 fit** in 529 B — no `+N more` needed. Final section: 157 (prose) + 5 (`Map: `) + 529 (13 candidates) + 29 (residual) + 16 (page) = **736 B**, under the cap, the reservation's slack simply unused because nothing had to be dropped.
+
+Older worked example (pre-reservation, kept for the "drop smallest first" mechanic it still illustrates): forcing a real page's candidates through an artificially tight budget kept only the single largest entry and reported `+3 more` — three smaller-but-still-above-threshold sections dropped, largest-first order preserved, nothing invented.
 
 ### Format
 
 ```
-  - Map: Session Log 87 KB (47 entries) · Active Tasks 10 KB · Current Plan 3 KB · Decisions 2 KB (2) · page 107 KB
+  - Map: Session Log | 87 KB (47 entries) · Active Tasks | 10 KB · Current Plan | 3 KB · Decisions | 2 KB (2) · +6 smaller sections, 2 KB · Archive | [[Projects/Unicorn-Globus/SessionArchive]] · page | 107 KB
 ```
 
-Worked example, measured live on `Projects___Unicorn-Globus.md` (109,786 B total): the derivation shell found 10 real sections, kept the 4 at or above 1 KB (`Session Log` 89,171 B, `Active Tasks` 10,590 B, `Current Plan` 3,153 B, `Decisions` 2,622 B), dropped 6 as noise (`Overview` 415 B, `Tech Stack` 322 B, `Key Projects` 555 B, `Architecture` 526 B, `Conventions` 426 B, `Implementation` 361 B — none of these ever reaches the map at this page's current sizes), and produced the line above at 119 bytes total — comfortably inside the 800 B cap alongside four prose slots.
+Each clause is `<label> | <figure>`, clauses still joined by ` · `. The ` | ` is a **reserved separator** — split on it, not on "the first space followed by a digit." A cut like the latter breaks the instant a label contains its own digits, which real task-page headings do constantly (`2026-04-23 — Step 2 isolated, real root cause found`, `PROD 2.6 — EXECUTED 2026-06-01 …`): the old approach cut mid-label and produced a truncated, sometimes-colliding key. Splitting on the reserved token instead never depends on what characters a label happens to contain.
+
+- **Label** — the section heading verbatim, **capped at 40 characters**. Longer than that: cut to the first 40 characters and append `…`. The truncated string doubles as the *diff key* — `stale-map` re-truncates the real heading the same way (first 40 characters) before comparing labels, so cutting for display never loses the ability to relocate the section, only its display length.
+- **Figure** — `N KB` or `N B` (truncation rule under "Rules" below); `Session Log` and `Decisions` carry their count immediately after the figure — `N KB (M entries)` / `N KB (M)`.
+- **`Archive`** — `Archive | [[Projects/<Name>/SessionArchive]]` (a pointer, not a figure — recognized by its value starting `[[`, never by clause position).
+- **`page`** — `page | N KB`, always last.
+- **The reconciling residual** — `+N smaller sections, X KB` (or `X B` under 1 KB), present whenever `noise_n` ≥ 1 (at least one real section fell under the 1 KB threshold). Not a section name: it's recognized by its `+N smaller sections` prefix and never looked up as a heading. This is what lets the Map's figures — candidates, `+N more`, residual, `page` — account for the *whole* page, not just the sections that individually cleared the threshold: measured live on `Tasks___CRMGM-1937.md`, 8 sections totaling 4,121 B cleared no threshold and, before this clause existed, appeared in the Map nowhere at all.
+
+**Duplicate labels are a finding, not a collision to key through.** Two headings can truncate to the same 40 characters — measured live, two same-day task-page entries both start `2026-04-23 — Step 2…` and differ only after character 20, so a too-short cap would collide them. Before finalizing the Map, check whether any two included labels are identical after truncation; if so, widen *that pair's* truncation only, as far as needed to disambiguate (up to the full heading length), rather than let either one silently key to the wrong section. `skills/_shared/hygiene-rules.md`'s `stale-map` performs the same check on whatever a Map actually claims: two clauses parsing to the same label is reported as its own finding, and neither of that pair is diffed — the key is ambiguous, not wrong, and guessing which is which would be worse than saying so.
+
+Worked example, measured live on `Projects___Unicorn-Globus.md` (109,786 B total): the derivation shell found 10 real sections, kept the 4 at or above 1 KB (`Session Log` 89,171 B, `Active Tasks` 10,590 B, `Current Plan` 3,153 B, `Decisions` 2,622 B), and summarized the other 6 as noise (`Overview` 415 B, `Tech Stack` 322 B, `Key Projects` 555 B, `Architecture` 526 B, `Conventions` 426 B, `Implementation` 361 B — 2,605 B total) in a single reconciling clause, `+6 smaller sections, 2 KB`, rather than omitting them. The full line — four candidates, the residual, the Archive pointer, the page total — runs comfortably inside the 800 B cap alongside four prose slots.
 
 ### Rules
 
-- **Byte figures are authoritative and always emitted** for every section that clears the threshold. Round down to whole KB above 1 KB (truncate, don't round to nearest — see "The `page` figure" below for why the direction matters); below 1 KB use bytes.
-- **The 1 KB threshold is a hard floor for inclusion**, independent of the 800 B cap — a section under 1 KB is omitted from the map even when there is room to spare. It isn't signal.
-- **Entry counts (`Session Log`) and decision counts (`Decisions`) are best-effort**, exactly as before F2, keyed off the dated-headline shape (`grep -cE '^[[:space:]]+- \[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}'`), mirroring the Decision Entry Template (`{{date}}: {{decision_title}}`) so that free-form children (a `**Consequences:**` sub-list, an undated aside) don't get counted as their own entries. This is unchanged in mechanism, just now applied to whichever sections actually clear the threshold rather than to a fixed pair. As before: an **undated** entry is not counted, so when a section has content but the dated-headline count comes back 0, omit the count rather than write `0 entries`/`(0)` — that would be a lie about a non-empty section.
+- **Byte figures are authoritative and always emitted** for every section that clears the threshold. Above 1 KB, a claim of `N KB` asserts the section measures **somewhere in `[N·1024, N·1024 + 1023]` bytes** — truncate to that floor, never round to nearest (see "The `page` figure" below for why the direction matters, and `stale-map` in `skills/_shared/hygiene-rules.md` for why the tolerance this implies is one-sided, not a symmetric ± band). Below 1 KB use exact bytes.
+- **The 1 KB threshold is a hard floor for inclusion**, independent of the 800 B cap — a section under 1 KB is omitted from the map even when there is room to spare. It isn't signal. A section that shrinks below 1 KB after previously clearing it (rotation, a doctor repair) must be **dropped** from the Map on the next Remap/Refresh, not left in at a stale figure — `stale-map` flags any claimed section it re-measures at under 1 KB, on the theory that this rule was skipped.
+- **Entry counts (`Session Log`) and decision counts (`Decisions`) are best-effort**, keyed off the dated-headline shape — `grep -cE '^[[:space:]]*- (#{2,6} +)?\[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}'` — which matches a `### `-style dated sub-heading as well as a plain dash-bullet (see "Derivation shell" above for why the `#{2,6}` alternative is required, not cosmetic). Mirrors the Decision Entry Template (`{{date}}: {{decision_title}}`) so that free-form children (a `**Consequences:**` sub-list, an undated aside) don't get counted as their own entries. As before: an **undated** entry is not counted, so when a section has content but the dated-headline count comes back 0, omit the count rather than write `0 entries`/`(0)`. **New:** a *nonzero* count that comes back lower than the section's own top-level child-bullet count (see the cross-check above) is also omitted — a wrong-but-nonzero count is not more honest than a zero one.
 - **Every figure is scoped to its own section** — the same `lineno`–`endline` boundaries the derivation shell computes, never a blind whole-file grep. An unscoped count over the whole page would, for instance, count dated `## Decisions` bullets as Session Log entries.
 - **Absent sections are omitted**, never reported as zero.
+- **Labels are capped at 40 characters**, truncated with a trailing `…` when the real heading runs longer, and joined to their figure with the reserved ` | ` separator — see "Format" above. Never key two different labels to the same truncated string; widen the cap for a colliding pair before falling back to it.
 - **Include the `Archive` pointer only when** `pages/Projects___<Name>___SessionArchive.md` exists — unchanged, and never subject to the drop-for-space rule.
+- **Include the reconciling residual (`+N smaller sections, X KB`) whenever `noise_n` ≥ 1** — never subject to the drop-for-space rule, reserved for up front (see "Fitting" above).
 - **The page total is always emitted** and never subject to the drop-for-space rule — it's the one figure that lets `brain-load` say "this is everything, and here's how much of it I read."
 - **Placeholder stubs** (`_Session entries are added by brain-save._` and friends) still denote an empty section — a section holding only its stub measures near-zero and is naturally filtered out by the 1 KB threshold, no special-casing needed.
 

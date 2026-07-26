@@ -187,11 +187,19 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **auto-fixable:** report
 - **detection:** pure arithmetic — recompute the page's **real** section sizes (the same enumerate-and-measure approach as `skills/_shared/digest.md`'s derivation shell, since F2 the Map's field list is derived per page, not fixed), parse **whatever labels the page's own `Map:` bullet actually claims** — however many there are, whatever they're called — and diff each claimed figure against the measured size of the section with that name, keyed by name rather than by a fixed position. A claimed label that matches no real section on the page is its own finding: the Map is describing something that isn't there.
 
-  The tolerance is derived from the **unit the Map claims**, not a percentage of the measured size: a figure stated in KB truncates to the nearest whole kilobyte (see `digest.md`), so its worst case is a fixed drift of ≤ 1023 B no matter how large the section is — tolerate **1024 B**. A figure stated in bytes carries no rounding step and gets **64 B** — enough to absorb ordinary noise, far below any real drift.
+  **Parsing keys off the reserved ` | ` separator (`skills/_shared/digest.md` "Format"), not off "the first space before a digit."** The earlier parser split a clause on the first space-then-digit, which breaks the instant a label contains its own digits — and real task-page headings do, constantly: `'2026-04-23 — Step 2 isolated, real root cause found'` and `'2026-04-23 — Step 2 patch VALIDATED on PROD'` both cut down to the label `'2026-04-23 — Step'`, a false "no such section" finding on the first and a silent same-key collision with the second — whose byte diff then never ran, because the mis-parse `continue`d past it. Splitting on the reserved token instead of guessing where prose ends is what makes the split unambiguous regardless of what a heading contains.
+
+  **A label may be truncated for display (`skills/_shared/digest.md`'s 40-character cap, `…` marker).** Resolve it by **exact match** when it carries no `…`; when it does, treat the text before `…` as a **prefix** and find the one real heading whose own first N characters equal it. Exactly one match → resolved, diff proceeds. Zero matches → "no such section." **More than one match → its own finding** ("ambiguous — ").
+
+  **A duplicate label — two clauses parsing to the identical string — is its own finding, not a collision to key through.** Track every label already seen in this Map; the second occurrence is reported and **neither** of the pair is diffed, because the key no longer identifies one section.
+
+  The tolerance is derived from the **unit the Map claims**, not a percentage of the measured size — and it is **one-sided for KB**, not a symmetric ± band. `digest.md` mandates truncation (never round-to-nearest), so a claim of `N KB` asserts the section measures **in `[N·1024, N·1024 + 1023]` bytes** — check `0 <= measured − N·1024 <= 1023`, not `|N·1024 − measured| <= 1024`. The old symmetric form silently accepted an entire adjacent KB tier on the low side: a claim of `87 KB` against a true 88,100 B section (which truncates to `86 KB`, one tier down) drifts only 988 B from `87·1024`, under the old 1024 B band — a wrong claim, undetected. The one-sided form catches it (the measured byte count falls *below* the claimed floor, which a correct truncation never does) while still passing a claim of `87 KB` against 89,200 B (`89200 − 89088 = 112`, inside `[0, 1023]`). A figure stated in bytes carries no rounding step and keeps the existing symmetric **64 B** tier — enough to absorb the `page` self-reference noise noted below, far below any real drift.
+
+  **A claimed section now measuring under 1 KB is flagged regardless of whether its figure still diffs correctly.** `digest.md`'s 1 KB inclusion floor means such a section should already have been dropped from the Map (Remap/Refresh) — a Map still naming it, even at an arithmetically-accurate `200 B`, means that step was skipped.
 
   The `page` figure used to be a special case beyond ordinary rounding: `brain-save` step 9 measured the page and *then* edited the Map bullet, so the just-written claim went stale by the edit's own length delta the instant it landed — 32 B on a fresh project's first save (sub-1 KB, absorbed by the 64 B byte tier), but on a large page the same self-reference can straddle a KB boundary and drift past even the 1024 B KB tier: measured live, a 106 KB pre-write claim against a 109,786 B post-write total drifted 1,242 B — a correctly-computed Map, false-flagged as stale by write order. That is now fixed at the source, not by tolerance: every Map-writing flow re-measures the page *after* writing and corrects `page` if it changed (`skills/_shared/digest.md`'s "second pass" step; `skills/brain-save/SKILL.md` step 9). With that in place, `page`'s residual drift is like any other figure's — the tolerances above cover genuine rounding error only, and widening them again would just hide a bigger version of the same bug on the next boundary crossing.
 
-  The entry count (`(N entries)` on `Session Log`) and decision count (`(N)` on `Decisions`) have no rounding step at all — a claimed count that doesn't exactly equal the measured count is stale, full stop — while still honoring the omit-when-zero-but-nonempty rule from `digest.md`: a Map that correctly omits a count is not compared. Scope is identical to the other three digest rules: skip `___SessionArchive.md` and `type:: session-archive`.
+  The entry count (`(N entries)` on `Session Log`) and decision count (`(N)` on `Decisions`) have no rounding step at all — a claimed count that doesn't exactly equal the measured count is stale, full stop — while still honoring the omit-when-zero-but-nonempty rule from `digest.md`: a Map that correctly omits a count is not compared. The count itself is scoped with the same widened pattern `digest.md` uses — `grep -cE '^[[:space:]]*- (#{2,6} +)?\[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}'`, matching a `### `-style dated sub-heading as well as a plain dash-bullet — so this check agrees with what the Map was built from, rather than re-litigating the count with the narrower pattern the Map has already moved past. The reconciling residual (`+N smaller sections, X KB`) is recognized by its `+…smaller sections` prefix and skipped like `Archive` — it names no single section to diff. Scope is identical to the other three digest rules: skip `___SessionArchive.md` and `type:: session-archive`.
   ```
   for f in pages/Projects___*.md pages/Tasks___*.md; do
     [ -e "$f" ] || continue    # unexpanded glob on a graph with no task pages
@@ -208,7 +216,7 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
     grep -nE '^(- )?## ' "$f" | grep -v '## Digest$' > /tmp/sm_secmap.txt
     nsecs=$(wc -l < /tmp/sm_secmap.txt)
 
-    measure_section() {   # $1 = heading text exactly as it appears after "## "
+    measure_section() {   # $1 = exact real heading text (after "## ") -> section body on stdout
       i=1
       while [ "$i" -le "$nsecs" ]; do
         line=$(sed -n "${i}p" /tmp/sm_secmap.txt)
@@ -229,44 +237,100 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
       return 1
     }
 
-    # Split "Map: A x KB (n) · B y KB · page z KB" on " · " and check each clause
+    # Resolve a claimed (possibly truncated) label to exactly one real heading.
+    # Prints the real heading on success. Return: 0 resolved, 1 no match, 2 ambiguous.
+    find_section() {
+      claim="$1"
+      case "$claim" in
+        *…)
+          prefix="${claim%…}"
+          plen=$(printf '%s' "$prefix" | wc -m)
+          matches=0; match_heading=""
+          i=1
+          while [ "$i" -le "$nsecs" ]; do
+            line=$(sed -n "${i}p" /tmp/sm_secmap.txt)
+            heading=$(echo "$line" | sed -E 's/^[0-9]+:(- )?## //')
+            head_prefix=$(printf '%s' "$heading" | cut -c1-"$plen")
+            [ "$head_prefix" = "$prefix" ] && { matches=$((matches+1)); match_heading="$heading"; }
+            i=$((i+1))
+          done
+          [ "$matches" -eq 1 ] && { echo "$match_heading"; return 0; }
+          [ "$matches" -eq 0 ] && return 1
+          return 2
+          ;;
+        *)
+          measure_section "$claim" >/dev/null && { echo "$claim"; return 0; }
+          return 1
+          ;;
+      esac
+    }
+
+    # Split "Map: A | x KB (n) · B | y KB · +N smaller sections, Z KB · page | z KB" on " · "
+    labels_seen=""
     echo "$map" | sed 's/.*Map: //' | sed 's/ · /\n/g' | while IFS= read -r clause; do
       case "$clause" in
-        Archive*) continue ;;   # pointer, not a figure
+        "Archive | "*) continue ;;                    # pointer, not a figure
+        "+"*"smaller sections"*) continue ;;           # reconciling residual, not a section name
       esac
-      label=$(echo "$clause" | sed -E 's/ [0-9].*$//')     # everything before the first " <digit>"
-      figure=$(echo "$clause" | grep -oE '[0-9]+(\.[0-9]+)? ?(KB|B)')
+
+      # Reserved-separator split: label is everything before the LAST " | " —
+      # robust even in the (rare) case a label itself contains " | ".
+      label=$(printf '%s' "$clause" | sed -E 's/ \| [^|]*$//')
+      rest=$(printf '%s' "$clause" | sed -E 's/^.* \| //')
+
+      case " ${labels_seen} " in
+        *" ${label} "*) echo "$f: Map claims duplicate label '$label' — ambiguous, not diffed"; continue ;;
+      esac
+      labels_seen="${labels_seen} ${label}"
+
+      figure=$(echo "$rest" | grep -oE '^[0-9]+(\.[0-9]+)? ?(KB|B)')
       [ -n "$figure" ] || continue
       v=$(echo "$figure" | grep -oE '[0-9]+(\.[0-9]+)?')
+      isKB=0
       case "$figure" in
-        *KB) cb=$(awk -v v="$v" 'BEGIN{printf "%d", v*1024}'); tol=1024 ;;
-        *)   cb=$(awk -v v="$v" 'BEGIN{printf "%d", v}');       tol=64 ;;
+        *KB) cb=$(awk -v v="$v" 'BEGIN{printf "%d", v*1024}'); isKB=1 ;;
+        *)   cb=$(awk -v v="$v" 'BEGIN{printf "%d", v}');      tol=64 ;;
       esac
 
       if [ "$label" = "page" ]; then
-        m=$total
+        m=$total; resolved="page"
       else
-        if ! measure_section "$label" >/dev/null; then
+        resolved=$(find_section "$label"); rc=$?
+        if [ "$rc" -eq 1 ]; then
           echo "$f: Map claims '$label' but no such section exists on the page"
           continue
+        elif [ "$rc" -eq 2 ]; then
+          echo "$f: Map claims '$label' but it matches more than one section — ambiguous"
+          continue
         fi
-        m=$(measure_section "$label" | wc -c)
+        m=$(measure_section "$resolved" | wc -c)
       fi
 
-      diff=$(( cb > m ? cb - m : m - cb ))
-      [ "$diff" -gt "$tol" ] && echo "$f: $label claims $figure, measured ${m}B"
+      # One-sided KB tolerance (truncation-only): 0 <= measured - claimed_floor <= 1023.
+      # Byte tier stays symmetric (no rounding direction to respect).
+      if [ "$isKB" -eq 1 ]; then
+        d=$((m - cb))
+        { [ "$d" -lt 0 ] || [ "$d" -gt 1023 ]; } && echo "$f: $label claims $figure, measured ${m}B"
+      else
+        diff=$(( cb > m ? cb - m : m - cb ))
+        [ "$diff" -gt "$tol" ] && echo "$f: $label claims $figure, measured ${m}B"
+      fi
+
+      # 1 KB inclusion floor: a claimed (non-page) section now under 1024 B should have been dropped
+      [ "$label" != "page" ] && [ "$m" -lt 1024 ] && \
+        echo "$f: $label claims $figure but now measures ${m}B, below the 1 KB inclusion floor — should have been dropped"
 
       # Exact count check — only fires when the clause actually carries a count
       case "$clause" in
         *"entries)"*)
           cc=$(echo "$clause" | grep -oE '\([0-9]+ entries\)' | grep -oE '[0-9]+')
-          mc=$(measure_section "$label" | grep -cE '^[[:space:]]+- \[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}')
+          mc=$(measure_section "$resolved" | grep -cE '^[[:space:]]*- (#{2,6} +)?\[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}')
           [ -n "$cc" ] && [ "$cc" != "$mc" ] && echo "$f: $label claims ($cc entries), measured $mc"
           ;;
         *"("*")"*)
           cc=$(echo "$clause" | grep -oE '\([0-9]+\)' | grep -oE '[0-9]+')
           if [ -n "$cc" ]; then
-            mc=$(measure_section "$label" | grep -cE '^[[:space:]]+- \[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}')
+            mc=$(measure_section "$resolved" | grep -cE '^[[:space:]]*- (#{2,6} +)?\[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}')
             [ "$cc" != "$mc" ] && echo "$f: $label claims ($cc), measured $mc"
           fi
           ;;
@@ -275,7 +339,7 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
   done
   ```
   This is the rule that catches what the other three digest rules cannot: `digest-updated::` and `## Digest`'s mere presence say nothing about whether the *bytes it claims* — or the *entry count* it claims, the figure `brain-load` quotes most prominently ("49 sessions of log not read") — still match the page, and F2 means that check must now hold for however many sections a real page's Map actually lists, not just a fixed four. Rotation is the primary offender (see `skills/brain-save/references/rotation.md`) — it moves tens of KB out of `## Session Log` and, absent the digest-remap step added there, leaves the Map quoting a page that no longer exists.
-- **remediation:** report each mismatched figure (claimed vs. measured), report any claimed label that matches no real section, and suggest a rebuild per `skills/_shared/digest.md`. Report-tier, like the other digest rules — a rebuild reads real content and costs real tokens, never spent without confirmation.
+- **remediation:** report each mismatched figure (claimed vs. measured), report any claimed label that matches no real section (or matches more than one), report any duplicate label, report any claimed section now under the 1 KB inclusion floor, and suggest a rebuild per `skills/_shared/digest.md`. Report-tier, like the other digest rules — a rebuild reads real content and costs real tokens, never spent without confirmation.
 
 ## `oversized-digest`
 - **severity:** data-quality

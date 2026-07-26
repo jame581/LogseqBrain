@@ -53,7 +53,7 @@ When the user says "load <project>" or similar:
    > Focus: Hangfire unification — phase 2 of 4. Next: CRMGM-2016 rollout to STAGE.
    > **Not read:** Session Log 87 KB (47 entries), Active Tasks 10 KB, Current Plan 3 KB, Decisions 2 KB (2). Ask and I'll grep any of it.
 
-   Quote whatever the Map actually lists — the field list is derived per page (`skills/_shared/digest.md`), not the fixed four shown here; a page whose Map surfaces `Active Tasks` or any other section says so, because that section is what the digest chose not to read on that particular page.
+   Quote whatever the Map actually lists — the field list is derived per page (`skills/_shared/digest.md`), not the fixed four shown here; a page whose Map surfaces `Active Tasks` or any other section says so, because that section is what the digest chose not to read on that particular page. The Map bullet itself separates each label from its figure with a reserved ` | ` token (e.g. `Session Log | 87 KB (47 entries)`) so a heading full of its own digits and punctuation parses unambiguously — paraphrase that into comma-separated prose here, as the example above does, rather than quoting the `|` verbatim.
 
    This is mandatory, not decorative — see "Truncation honesty" in `skills/_shared/section-locator.md`. Presenting a digest without saying what it omits is what lets the model reason from a fragment as though it held the whole history.
 

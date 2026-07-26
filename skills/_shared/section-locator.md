@@ -48,16 +48,16 @@ The algorithm above reads *forward* from a heading — fine when the whole secti
 1. **Find every entry-start line, cheaply.** `grep -n` on the entry-start pattern costs a few hundred bytes of line-number output, not the section itself:
    ```bash
    p="pages/Projects___<Name>.md"
-   grep -nE '^[[:space:]]+- \[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}' "$p"
+   grep -nE '^[[:space:]]*- (#{2,6} +)?\[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}' "$p"
    ```
 2. **Take the last N line numbers, largest N first, then shrink to fit any byte cap the caller states.** For a plain count target ("last 3 entries," no cap), take the last 3 and move on. When a caller also states a byte cap — brain-load's fallback: last 3 entries *or* ~4 KB, whichever is smaller — measure before committing to N instead of assuming 3 is safe:
    ```bash
-   grep -nE '^[[:space:]]+- \[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}' "$p" | tail -3   # candidate: 3 entries
+   grep -nE '^[[:space:]]*- (#{2,6} +)?\[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}' "$p" | tail -3   # candidate: 3 entries
    ```
    Try the largest N (3) first: take the earliest of those 3 line numbers, `tail -n +<that line>` and `wc -c` the result. Under the cap → read it, done — report "3 of M". Over the cap → drop to N=2 (earliest of the last 2), re-measure. Still over → drop to N=1 and read it regardless of size — **never return zero entries**, and say so even when that single entry alone exceeds the cap. State the N you actually landed on; never assume 3 without checking.
 3. **Read from the earliest of the N lines you settled on.** If the section is last in the file (as `## Session Log` usually is), read to EOF — no next heading to bound against:
    ```bash
-   start=$(grep -nE '^[[:space:]]+- \[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}' "$p" | tail -N | head -1 | cut -d: -f1)   # N = the count settled on in step 2
+   start=$(grep -nE '^[[:space:]]*- (#{2,6} +)?\[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}' "$p" | tail -N | head -1 | cut -d: -f1)   # N = the count settled on in step 2
    tail -n +"$start" "$p"            # or Read(offset = start-1, limit = total_lines - start + 1)
    ```
    If another heading follows the section, bound the read at `next-heading-line − 1` instead, exactly as step 4 of the main algorithm does.

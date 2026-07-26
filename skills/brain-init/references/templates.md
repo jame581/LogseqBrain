@@ -31,7 +31,7 @@ digest-updated:: {{today}}
 - ## Digest
   - {{project_description}}
   - Now: just created; no work logged yet.
-  - Map: page {{page_size}}
+  - Map: page | {{page_size}}
 - ## Overview
   - {{project_description}}
 - ## Current Plan
