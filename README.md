@@ -57,7 +57,7 @@ Then say **"init brain"** to set up the graph structure, and **"init brain proje
 - "init brain project MyProject" — adds a new project page
 
 **brain-load** — Load project context into the current session.
-- "load MyProject" — loads the project's **digest**: one read, under ~2 KB no matter how big the page is, and it tells you exactly what it *didn't* read
+- "load MyProject" — loads the project's **digest**: **one** read of the page, ~1.5 KB no matter how big the page is, plus today's journal entry for that project if there is one (targeting ~2 KB). It tells you exactly what it *didn't* read
 - Anything it didn't read is one question away — ask and it greps for just that, announcing each step
 - "load MyProject full" — loads everything including decisions, implementation, linked tasks
 - "load brain" — loads a high-level overview of all projects
@@ -109,7 +109,7 @@ Every brain operation (init / load / save / status / search) leaves a one-line `
 
 ## Digest
 
-Every project and task page carries a small summary at the top — four properties (`focus::`, `next::`, `open::`, `digest-updated::`) and a `## Digest` section capped at 800 bytes. Loading a project reads *only* that, so a 107 KB page costs under 2 KB instead of reading it whole.
+Every project and task page carries a small summary at the top — four properties (`focus::`, `next::`, `open::`, `digest-updated::`) and a `## Digest` section capped at 800 bytes. Loading a project reads *only* that from the page — one ~1.5 KB read instead of a 107 KB one — plus today's journal entry for that project if there is one. Nothing else is loaded up front.
 
 The last digest bullet is a **map** — e.g. `Session Log | 87 KB (47 entries) · Active Tasks | 10 KB · Current Plan | 3 KB · Decisions | 2 KB (2) · page | 107 KB` — computed from the file, never written from memory, and derived from whatever sections the page actually has (not a fixed list — a page whose real second-largest section is `Active Tasks` shows `Active Tasks`). It does two jobs: it tells Claude what it doesn't have (so it can't quietly reason as though it read everything), and it's the index Claude uses when you ask for more.
 

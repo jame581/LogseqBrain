@@ -23,7 +23,7 @@ When the user says "load <project>" or similar:
 
 1. **Find the project page** using the algorithm in `references/matching.md`.
 
-2. **Read the digest — one Read.** `Read(page, offset 0, limit 20)` captures the page-top property block and the whole `## Digest` (see `skills/_shared/digest.md`). It may overshoot a few lines into `## Overview`; that is acceptable and bounded. This is the entire brief-mode read.
+2. **Read the digest — one Read.** `Read(page, offset 0, limit 20)` captures the page-top property block and the whole `## Digest` (see `skills/_shared/digest.md`). It may overshoot a few lines into `## Overview`; that is acceptable and bounded. This is the entire brief-mode read **of the page** — step 4 additionally reads today's journal's mention(s) of this project, shrunk to fit. Those two are the whole of digest mode; nothing else is pre-loaded.
 
    **Check before you use it: the read must contain a `Map:` bullet.** Task pages have no fixed template, so a property block can run long (extra task-specific properties push everything below it further down the file) — a `limit 20` read can land past the end of `## Digest` and return digest-shaped bullets with no Map. If `Map:` is not in what you read, the property block is longer than the bound, not that the page lacks a Map — re-read with a larger `limit` (e.g. 30), or `grep -nE '^(- )?## '` for the exact section span and read from there. **Never present a digest whose Map you did not see** — a digest without a Map is not a shorter digest, it is a page you cannot state coverage for.
 

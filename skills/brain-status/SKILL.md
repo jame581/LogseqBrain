@@ -80,7 +80,7 @@ When counting, **exclude template placeholder stubs** — the italic markers a f
 2. **Decisions.** Count two distinct figures, because cross-project decisions are intentionally duplicated in both places (so never sum them): (a) **cross-project** decisions in `pages/Decisions.md`, and (b) decisions recorded on project pages (in their `## Decisions` sections; this includes the project-page copy of any cross-project decision). Break each down by `status::` value (e.g. accepted, superseded).
 3. **Sessions.** For each project page, count real entries under `## Session Log` (section-targeted read; skip the placeholder stub). Sum across projects.
 4. **Activity (recent window).** Glob `journals/*.md`. For journals dated within the last 30 days (filename `yyyy_MM_dd.md`), count bullets under `## Activity`. Report the total as the recent activity signal.
-5. **Present** a compact block. The Tasks line is computed as in Dashboard step 8 (glob `pages/Tasks___*.md`, page-top `status::` only); **legacy** = task pages with no `status::`.
+5. **Present** a compact block. The Tasks line is computed as in Dashboard step 8 — grouped from the **same single ripgrep** as step 2, which already covers `pages/Tasks___*.md`; no per-task reads. **legacy** = task pages with no `status::`.
 
    ```
    Brain stats:

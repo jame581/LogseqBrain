@@ -97,7 +97,7 @@ Three places enforce it, at different granularities:
 
 ## Token-frugality target
 
-With a digest present, a brief load is **one** Read of ≤ ~2 KB regardless of page size. A save reads only the sections it will touch.
+With a digest present, a brief load is **one** Read of the page — ≤ ~2 KB regardless of page size (measured: 1,474 B and 1,508 B on the two digested pages of the reference graph) — plus today's journal's mention(s) of the project, shrunk toward the journal budget above. A save reads only the sections it will touch.
 
 Without a digest, the fallback has a **stated per-component budget**, not one soft ceiling a real page can quietly blow past: property block ≤ ~2 KB (`limit 10`) + Overview first 5 bullets ≤ ~2 KB + Current Plan ≤ 8 KB (the per-section cap above) + Session Log tail ≤ ~4 KB (byte-bounded — see "Reading a section's tail" above: last 3 entries or ~4 KB, whichever is smaller). That is ≤ ~16 KB worst case; real pages land well under it because Current Plan and Overview rarely approach their caps. Measured on a real 59.8 KB page with no digest (`Projects___SELOS.md`): property block 1.1 KB + Overview 1.0 KB + Current Plan 3.7 KB + Session Log tail 2.8 KB (1 of 12 entries, capped down from the 9.1 KB "last 3 entries" alone would have read) = **8.7 KB**. The byte cap on the tail read is what makes any of this hold — "last 3 entries" is denominated in entries, not bytes, and a page whose recent entries run large (this one averages ~3 KB each) blows through any stated ceiling without it. Raising the old ≤ 8 KB target to cover the 15 KB this same page cost before the cap existed would not have fixed anything; the tail read itself had to shrink.
 
