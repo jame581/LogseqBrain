@@ -202,7 +202,7 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
     [ -n "$map" ] || continue
 
     total=$(wc -c < "$f")
-    totallines=$(wc -l < "$f")
+    totallines=$(awk 'END{print NR}' "$f")   # not wc -l — see digest.md: no trailing newline
 
     # Real section map (excluding Digest itself), used to measure whatever the Map claims
     grep -nE '^(- )?## ' "$f" | grep -v '## Digest$' > /tmp/sm_secmap.txt

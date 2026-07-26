@@ -85,7 +85,11 @@ Enumerate the page's real sections (excluding `## Digest` itself, which is the m
 p="pages/Projects___<Name>.md"
 threshold=1024
 total=$(wc -c < "$p")
-totallines=$(wc -l < "$p")
+totallines=$(awk 'END{print NR}' "$p")   # NOT wc -l: Logseq writes files with no
+                                        # trailing newline (all 49 pages of the reference
+                                        # graph), so wc -l undercounts by one and the last
+                                        # section silently loses its final line — measured
+                                        # at 425 B on a real page, enough to shift a KB figure
 
 grep -nE '^(- )?## ' "$p" | grep -v '## Digest$' > /tmp/secmap.txt
 nsecs=$(wc -l < /tmp/secmap.txt)
