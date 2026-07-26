@@ -85,7 +85,11 @@ When the user wants to add a project (e.g., "add MyProject to brain", "init brai
 
 4. **Measure the page and resolve `{{page_size}}`.** This is the one placeholder that can only be filled *after* the Write: run `wc -c` on the new file, round to the nearest 10 bytes, then Edit the literal `{{page_size}}` bullet to the rounded figure (`references/templates.md` has the rounding rule and why an exact figure would be a small lie). Do not skip this — a fresh page ships with `{{page_size}}` still in it until this step runs.
 
-5. **Confirm no `{{` placeholder survives.** `grep -c '{{' "pages/Projects___<ProjectName>.md"` must return `0`. If it doesn't, find and replace the remaining placeholder before continuing — a literal `{{...}}` left in the graph is a `code-in-braces` violation, exactly the kind of format break this plugin exists to prevent.
+5. **Confirm no template placeholder survives.** Check for **this template's three placeholders specifically**, not for `{{` in general:
+   ```bash
+   grep -cE '\{\{(today|project_description|page_size)\}\}' "pages/Projects___<ProjectName>.md"
+   ```
+   must return `0`. A bare `{{` search would be wrong twice over: `{{query}}` and `{{embed}}` are legitimate Logseq macros that `code-in-braces` explicitly whitelists, and a user's project description may contain `{{` of its own — matching either would send you "replacing" content that was never a placeholder. If it doesn't, find and replace the remaining placeholder before continuing — a literal `{{...}}` left in the graph is a `code-in-braces` violation, exactly the kind of format break this plugin exists to prevent.
 
 6. Update `pages/Index.md` — add a link to the new project under the Projects section:
    - `[[Projects/<ProjectName>]] — <brief description>`

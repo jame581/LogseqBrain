@@ -29,7 +29,7 @@ Then choose: a 3 KB section is fine to read whole; an 89 KB one is not — grep 
 
 ## Algorithm
 
-1. **Read the property block** — `Read(offset 0, limit 10)`. Captures `type::`, `status::`, `created::`, `last-updated::`, and the digest properties `focus::` / `next::` / `open::` / `digest-updated::`.
+1. **Read the property block** — `Read(offset 0, limit 10)` is the *starting* bound, not a guarantee. It captures `type::`, `status::`, `created::`, `last-updated::` and the digest properties `focus::` / `next::` / `open::` / `digest-updated::` **on a page whose property block fits in 10 lines** — true of the project template, not guaranteed anywhere else. Task pages have no fixed template and carry arbitrary extra properties, so a digest property can sit below line 10. **A property absent from a bounded read is not an absent property** — if the read ends without reaching a non-property line (a blank line or the first `- ` bullet), the block ran past the bound: re-read with a larger `limit`. Never conclude `digest-updated::` is missing from a read that never reached the end of the block; that is how a healthy page gets reported as un-backfilled.
 
    **If you also need the `## Digest` section, use `limit 20`, not `limit 10`.** The digest sits between the property block and `## Overview`, and its **Map bullet is always last** — a `limit 10` read silently truncates it away, which loses the one thing that tells you what you have not read. When in doubt, read 20.
 

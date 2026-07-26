@@ -4,8 +4,8 @@
 
 All content written to the graph MUST follow these rules:
 
-1. **Outliner format**: Every line of content must be a bullet point (starting with `- `). No bare paragraphs.
-2. **Properties**: Use `key:: value` format. Properties go at the top of the page (page-level) or as children of a bullet (block-level).
+1. **Outliner format**: Every line of content must be a bullet point (starting with `- `). No bare paragraphs. **One exception: the page-top property block** — see rule 2.
+2. **Properties**: Use `key:: value` format. Properties go at the top of the page (page-level) or as children of a bullet (block-level). **The page-top block is deliberately un-bulleted** — bare `type:: project` lines before the first `- `, exactly as the templates below show. This is Logseq's own page-properties form, and bulleting those lines would stop Logseq treating them as page properties. Rule 1's "every line" governs the outliner body that follows; it does not govern this block. Block-level properties, by contrast, *are* bulleted, because they are children of a bullet.
 3. **Headings**: Use `- ## Heading` (bullet + markdown heading). Never a bare `## Heading` without the bullet prefix.
 4. **Indentation**: Use two spaces per indent level. Children are indented under their parent bullet.
 5. **Links**: Use `[[Page Name]]` for internal links. For namespaced pages: `[[Projects/PageName]]`.
