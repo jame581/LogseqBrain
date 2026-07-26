@@ -2,6 +2,17 @@
 
 ## Shipped
 
+### v0.10.0 — Digest layer: cheap recall, honest coverage
+- `## Digest` section + `focus::` / `next::` / `open::` / `digest-updated::` properties on project and task pages (`skills/_shared/digest.md`)
+- brain-load brief mode = one Read of the digest (~2 KB regardless of page size), with automatic fallback to the pre-digest path on un-backfilled pages
+- Lazy retrieval ladder (`skills/_shared/escalation.md`) — announced escalation from grep to bounded read to consent-gated whole-page read
+- Truncation honesty: byte-denominated budgets, measure-before-read, and a mandatory coverage statement on every partial read (`skills/_shared/section-locator.md` rewritten)
+- brain-save refreshes the digest unconditionally on every save; rebuild-from-source is the corrective path
+- brain-status dashboard from a single ripgrep over digest properties
+- 4 new hygiene rules (`missing-digest`, `stale-digest`, `stale-map`, `oversized-digest`) + brain-doctor guided digest backfill
+- Explicit **Logseq OG only** targeting
+- See `docs/superpowers/specs/2026-07-25-v0.10.0-design.md`
+
 ### v0.9.0 — Prevention, lifecycle, findability
 - `jira-markup` hygiene rule — Jira drafts stored verbatim in fenced code blocks; unfenced residue reported by brain-doctor
 - Mechanical post-write verify in brain-save (grep the files just written; fix + re-verify)
@@ -62,16 +73,24 @@
 - Save/load cycle against a Logseq graph
 - Initial graph layout (`pages/`, `journals/`, `Index.md`, `Meta.md`)
 
-## Current — v0.10.0 (TBD)
+## Current — v0.11.0 (TBD)
 
-Open candidates from the Future list will be promoted here once Logseq's roadmap clarifies which is closest to ready.
+## Future — OG (markdown)
 
-## Future — informed by Logseq's own roadmap
-
-These items are deferred until Logseq's own work makes them clearly worthwhile.
-
-- **Storage abstraction layer.** Decouple "what to store" from "how to store it" so the backend can swap from markdown files to Logseq's DB API without changing the skill surface. Defer until Logseq's "Markdown Mirror" feature ships and the DB version stabilizes — until then, markdown is safe.
-- **Logseq DB plugin API integration.** Replace markdown file IO with Logseq's plugin API once it goes GA. Per Logseq's roadmap the API is in development; revisit when stable.
-- **Headless sync via new Logseq CLI.** The new Logseq CLI supports headless sync without the desktop app, which would let LogseqBrain operate concurrently with the desktop app safely. Revisit when the CLI ships in stable.
-- **Conflict resolution for Logseq Sync.** Detect and merge sync conflicts gracefully (relevant once we're touching the same files Logseq Sync is touching mid-write).
+- **Block refs for decisions.** Write a cross-project decision once with `id:: <uuid>` and reference it as `((uuid))` from `pages/Decisions.md`, ending the physical duplication between the project page and the decision log.
+- **`{{query}}` dashboards.** Live Logseq-rendered views (active projects, open blockers) that cost nothing to maintain. Human-facing only — no token effect for Claude.
+- **Retrieval rethink.** Drop project pre-loading entirely; grep purely on demand with `Index.md` as the only always-loaded surface. v0.10.0's escalation ladder is a bounded step in this direction.
+- **Conflict resolution for Logseq Sync.** Detect and merge sync conflicts gracefully.
 - **Plugin packaging refinements.** Cleaner Cowork install flow, installation wizard.
+
+## DB version (future track) — not applicable to OG
+
+Logseq split in 2026: **OG** (markdown) moved to <https://github.com/logseq/og> and entered **maintenance mode** — security and Electron upgrades only, no new features. The **DB** (SQLite) version continues at the original repo; its beta was announced 2026-07-13.
+
+This plugin targets OG. The items below were previously listed as "deferred until Logseq's roadmap clarifies"; it has now clarified in the negative for OG, so they are parked here rather than deleted — they become live again only if this plugin ever targets DB graphs.
+
+- **Storage abstraction layer.** Moot for OG: markdown is permanently safe, since OG will not gain a DB backend.
+- **Logseq DB plugin API integration.** Not an OG capability. The plugin API only runs inside the desktop app.
+- **Headless sync via the Logseq CLI.** `@logseq/cli` serves **DB graphs only** and cannot operate on a markdown graph.
+
+Rejected outright (recorded so it is not re-proposed): driving a file graph through `logseq/nbb-logseq` or `cldwalker/logseq-query` to run Datalog from the command line. It works, but `logseq-query` is alpha and it would put a Node/nbb runtime under a plugin whose whole identity is markdown skills with no runtime code.

@@ -4,8 +4,8 @@
 
 All content written to the graph MUST follow these rules:
 
-1. **Outliner format**: Every line of content must be a bullet point (starting with `- `). No bare paragraphs.
-2. **Properties**: Use `key:: value` format. Properties go at the top of the page (page-level) or as children of a bullet (block-level).
+1. **Outliner format**: Every line of content must be a bullet point (starting with `- `). No bare paragraphs. **One exception: the page-top property block** — see rule 2.
+2. **Properties**: Use `key:: value` format. Properties go at the top of the page (page-level) or as children of a bullet (block-level). **The page-top block is deliberately un-bulleted** — bare `type:: project` lines before the first `- `, exactly as the templates below show. This is Logseq's own page-properties form, and bulleting those lines would stop Logseq treating them as page properties. Rule 1's "every line" governs the outliner body that follows; it does not govern this block. Block-level properties, by contrast, *are* bulleted, because they are children of a bullet.
 3. **Headings**: Use `- ## Heading` (bullet + markdown heading). Never a bare `## Heading` without the bullet prefix.
 4. **Indentation**: Use two spaces per indent level. Children are indented under their parent bullet.
 5. **Links**: Use `[[Page Name]]` for internal links. For namespaced pages: `[[Projects/PageName]]`.
@@ -24,7 +24,14 @@ type:: project
 status:: active
 created:: {{today}}
 last-updated:: {{today}}
+focus:: {{project_description}}
+next:: _No next action yet._
+digest-updated:: {{today}}
 
+- ## Digest
+  - {{project_description}}
+  - Now: just created; no work logged yet.
+  - Map: page | {{page_size}}
 - ## Overview
   - {{project_description}}
 - ## Current Plan
@@ -37,8 +44,15 @@ last-updated:: {{today}}
   - _Session entries are added by brain-save._
 ```
 
-Replace `{{today}}` with current date in `yyyy-MM-dd` format.
-Replace `{{project_description}}` with user-provided description or placeholder.
+Replace `{{today}}` with the current date in `yyyy-MM-dd` format.
+Replace `{{project_description}}` with the user-provided description — it appears **three times** in the template above: `focus::`, the Digest Identity bullet, and `## Overview`. If that description exceeds **120 bytes**, use a short form for `focus::` only — property values share that 120-byte cap, see `skills/_shared/digest.md` — and put the full text in both the Digest Identity bullet and `## Overview`; the Digest section's own cap (below) is 800 bytes for the whole section, not per bullet, so Identity is not subject to the 120-byte property limit. `oversized-digest` caps property values, and a page that is oversized the moment it is created defeats the point of seeding a digest.
+Replace `{{page_size}}` by **measuring the file after writing it, then rounding to the nearest 10 bytes** — `wc -c < "pages/Projects___<Name>.md"`, e.g. `684 B` measured → write `680 B`. Rounding is required, not cosmetic: at the moment you measure, the literal 13-character placeholder text `{{page_size}}` is still sitting in the file; the Edit that replaces it with the formatted figure (`680 B`, 5 characters) shrinks the file again by a few bytes — exactly how many depends on the digit count of the figure itself, so the two writes can never be made to agree exactly. An exact-looking figure (`684 B`) is therefore a small, silent lie the moment it's substituted in; a figure stated to the nearest 10 B is honest about the same imprecision. Never write a literal, and never write `0 KB`: `skills/_shared/digest.md` requires Map figures to be measured, not remembered, and a fresh page is several hundred bytes, not zero. This is the one placeholder resolved *after* the write rather than before it.
+
+Note the deliberate omissions: **no `open::` line** (nothing is open on a fresh page — the property is omitted, never written as `open:: none`), and the Map carries only the page size because every other section is still a placeholder stub, and stub-only sections are omitted from the Map rather than reported as zero. Both follow `skills/_shared/digest.md`. `brain-save` replaces all of this on the first real save.
+
+## Task Page Digest
+
+Task pages have no fixed template, but when `brain-save` or `brain-doctor` gives one a digest it is the thin form — Identity + Now + Map — plus the page-top properties `focus::`, `next::`, `digest-updated::` and the existing `status:: active | blocked | done`. See `skills/_shared/digest.md`.
 
 ## Session Log Entry Template
 

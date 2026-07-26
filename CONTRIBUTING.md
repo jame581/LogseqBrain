@@ -85,6 +85,12 @@ export LOGSEQ_BRAIN_PATH=/tmp/scratch-brain
 16. **Guided task-status backfill.** Run the guided backfill via brain-doctor against task pages missing `status::` — verify statuses are seeded on confirmation, "brain status" groups tasks correctly afterward, and a brief-mode `load <project>` skips the `done` task pages.
 17. **Session Log rotation.** Grow a project page past 64 KB or 40 Session Log entries — verify brain-save suggests rotation, and on confirmation entries older than 90 days move to `Projects___<Name>___SessionArchive.md` with `type:: session-archive` and a marker link on the main page.
 18. **Index refresh + decision prompt.** Run a normal save — verify the project's `Index.md` one-liner is refreshed unconditionally, and the decision prompt fires only when the session content is decision-shaped (not on unrelated saves).
+19. **Digest round-trip:** save to a project → `digest-updated::` is today, the Map's byte figures match `wc -c` run independently, and the `## Digest` section is under 800 bytes.
+20. **Backward compatibility:** load a project page that has no `## Digest` → the pre-digest brief mode runs unchanged and a digest is *offered*, not built.
+21. **Coverage honesty:** every load and every partial section read states what it did not read.
+22. **Escalation:** a question answerable only from the Session Log triggers an announced grep and a bounded read — not a whole-page read.
+23. **Dashboard:** `brain status` issues one ripgrep; a project stripped of its digest properties falls back alone, and the fallback count is reported.
+24. **Doctor:** `missing-digest` lists exactly the un-backfilled pages largest-first; `backfill digests` states the read cost before doing any work.
 
 ## Releasing a new version
 
