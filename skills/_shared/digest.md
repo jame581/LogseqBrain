@@ -213,7 +213,7 @@ Refresh only ever knows the current session, so across dozens of sessions a dige
 
 **Triggers:** the page has no `digest-updated::` and is being loaded or saved (lazy backfill); `digest-updated::` is more than 30 days behind `last-updated::` (**suggest** — never spend silently); brain-doctor's guided backfill; explicit "rebuild digest for X".
 
-**Procedure:**
+**Procedure — project-shaped pages** (has `## Overview`, `## Current Plan`, and `## Session Log` by name — the standard project template):
 
 1. Read the property block and `## Overview` → Identity.
 2. Read `## Current Plan` → Now, and `next::`.
@@ -222,4 +222,18 @@ Refresh only ever knows the current session, so across dozens of sessions a dige
 5. Where `pages/Projects___<Name>___SessionArchive.md` exists, read **its digest**, never its contents.
 6. Compute the Map, check the 800-byte cap, write.
 
-**Never read the whole file in a single Read during a rebuild** — that is the cost this feature exists to avoid.
+**Procedure — task-shaped pages (no fixed template):** task pages routinely have none of `## Overview` / `## Current Plan` / `## Decisions` / `## Session Log` by that name — measured live, `Tasks___CRMGM-1994.md` (108,143 B) has only `## Overview` (1,335 B) and `## Notes` (106,526 B — 98% of the page). The five project-shaped steps above have nowhere to land on a page like this: none of them names `## Notes`, so a rebuild that only knew those five headings would read almost nothing of a page that is almost nothing *but* that one section. Branch instead:
+
+1. Read the property block (unchanged — generic regardless of page shape).
+2. **Enumerate the page's real sections** using the derivation shell already defined above for the Map: every `## ` heading, measured, kept at or above the 1 KB threshold, sorted largest first. This costs nothing extra — it's the same Bash call the Map needs anyway, run once and used for both.
+3. **Read the largest one or two of those candidates**, each capped at the per-section budget (`skills/_shared/section-locator.md`, ≤ 8 KB per section):
+   - At or under the cap → read it whole.
+   - Over the cap (the normal case — a task page's catch-all section is usually the one that grew) → don't read it whole. Use the byte-bounded **tail** recipe (`skills/_shared/section-locator.md`'s "Reading a section's tail"), scoped to that section's own line range, exactly as `## Session Log` is read tail-first on a project page — recent content carries more signal per byte on a task page's catch-all section too.
+4. **Derive Identity from the smallest/most-stable candidate** (often literally called `## Overview` even without the rest of the project template) and **Now from the most recent dated content** the tail read surfaced in the largest candidate.
+5. **Skip Binding/Hazard/the free slot** when nothing in the page's real sections supports them — task-page digests already run thinner by design (typically Identity + Now + Map; see "Slots" above).
+6. Where `pages/Tasks___<ID>___SessionArchive.md` exists, read its digest, never its contents (unchanged).
+7. Compute the Map (unchanged — the derivation shell already treats every page generically, project- or task-shaped), check the 800-byte cap, write.
+
+Worked example, `Tasks___CRMGM-1994.md` (108,143 B — the spec's own §9.10 acceptance page): the derivation shell finds exactly two real sections, `## Overview` (1,335 B) and `## Notes` (106,526 B). Both clear the 1 KB threshold. Overview is under the 8 KB per-section cap, so it's read whole for Identity (256 B property block + 1,335 B). Notes is nowhere near the cap — its last 3 dated entries (the tail recipe, scoped to the section) read **5,670 B**, comfortably inside the 8 KB per-section cap, and supply Now. Total read: 256 + 1,335 + 5,670 = **7,261 B**, a two-slot digest (Identity + Now + Map) built without ever reading the 106.5 KB `## Notes` whole.
+
+**Never read the whole file in a single Read during a rebuild** — that is the cost this feature exists to avoid, on a task page most of all, since a task page's one oversized section is usually most of the file.

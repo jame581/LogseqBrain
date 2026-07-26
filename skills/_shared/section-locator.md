@@ -10,7 +10,7 @@ Measured on a real brain graph (2026-07-25): bullets average **195 bytes**; the 
 |---|---|
 | Brief load (digest) | ≤ 1 KB of digest content; ≤ ~2 KB actually read |
 | Targeted section read | ≤ 8 KB per section |
-| Full load | ≤ 24 KB soft ceiling — report the overflow, never silently truncate |
+| Full load | ≤ 24 KB soft ceiling — Session Log tail is byte-bounded (last 10 entries *or* ~8 KB, whichever is smaller — see "Reading a section's tail"); **state the measured total and ask before reading** when it would exceed the ceiling, then report any remaining overflow rather than truncating silently |
 | Whole-page read | consent-gated (`skills/_shared/escalation.md`, level 5) |
 
 ## Measure before you read
@@ -43,29 +43,42 @@ Then choose: a 3 KB section is fine to read whole; an 89 KB one is not — grep 
 
 ## Reading a section's tail
 
-The algorithm above reads *forward* from a heading — fine when the whole section is small, but `digest.md` mandates reading `## Session Log` **tail-first** (recent entries carry more signal per byte), and brain-load's no-digest fallback needs a **byte-bounded** tail: last 3 entries **or ~4 KB, whichever is smaller**. A count alone assumes average-sized bullets — measured on a real page, three recent entries averaging ~3 KB each cost 9.1 KB, blowing straight past any stated ceiling. Neither is a forward read, and getting the tail of a large section without reading it whole needs its own recipe:
+The algorithm above reads *forward* from a heading — fine when the whole section is small, but `digest.md` mandates reading `## Session Log` **tail-first** (recent entries carry more signal per byte), and both brain-load's no-digest fallback and full mode need a **byte-bounded** tail: fallback's is last 3 entries **or ~4 KB, whichever is smaller**; full mode's is last 10 entries **or ~8 KB (the per-section cap above), whichever is smaller**. A count alone assumes average-sized bullets — measured on a real page, three recent entries averaging ~3 KB each cost 9.1 KB, blowing straight past any stated ceiling. Neither is a forward read, and getting the tail of a large section without reading it whole needs its own recipe.
 
-1. **Find every entry-start line, cheaply.** `grep -n` on the entry-start pattern costs a few hundred bytes of line-number output, not the section itself:
+**Scope the entry search to the section, never the whole file.** A page-wide grep for the entry pattern also finds dated bullets in `## Decisions` and dated headings elsewhere — sections that are not the one whose tail you were asked for. On a real page (`Projects___SELOS.md`) an unscoped grep returns 19 dated-shaped lines; `## Session Log` itself holds 12. And on a page where `## Session Log` is not the *last* section (true on several real task pages — `## Notes` follows it), an unscoped "last N" silently returns entries from whatever section happens to be last, not the one asked for. Always derive the target section's own line range first — the section map the main algorithm already computes — and confine every grep in this recipe to it:
+
+1. **Get the section's line range from the section map** (already computed by step 2/3 of the main algorithm above): `lineno` = the heading's line; `endline` = the next heading's line minus 1, or the file's last line if this section is last in the file.
+2. **Find every entry-start line inside that range, cheaply** — scope the grep to `lineno+1`–`endline`, not the whole file:
    ```bash
    p="pages/Projects___<Name>.md"
-   grep -nE '^[[:space:]]*- (#{2,6} +)?\[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}' "$p"
+   sed -n "$((lineno+1)),${endline}p" "$p" \
+     | grep -nE '^[[:space:]]*- (#{2,6} +)?\[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}'
    ```
-2. **Take the last N line numbers, largest N first, then shrink to fit any byte cap the caller states.** For a plain count target ("last 3 entries," no cap), take the last 3 and move on. When a caller also states a byte cap — brain-load's fallback: last 3 entries *or* ~4 KB, whichever is smaller — measure before committing to N instead of assuming 3 is safe:
-   ```bash
-   grep -nE '^[[:space:]]*- (#{2,6} +)?\[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}' "$p" | tail -3   # candidate: 3 entries
-   ```
-   Try the largest N (3) first: take the earliest of those 3 line numbers, `tail -n +<that line>` and `wc -c` the result. Under the cap → read it, done — report "3 of M". Over the cap → drop to N=2 (earliest of the last 2), re-measure. Still over → drop to N=1 and read it regardless of size — **never return zero entries**, and say so even when that single entry alone exceeds the cap. State the N you actually landed on; never assume 3 without checking.
-3. **Read from the earliest of the N lines you settled on.** If the section is last in the file (as `## Session Log` usually is), read to EOF — no next heading to bound against:
-   ```bash
-   start=$(grep -nE '^[[:space:]]*- (#{2,6} +)?\[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}' "$p" | tail -N | head -1 | cut -d: -f1)   # N = the count settled on in step 2
-   tail -n +"$start" "$p"            # or Read(offset = start-1, limit = total_lines - start + 1)
-   ```
-   If another heading follows the section, bound the read at `next-heading-line − 1` instead, exactly as step 4 of the main algorithm does.
-4. **State the coverage** as elsewhere — "read N of M entries, X KB of Y KB" — using the byte counts from `wc -c` on the tail read versus the whole-section measurement from "Measure before you read."
+   Use the widened pattern verbatim from `skills/_shared/digest.md` — it matches a `### `-style dated sub-heading as well as a plain dash-bullet. Retyping a narrower version is how this regresses: the plain-dash-only form matches **zero** entries in a Session Log written entirely as `- ### yyyy-mm-dd — …` (real shape, several task pages), even though the section is full of dated entries.
 
-Worked example (count-only, no cap), against a 49-entry, 84.6 KB `## Session Log`: the three commands above return entry line numbers, the earliest of the last 3 is line 485 of a 514-line file, and `tail -n +485` reads 5.2 KB — the last 3 entries, at ~6% of the section's bytes, without reading the other 46.
+   `grep -n` here numbers lines **relative to the `sed` excerpt**, not the file — recover the absolute line before using it anywhere else: `absolute = lineno + relative`.
+3. **Zero matches is a real outcome — handle it explicitly, don't let it crash.** A section can legitimately hold no dated-headline bullets (an all-prose `## Notes`, a task-page catch-all whose entries don't follow the Decision Entry Template shape). Building a `start` value from an empty grep result and feeding it straight to `tail -n +"$start"` produces `tail: invalid number of lines: '+'` — a hard failure, not a graceful empty read, because `$start` is the empty string, not a number. If step 2 returns nothing:
+   - **Fall back to the last ~40 lines of the section** (or the whole section if it is shorter), read via `sed -n` on the already-known `lineno`–`endline` range.
+   - **State coverage in bytes only** — there is no entry count to report: *"read the last 2.1 KB of `## Notes` (18.4 KB total); no dated-entry boundary found in this section, so coverage is stated by bytes, not entry count."*
+   - Do not retry with a wider file scope — that reintroduces the wrong-section failure this recipe exists to close.
+4. **Take the last N line numbers (relative to the section), largest N first, then shrink to fit any byte cap the caller states.** For a plain count target ("last 3 entries," no cap), take the last 3 and move on. When a caller also states a byte cap — fallback: last 3 *or* ~4 KB, whichever is smaller; full mode: last 10 *or* ~8 KB, whichever is smaller — measure before committing to N instead of assuming the stated count is safe:
+   ```bash
+   sed -n "$((lineno+1)),${endline}p" "$p" \
+     | grep -nE '^[[:space:]]*- (#{2,6} +)?\[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}' | tail -3   # or tail -10 for full mode
+   ```
+   Try the largest N first: convert the earliest of those N to an absolute line (step 2), `tail -n +<that line>` bounded at `endline` (or EOF if the section is last), and `wc -c` the result. Under the cap → read it, done — report "N of M entries". Over the cap → drop N by one, re-measure. Keep dropping until under the cap or N=1; at N=1, read it regardless of size — **never return zero entries when at least one exists** (step 3 covers the case where none do), and say so even when that single entry alone exceeds the cap. State the N you actually landed on; never assume the starting count without checking.
+5. **Read from the earliest of the N lines you settled on, bounded at `endline`** (or EOF if the section is last in the file — no next heading to bound against):
+   ```bash
+   start=$((lineno + relative))              # relative = the earliest of the N settled on in step 4
+   tail -n +"$start" "$p" | head -n $((endline - start + 1))     # or Read(offset = start-1, limit = endline - start + 1)
+   ```
+6. **State the coverage** as elsewhere — "read N of M entries, X KB of Y KB" — where **M is this section's own scoped entry count from step 2, never a whole-page or whole-file count** — using the byte counts from `wc -c` on the tail read versus the whole-section measurement from "Measure before you read."
 
-Worked example (byte-bounded, brain-load's fallback cap) — against a real 29.6 KB `## Session Log` (12 entries, ~2.8 KB average recent entry): the last-3 candidate (from line 176 of a 207-line file) reads **9,098 B** — already past the ~4 KB fallback cap. Dropping to the last 2 (from line 188) reads 6,271 B — still over. Dropping to the last 1 (from line 199) reads **2,815 B** — under the cap. Read that one entry and report "1 of 12 entries, 2.8 KB of 29.6 KB" rather than silently reading the 9 KB the count-only rule alone would have produced.
+Worked example (count-only, no cap), against a 49-entry, 84.6 KB `## Session Log` (the section is last in its file, and its own range already excludes everything else): the commands above return entry line numbers scoped to the section, the earliest of the last 3 is line 485 of a 514-line file, and `tail -n +485` reads 5.2 KB — the last 3 entries, at ~6% of the section's bytes, without reading the other 46 and without picking up any dated line from another section.
+
+Worked example (byte-bounded, brain-load's fallback cap) — against a real 29.6 KB `## Session Log` (`Projects___SELOS.md`; 12 entries scoped to the section, ~2.8 KB average recent entry — **not** the 19 an unscoped whole-file grep would return on this same page, since `## Decisions` and others also carry dated bullets): the last-3 candidate (from line 176 of a 207-line file) reads **9,098 B** — already past the ~4 KB fallback cap. Dropping to the last 2 (from line 188) reads 6,271 B — still over. Dropping to the last 1 (from line 199) reads **2,815 B** — under the cap. Read that one entry and report "1 of 12 entries, 2.8 KB of 29.6 KB" rather than silently reading the 9 KB the count-only rule alone would have produced, and rather than the 19-entry denominator an unscoped grep would have claimed.
+
+Worked example (wrong-section risk and the zero-match branch), against `Tasks___CRMGM-1904.md` (66.7 KB; `## Session Log` at line 165 is **not** the last section — `## Notes` follows it at line 300): an unscoped "last 3" grep returns three lines, all inside `## Notes`, not `## Session Log` — the wrong-section failure this recipe closes by scoping to `lineno+1`–`endline` (166–299) before searching. Scoped and using the widened pattern, that range holds **13** entries (not zero — the section's dated headlines are written as `- ### yyyy-mm-dd — …` throughout), so the tail read targets the right content: last 3 of 13. The zero-match branch (step 3) is what a narrower, retyped pattern would have hit instead — the plain-dash-only form matches nothing in this same 166–299 range even though it holds 13 real entries, which is exactly the crash step 3 exists to prevent: falling back to the section's last ~40 lines, stated in bytes, rather than feeding an empty `start` to `tail -n +`.
 
 ## Truncation honesty (mandatory)
 
@@ -86,6 +99,10 @@ Three places enforce it, at different granularities:
 With a digest present, a brief load is **one** Read of ≤ ~2 KB regardless of page size. A save reads only the sections it will touch.
 
 Without a digest, the fallback has a **stated per-component budget**, not one soft ceiling a real page can quietly blow past: property block ≤ ~2 KB (`limit 10`) + Overview first 5 bullets ≤ ~2 KB + Current Plan ≤ 8 KB (the per-section cap above) + Session Log tail ≤ ~4 KB (byte-bounded — see "Reading a section's tail" above: last 3 entries or ~4 KB, whichever is smaller). That is ≤ ~16 KB worst case; real pages land well under it because Current Plan and Overview rarely approach their caps. Measured on a real 59.8 KB page with no digest (`Projects___SELOS.md`): property block 1.1 KB + Overview 1.0 KB + Current Plan 3.7 KB + Session Log tail 2.8 KB (1 of 12 entries, capped down from the 9.1 KB "last 3 entries" alone would have read) = **8.7 KB**. The byte cap on the tail read is what makes any of this hold — "last 3 entries" is denominated in entries, not bytes, and a page whose recent entries run large (this one averages ~3 KB each) blows through any stated ceiling without it. Raising the old ≤ 8 KB target to cover the 15 KB this same page cost before the cap existed would not have fixed anything; the tail read itself had to shrink.
+
+**Full mode's tail needs the same shrink, at the larger per-section cap.** "Last 10 Session Log entries" is exactly as entry-denominated as the fallback's "last 3" was, and on a real page it is worse: measured live, the raw last-10 cost alone was **25.4 KB** (`Projects___Unicorn-Globus.md`, 47 entries), **27.5 KB** (`Projects___SELOS.md`, 12 entries), and **36.8 KB** (`Projects___Timinute.md`, 12 entries) — every one already past the entire 24 KB full-load ceiling, before Overview, Current Plan, Implementation, or Decisions get read at all. Full mode's tail is bounded the same way as the fallback's (last N, largest first, shrink until under the cap, never zero — see "Reading a section's tail" above), just at the full-mode-appropriate cap: **last 10 entries or ~8 KB (the per-section cap), whichever is smaller**. Bounding the same three pages this way lands the tail at **3.9 KB (1 of 47 entries)**, **6.3 KB (2 of 12)**, and **6.9 KB (2 of 12)** respectively — a real cost the rest of full mode's budget can still absorb.
+
+Because the other full-mode components are each independently capped at ≤ 8 KB (Overview, Current Plan, Implementation, Decisions), their sum can still exceed the 24 KB ceiling even with the tail bounded. Full mode therefore **measures the total before reading** — `wc -c` on the section map is free — and when that total would exceed 24 KB, **states the figure and asks**, the same consent gate `skills/_shared/escalation.md` rule 3 already requires for a whole-page read (*"That means reading the whole 109 KB page — want me to?"*). A `load <project> full` that would cost tens of KB deserves the identical courtesy, not a silent read followed by an after-the-fact overflow note — "report the overflow" stays the honesty rule for whatever residual gap remains after the bound and the ask, not a substitute for either.
 
 ## Failure modes
 

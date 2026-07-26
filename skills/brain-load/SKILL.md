@@ -106,11 +106,11 @@ Then state coverage as in step 8, mention that more is available — "Say 'load 
 1. All properties and the digest
 2. Full Overview, Current Plan, Implementation
 3. All Decisions
-4. Last 10 Session Log entries
+4. Last 10 Session Log entries — **byte-bounded**: last 10 entries *or* ~8 KB (the per-section cap), whichever is smaller, using the shrink-until-under-cap recipe in `skills/_shared/section-locator.md`'s "Reading a section's tail" (never zero). "Last 10" alone is entry-denominated and, measured live, already exceeds the entire 24 KB ceiling by itself on real pages (25–37 KB for three different projects) — the same defect the fallback tail was byte-bounded for at 3-entry scale.
 5. Related context pages (follow `[[links]]`), referenced task pages by digest
 6. Today's journal entry
 
-Full mode keeps the ≤ 24 KB soft ceiling from `skills/_shared/section-locator.md` and **reports the overflow** when a page exceeds it rather than truncating silently.
+**State the cost before spending it, when it's big.** Before reading steps 1–6, size each targeted section (`wc -c`, already free per "measure before you read") and sum them — including the *bounded* Session Log tail from step 4, not the raw entry count. If the total would exceed the 24 KB soft ceiling, say so and ask before reading, mirroring the consent gate `skills/_shared/escalation.md` rule 3 already requires for a whole-page read: *"Full load of <Project> comes to ~31 KB (Overview 4 KB, Current Plan 8 KB, Implementation 8 KB, Decisions 6 KB, Session Log tail 6 KB, capped from 2 of 12 entries) — that's over the usual ceiling. Read it all, or would you rather I stuck to the digest and escalated on demand?"* Under the ceiling → just read, no ask needed. This is in addition to, not instead of, reporting any overflow that remains after the bound and the ask — full mode still **reports the overflow** rather than truncating silently when a page's other sections (Implementation, Decisions) themselves run long.
 
 In digest mode, mention what more is available: "Loaded the digest. Ask about anything in the Map and I'll fetch it, or say 'load full' for everything."
 
