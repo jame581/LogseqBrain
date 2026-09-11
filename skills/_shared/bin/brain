@@ -277,7 +277,13 @@ cmd_check() {
     _b="$(state_dir)/base/$(printf '%s' "$_rel" | sed 's#/#%#g')"
     _list="$(state_dir)/check.lst"; printf '%s\n' "$_rel" > "$_list"
     _fresh=0
-    if [ -f "$_b" ] && [ -f "$_b.ts" ] && [ $(( $(date +%s) - $(cat "$_b.ts") )) -le 43200 ]; then _fresh=1; fi
+    if [ -f "$_b" ] && [ -f "$_b.ts" ]; then
+      _ts=$(cat "$_b.ts")
+      case $_ts in
+        ''|*[!0-9]*) ;;
+        *) [ $(( $(date +%s) - _ts )) -le 43200 ] && _fresh=1 ;;
+      esac
+    fi
     if [ "$_fresh" = 1 ]; then
       _add="$(state_dir)/added.lst"
       $AWK -v BINMODE=3 -f "$LIB/added.awk" "$_b" "$GRAPH/$_rel" > "$_add"
