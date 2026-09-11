@@ -341,6 +341,9 @@ cmd_search() {
   else
     (cd "$GRAPH" && { ls pages/*.md 2>/dev/null; ls journals/*.md 2>/dev/null; }) > "$_list"; _scope="pages/, journals/"
   fi
+  if [ -n "$_ctx" ]; then
+    while IFS= read -r _f || [ -n "$_f" ]; do printf '%s\t%s\n' "$_f" "$(nonl "$GRAPH/$_f")"; done < "$_list" > "$_list.n" && mv "$_list.n" "$_list"
+  fi
   (cd "$GRAPH" && BRAIN_TERM=$_term run_awk search -v listfile="$_list" -v sec="$_sec" -v ctx="$_ctx" -v scope="$_scope")
 }
 

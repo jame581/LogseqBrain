@@ -25,7 +25,8 @@ BEGIN {
   term = ENVIRON["BRAIN_TERM"]
   tl = tolower(term); M = 0; K = 0; HITBYTES = 0; CTXB = 0; NWIN = 0; OVER = 0; CTXOUT = ""
   while ((getline f < listfile) > 0) {
-    reset(); NONL = 0
+    reset()
+    n = split(f, parts, "\t"); f = parts[1]; NONL = (n > 1) ? parts[2] + 0 : 0
     while ((getline ln < f) > 0) L[++N] = ln
     close(f)
     scan(); scan_props()
