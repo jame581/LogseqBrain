@@ -357,6 +357,24 @@ cmd_journal() {
   run_awk journal -v rel="$_rel" -v nonl="$(nonl "$GRAPH/$_rel")" -v name="$PAGE_NAME" -v target=2048 "$GRAPH/$_rel"
 }
 
+cmd_activity() {
+  [ $# -ge 1 ] || die "usage: brain activity <text>"
+  if [ "$(json_get journeyLog "$(config_file)")" = false ]; then echo "journey log disabled (journeyLog: false)"; return 0; fi
+  _d=$(today) || exit 2; _rel="journals/$(printf '%s' "$_d" | tr '-' '_').md"; _t="$GRAPH/$_rel"
+  _line="$(now_hm) $*"
+  _tmp="$(state_dir)/activity.$$"
+  if [ -f "$_t" ]; then
+    _sum=$(cksum < "$_t")
+    BRAIN_BULLET=$_line run_awk activity -v nonl="$(nonl "$_t")" -v new=0 "$_t" > "$_tmp" || { rm -f "$_tmp"; die "activity failed on $_rel"; }
+    commit_write "$_rel" "$_tmp" 0 2 "$_sum"
+  else
+    mkdir -p "$GRAPH/journals" || die "cannot create journals/"
+    BRAIN_BULLET=$_line run_awk activity -v new=1 /dev/null > "$_tmp"
+    commit_write "$_rel" "$_tmp" 0 3 absent
+  fi
+  printf 'activity: %s → %s\n' "$_line" "$_rel"      # not echo: dash's echo expands backslashes
+}
+
 # --- commands end ---
 
 OPT_GRAPH=
@@ -380,6 +398,7 @@ case $cmd in
   check)             resolve_graph; cmd_check "$@" ;;
   search)            resolve_graph; cmd_search "$@" ;;
   journal)           resolve_graph; cmd_journal "$@" ;;
+  activity)          resolve_graph; cmd_activity "$@" ;;
   # --- dispatch end ---
   *) die "unknown command: $cmd (try: brain help)" ;;
 esac
