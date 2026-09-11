@@ -189,6 +189,29 @@ cmd_read_tail() {
     -v sec="$_sec" -v max="$_max" -v entries="$_n" "$_f"
 }
 
+ARCH=
+archive_of() {  # sets ARCH for a project page that has a SessionArchive page
+  ARCH=
+  case $PAGE_REL in
+    pages/Projects___*) [ -f "$GRAPH/${PAGE_REL%.md}___SessionArchive.md" ] && ARCH="[[$PAGE_NAME/SessionArchive]]" ;;
+  esac
+}
+
+# map_awk MODE FILE — map.awk over FILE (PAGE_REL/ARCH already set).
+map_awk() {
+  run_awk map -v rel="$PAGE_REL" -v nonl="$(nonl "$2")" -v today="$(today)" -v archive="$ARCH" -v mode="$1" "$2"
+}
+
+cmd_digest() {
+  [ $# -ge 1 ] || die "usage: brain digest <page> [--apply]"
+  resolve_page "$1"; shift
+  archive_of
+  if [ "${1:-}" = --apply ]; then cmd_digest_apply; return; fi
+  map_awk report "$GRAPH/$PAGE_REL"
+}
+
+cmd_digest_apply() { die "digest --apply lands in Task 5"; }
+
 # --- commands end ---
 
 OPT_GRAPH=
@@ -207,6 +230,7 @@ case $cmd in
   sections)          resolve_graph; cmd_sections "$@" ;;
   read)              resolve_graph; cmd_read_tail read "$@" ;;
   tail)              resolve_graph; cmd_read_tail tail "$@" ;;
+  digest)            resolve_graph; cmd_digest "$@" ;;
   # --- dispatch end ---
   *) die "unknown command: $cmd (try: brain help)" ;;
 esac

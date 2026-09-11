@@ -23,3 +23,23 @@ demo_page() {
     pad_line '    - child' 300
   } > pages/Projects___Demo.md
 }
+
+# digest_page MAPTEXT|- — print the Digest test page (5717 B + the Map line) to stdout. "-" = no Map line.
+# Callers redirect: `digest_page '...' > pages/Projects___Dig.md`.
+digest_page() {
+  {
+    printf '%s\n' 'type:: project' 'status:: active' 'last-updated:: 2026-09-10' 'focus:: f' \
+      'next:: n' 'digest-updated:: 2026-09-10' '- ## Digest' '  - Id'
+    [ "$1" != - ] && printf '  - Map: %s\n' "$1"
+    printf '%s\n' '- ## Overview'
+    repeat_lines 3 '  - o' 100
+    printf '%s\n' '- ## Current Plan'
+    repeat_lines 11 '  - p' 100
+    printf '%s\n' '- ## Session Log'
+    pad_line '  - 2026-09-01: a' 1000
+    pad_line '    - c' 1048
+    pad_line '  - 2026-09-02: b' 1000
+    pad_line '    - c' 1048
+    printf '%s\n' '- ## Decisions' '  - _Project-specific decisions._'
+  }
+}

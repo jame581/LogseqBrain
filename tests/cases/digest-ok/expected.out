@@ -1,0 +1,15 @@
+type:: project
+status:: active
+last-updated:: 2026-09-10
+focus:: f
+next:: n
+digest-updated:: 2026-09-10
+- ## Digest
+  - Id
+  - Map: Session Log | 4 KB (2 entries) · Current Plan | 1 KB · +2 smaller sections, 334 B · page | 5 KB
+--
+map: ok
+digest: 115 B of 800 B cap
+drift: 0 days (digest-updated 2026-09-10, last-updated 2026-09-10)
+staleness: fresh (1 day)
+coverage: read properties + ## Digest (231 B of 5.7 KB)
