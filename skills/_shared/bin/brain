@@ -369,7 +369,7 @@ cmd_activity() {
     commit_write "$_rel" "$_tmp" 0 2 "$_sum"
   else
     mkdir -p "$GRAPH/journals" || die "cannot create journals/"
-    BRAIN_BULLET=$_line run_awk activity -v new=1 /dev/null > "$_tmp"
+    BRAIN_BULLET=$_line run_awk activity -v new=1 /dev/null > "$_tmp" || { rm -f "$_tmp"; die "activity failed on $_rel"; }
     commit_write "$_rel" "$_tmp" 0 3 absent
   fi
   printf 'activity: %s → %s\n' "$_line" "$_rel"      # not echo: dash's echo expands backslashes
