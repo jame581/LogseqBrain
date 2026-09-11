@@ -375,6 +375,12 @@ cmd_activity() {
   printf 'activity: %s → %s\n' "$_line" "$_rel"      # not echo: dash's echo expands backslashes
 }
 
+cmd_status() {
+  _list="$(state_dir)/status.lst"
+  (cd "$GRAPH" && ls pages/Projects___*.md pages/Tasks___*.md 2>/dev/null) | grep -v '___SessionArchive\.md$' > "$_list"
+  (cd "$GRAPH" && run_awk status -v listfile="$_list" -v today="$(today)")
+}
+
 # --- commands end ---
 
 OPT_GRAPH=
@@ -399,6 +405,7 @@ case $cmd in
   search)            resolve_graph; cmd_search "$@" ;;
   journal)           resolve_graph; cmd_journal "$@" ;;
   activity)          resolve_graph; cmd_activity "$@" ;;
+  status)            resolve_graph; cmd_status ;;
   # --- dispatch end ---
   *) die "unknown command: $cmd (try: brain help)" ;;
 esac
