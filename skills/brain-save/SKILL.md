@@ -42,6 +42,7 @@ Six categories. `references/categories.md` gives each one's format:
    - `brain tail <page> "Session Log" --entries 1 --max 4096`
    - `brain read <page> "Current Plan"`
    - `brain read <page> Decisions`, only when a decision was made (the conflict check in `references/decisions.md`)
+   - `brain read <page> Implementation`, only when you'll update it
 
 4. **Compose the updates** per `references/categories.md`, following the content invariants in `skills/_shared/logseq-format.md`:
    - backticks for code, never `{{ }}`
@@ -49,6 +50,8 @@ Six categories. `references/categories.md` gives each one's format:
    - namespaced `[[Tasks/…]]` / `[[Projects/…]]` links
    - markdown links for file paths, never `[[file://…]]`, and never relative `[x](docs/x.md)` links
    - Jira drafts fenced, verbatim
+
+   **Self-check the composed text against these before any Edit, and correct violations silently.** Step 10's `brain check` is the backstop, not the first line: Logseq parses a file as soon as it changes and never deletes a page it created, so a bad line fixed seconds later can still leave a phantom page.
 
    Also run the decision-detection scan in `references/decisions.md` on your summary.
 
@@ -71,7 +74,7 @@ Six categories. `references/categories.md` gives each one's format:
    2. **Edit the `## Digest` prose slots** from this session's knowledge, in slot order: Identity, Now, Binding, Hazard, then the free slot. Task pages usually need only Identity and Now. If the page has no `## Digest`, create it right after the property block, before the first `## ` heading. **Leave the Map line alone, or absent.**
    3. **`brain digest <page> --apply`.** It writes the Map from measurement and reports the caps:
       - `digest prose over cap by N B`: shorten the free slot first, then Binding and Hazard, and rerun.
-      - `over: open:: … B > 120 B`: shorten that property and rerun.
+      - `over: <focus|next|open>:: … B > 120 B`: shorten that property and rerun.
       - A page with no digest before this save has just been backfilled lazily. Say so in step 11, and mention that a Rebuild from source is available.
 
 9. **`pages/Index.md`:** every save rewrites this project's one-liner, as one single-line Edit.
