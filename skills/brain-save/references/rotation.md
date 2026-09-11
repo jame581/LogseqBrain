@@ -4,7 +4,7 @@ Keeps hot project pages lean. Suggestion-only — brain-save proposes, the user 
 
 ## Trigger
 
-After appending a session entry to a project page, check (one Bash call: `wc -c` on the file + `grep -c` of session-entry bullets under `## Session Log`):
+After appending a session entry to a project page, check (read both from the `brain sections <page>` output: the page total and the Session Log entry count):
 
 - file size > **64 KB**, or
 - more than **40** session entries.
@@ -23,10 +23,10 @@ Either → suggest: "This page is <size>/<N> entries. Move session entries older
      - _Entries rotated from [[Projects/<Name>]] by brain-save._
    ```
    If the page exists, leave it untouched and go to step 3 (append under its `## Archived Session Log`).
-3. **Move in one confirmed batch:** append the moving entries (verbatim, oldest-first) under `## Archived Session Log`, then delete them from the project page — surgical Edits on both sides, respecting `skills/_shared/logseq-format.md` survival rules (read-before-edit, anchor on heading text).
+3. Run `brain sections Projects/<Name> --baseline pages/Projects___<Name>___SessionArchive.md` first, so step 5 can check both files. Do this only after the save's own `brain check` has run, because it resets the project page's baseline. **Move in one confirmed batch:** append the moving entries (verbatim, oldest-first) under `## Archived Session Log`, then delete them from the project page — surgical Edits on both sides, respecting `skills/_shared/logseq-format.md` survival rules (read-before-edit, anchor on heading text).
 4. **Marker bullet:** ensure the project page's `## Session Log` has as its first child: `- Older entries: [[Projects/<Name>/SessionArchive]]` (add once; don't duplicate on later rotations).
-5. **Verify:** entry count before == entries kept + entries archived; run the "Post-write verify (scoped)" procedure from `skills/_shared/hygiene-rules.md` over both files.
-6. **Remap the digest — on both pages.** A rotation moves tens of KB out of the project page and into the archive page; if the Map is not recomputed, it keeps claiming bytes the project page no longer holds (and the archive page's own digest, if it has one, undercounts what it now holds). This is a **Remap**, not a Refresh (`skills/_shared/digest.md`) — rotation has no session knowledge to rewrite the prose slots from, so only the Map bullet is recomputed on the project page; `digest-updated::` and Identity/Now/Binding/Hazard stay exactly as they were (bumping the date would silence `stale-digest` for another 30 days on prose nobody touched). Do the same Remap on the archive page if it carries a digest. **Rotation without this step leaves the Map as a fabrication** — the next load quotes it as the mandatory "what I did not read" statement, so a stale Map is worse than no Map.
+5. **Verify:** entry count before == entries kept + entries archived; run `brain check <project page> <archive page>`.
+6. **Remap the digest — on both pages.** A rotation moves tens of KB out of the project page and into the archive page; if the Map is not recomputed, it keeps claiming bytes the project page no longer holds (and the archive page's own digest, if it has one, undercounts what it now holds). This is a **Remap**, not a Refresh (`skills/_shared/digest.md`) — rotation has no session knowledge to rewrite the prose slots from, so only the Map bullet is recomputed on the project page; `digest-updated::` and Identity/Now/Binding/Hazard stay exactly as they were (bumping the date would silence `stale-digest` for another 30 days on prose nobody touched). Do the same Remap on the archive page if it carries a digest. **Rotation without this step leaves the Map as a fabrication** — the next load quotes it as the mandatory "what I did not read" statement, so a stale Map is worse than no Map. Run `brain digest <project page> --apply` (and on the archive page, if it carries a digest). `--apply` touches only the Map line, so it is exactly a Remap.
 
 ## Exclusions (enforced elsewhere)
 
