@@ -1,0 +1,25 @@
+name: tests
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest,  awk: mawk }
+          - { os: ubuntu-latest,  awk: original-awk }
+          - { os: ubuntu-latest,  awk: gawk }
+          - { os: macos-latest,   awk: awk }     # BWK "one true awk"
+          - { os: windows-latest, awk: awk }     # Git Bash gawk
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y mawk original-awk gawk
+      - name: golden tests
+        run: BRAIN_AWK=${{ matrix.awk }} sh tests/run.sh

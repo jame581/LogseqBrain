@@ -5,3 +5,8 @@
 *.md text eol=lf
 *.json text eol=lf
 *.edn text eol=lf
+
+*.sh  text eol=lf
+*.awk text eol=lf
+skills/_shared/bin/brain text eol=lf
+tests/cases/** -text

@@ -1,0 +1,168 @@
+#!/bin/sh
+# logseq-brain helper — invoke as: sh <plugin>/skills/_shared/bin/brain [--graph DIR] <command> [args]
+# How skills call it: skills/_shared/run-brain.md
+# Design: docs/superpowers/specs/2026-09-11-v0.11.0-design.md
+set -u
+LC_ALL=C; export LC_ALL
+BRAIN_VERSION=0.11.0
+BIN_DIR=$(cd "$(dirname "$0")" && pwd)
+LIB=$(cd "$BIN_DIR/../lib" && pwd)
+AWK=${BRAIN_AWK:-awk}
+
+die() { printf 'brain: %s\n' "$1" >&2; exit "${2:-2}"; }
+
+usage() {
+  cat <<'EOF'
+usage: brain [--graph DIR] <command> [args]
+  info                                  version, graph source, awk in use
+  sections <page> [--baseline FILE…]    section table; records baselines for check
+  read <page> <section> [--max BYTES]   whole section if under the cap (default 8192)
+  tail <page> <section> [--entries N] [--max BYTES]
+  digest <page> [--apply]               digest + checks; --apply rewrites only the Map line
+  search <term> [--page P] [--section S] [--context N]
+  journal <page> [--date yyyy-MM-dd]    that page's mentions in a journal, shrunk to ~2 KB
+  check <file…>                         lint lines added since each file's baseline
+  lint [--all | <file…>]                every rule over whole files
+  status                                one TSV row per project and task page
+  activity <line>                       append "HH:MM <line>" under today's ## Activity
+EOF
+}
+
+to_posix() {
+  case $1 in
+    *\\*|?:*)
+      if command -v cygpath >/dev/null 2>&1; then cygpath -u "$1"
+      else printf '%s\n' "$1" | tr '\\' '/'; fi ;;
+    *) printf '%s\n' "$1" ;;
+  esac
+}
+
+config_file() {
+  if [ -n "${APPDATA:-}" ]; then printf '%s/logseq-brain/config.json\n' "$(to_posix "$APPDATA")"
+  elif [ -n "${XDG_CONFIG_HOME:-}" ]; then printf '%s/logseq-brain/config.json\n' "$XDG_CONFIG_HOME"
+  else printf '%s/.config/logseq-brain/config.json\n' "$HOME"; fi
+}
+
+# json_get KEY FILE — scalar value of "KEY" (string, bool or number); JSON \x escapes undone.
+json_get() {
+  [ -r "$2" ] || return 0
+  $AWK -v BINMODE=3 -v k="$1" 'BEGIN { RS = "\001" }
+  {
+    s = $0; i = index(s, "\"" k "\""); if (!i) exit
+    s = substr(s, i + length(k) + 2); sub(/^[ \t\r\n]*:[ \t\r\n]*/, "", s)
+    if (substr(s, 1, 1) == "\"") {
+      out = ""
+      for (j = 2; j <= length(s); j++) {
+        c = substr(s, j, 1)
+        if (c == "\\") { j++; out = out substr(s, j, 1); continue }
+        if (c == "\"") break
+        out = out c
+      }
+      print out
+    } else if (match(s, /^[A-Za-z0-9.]+/)) print substr(s, RSTART, RLENGTH)
+    exit
+  }' "$2"
+}
+
+GRAPH=; GRAPH_SRC=
+resolve_graph() {
+  for src in flag env config; do
+    case $src in
+      flag)   g=${OPT_GRAPH:-} ;;
+      env)    g=${LOGSEQ_BRAIN_PATH:-} ;;
+      config) g=$(json_get graphPath "$(config_file)") ;;
+    esac
+    [ -n "$g" ] || continue
+    g=$(to_posix "$g")
+    if [ -d "$g" ]; then GRAPH=${g%/}; GRAPH_SRC=$src; return 0; fi
+    [ "$src" = flag ] && die "graph not found: $g"
+  done
+  die "graph not resolved — pass --graph DIR, set LOGSEQ_BRAIN_PATH, or set graphPath in $(config_file)"
+}
+
+state_dir() {
+  _d="${TMPDIR:-/tmp}/logseq-brain/$(printf '%s' "$GRAPH" | cksum | cut -d' ' -f1)"
+  mkdir -p "$_d" || die "cannot create state dir $_d"
+  printf '%s\n' "$_d"
+}
+
+valid_date() {
+  case $1 in [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) return 0 ;; esac
+  printf 'brain: not a yyyy-MM-dd date: %s\n' "$1" >&2; return 2
+}
+today()  { _t=${BRAIN_TODAY:-$(date +%Y-%m-%d)}; valid_date "$_t" || return 2; printf '%s\n' "$_t"; }
+now_hm() { printf '%s\n' "${BRAIN_NOW:-$(date +%H:%M)}"; }
+
+nonl() {
+  if [ -s "$1" ] && [ "$(tail -c 1 "$1" | wc -l | tr -d ' ')" = 0 ]; then echo 1; else echo 0; fi
+}
+
+fig() { if [ "$1" -ge 1024 ]; then echo "$(($1 / 1024)) KB"; else echo "$1 B"; fi; }
+
+# guard_rel REL — refuse anything that could leave the graph's pages/ or journals/.
+guard_rel() {
+  case $1 in
+    *..*|/*) die "path outside the graph: $1" ;;
+    pages/*|journals/*) ;;
+    *) die "path outside pages/ or journals/: $1" ;;
+  esac
+}
+
+PAGE_REL=; PAGE_NAME=
+resolve_page() {
+  _p=$1
+  case $_p in
+    *.md) _rel=${_p#"$GRAPH"/}; guard_rel "$_rel" ;;
+    *)    _rel="pages/$(printf '%s' "$_p" | sed 's#/#___#g').md" ;;
+  esac
+  if [ ! -f "$GRAPH/$_rel" ]; then
+    case $_p in
+      */*|*.md) ;;
+      *) for _pre in Projects___ Tasks___; do
+           if [ -f "$GRAPH/pages/$_pre$_p.md" ]; then _rel="pages/$_pre$_p.md"; break; fi
+         done ;;
+    esac
+  fi
+  if [ ! -f "$GRAPH/$_rel" ]; then
+    printf 'brain: page not found: %s\n' "$_p" >&2
+    _key=$(printf '%s' "$_p" | sed 's#\.md$##; s#___#/#g; s#.*/##')
+    ls "$GRAPH/pages" 2>/dev/null | sed 's#\.md$##; s#___#/#g' | grep -i -F -- "$_key" \
+      | head -n 5 | sed 's/^/  did you mean: /' >&2
+    exit 2
+  fi
+  PAGE_REL=$_rel
+  PAGE_NAME=$(basename "$_rel" .md | sed 's#___#/#g')
+}
+
+# run_awk PROG [awk args…] — core.awk is always loaded first.
+# BINMODE=3: gawk on Windows otherwise reads in text mode and drops \r. Other awks ignore it.
+run_awk() { _prog=$1; shift; $AWK -v BINMODE=3 -f "$LIB/core.awk" -f "$LIB/$_prog.awk" "$@"; }
+
+cmd_info() {
+  echo "logseq-brain $BRAIN_VERSION"
+  echo "graph-source: $GRAPH_SRC"
+  # The one absolute path the helper prints: skills use it for their own Read/Edit/Write.
+  printf 'graph: %s\n' "$(cygpath -m "$GRAPH" 2>/dev/null || printf '%s' "$GRAPH")"
+  _v=$($AWK --version 2>/dev/null | head -n 1)
+  [ -n "$_v" ] || _v=$($AWK -W version 2>/dev/null | head -n 1)
+  echo "awk: ${_v:-unknown}"
+}
+
+# --- commands end ---
+
+OPT_GRAPH=
+while [ $# -gt 0 ]; do
+  case $1 in
+    --graph)   [ $# -ge 2 ] || die "--graph needs a directory"; OPT_GRAPH=$2; shift 2 ;;
+    --graph=*) OPT_GRAPH=${1#--graph=}; shift ;;
+    *) break ;;
+  esac
+done
+cmd=${1:-help}; [ $# -gt 0 ] && shift
+case $cmd in
+  help|-h|--help)    usage ;;
+  version|--version) echo "logseq-brain $BRAIN_VERSION" ;;
+  info)              resolve_graph; cmd_info ;;
+  # --- dispatch end ---
+  *) die "unknown command: $cmd (try: brain help)" ;;
+esac
