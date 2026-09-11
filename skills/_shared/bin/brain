@@ -347,6 +347,16 @@ cmd_search() {
   (cd "$GRAPH" && BRAIN_TERM=$_term run_awk search -v listfile="$_list" -v sec="$_sec" -v ctx="$_ctx" -v scope="$_scope")
 }
 
+cmd_journal() {
+  [ $# -ge 1 ] || die "usage: brain journal <page> [--date yyyy-MM-dd]"
+  resolve_page "$1"; shift
+  _d=$(today) || exit 2
+  if [ "${1:-}" = --date ]; then [ $# -ge 2 ] || die "--date needs yyyy-MM-dd"; _d=$2; valid_date "$_d" || exit 2; fi
+  _rel="journals/$(printf '%s' "$_d" | tr '-' '_').md"
+  if [ ! -f "$GRAPH/$_rel" ]; then printf 'coverage: no journal for %s (%s)\n' "$_d" "$_rel"; return 0; fi
+  run_awk journal -v rel="$_rel" -v nonl="$(nonl "$GRAPH/$_rel")" -v name="$PAGE_NAME" -v target=2048 "$GRAPH/$_rel"
+}
+
 # --- commands end ---
 
 OPT_GRAPH=
@@ -369,6 +379,7 @@ case $cmd in
   lint)              resolve_graph; cmd_lint "$@" ;;
   check)             resolve_graph; cmd_check "$@" ;;
   search)            resolve_graph; cmd_search "$@" ;;
+  journal)           resolve_graph; cmd_journal "$@" ;;
   # --- dispatch end ---
   *) die "unknown command: $cmd (try: brain help)" ;;
 esac
