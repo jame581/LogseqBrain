@@ -242,7 +242,10 @@ cmd_digest_apply() {
   commit_write "$PAGE_REL" "$_tmp" 1 1 "$_sum" '^[ \t]*- Map: '
   if [ "$COMMITTED" = 1 ]; then printf 'applied: Map line written to %s\n' "$PAGE_REL"
   else printf 'unchanged: Map line already current in %s\n' "$PAGE_REL"; fi
-  map_awk report "$_f"
+  map_awk report "$_f"; _r1=$?
+  echo "--"
+  SKIP_DIGEST_LINT=1 cmd_check "$PAGE_REL"; _r2=$?
+  [ "$_r1" = 0 ] && [ "$_r2" = 0 ]
 }
 
 graph_lists() {
@@ -261,6 +264,34 @@ digest_lint() {
       map_awk lint "$GRAPH/$1" ;;
   esac
   return 0
+}
+
+cmd_check() {
+  [ $# -ge 1 ] || die "usage: brain check <file|page>…"
+  graph_lists
+  _crc=0
+  for _a in "$@"; do
+    _rel=${_a#"$GRAPH"/}
+    case $_rel in pages/*|journals/*) guard_rel "$_rel" ;; *) resolve_page "$_a"; _rel=$PAGE_REL ;; esac
+    [ -f "$GRAPH/$_rel" ] || die "no such file: $_rel"
+    _b="$(state_dir)/base/$(printf '%s' "$_rel" | sed 's#/#%#g')"
+    _list="$(state_dir)/check.lst"; printf '%s\n' "$_rel" > "$_list"
+    _fresh=0
+    if [ -f "$_b" ] && [ -f "$_b.ts" ] && [ $(( $(date +%s) - $(cat "$_b.ts") )) -le 43200 ]; then _fresh=1; fi
+    if [ "$_fresh" = 1 ]; then
+      _add="$(state_dir)/added.lst"
+      $AWK -v BINMODE=3 -f "$LIB/added.awk" "$_b" "$GRAPH/$_rel" > "$_add"
+      (cd "$GRAPH" && run_awk lint -v listfile="$_list" -v pagesfile="$PAGES_LST" -v keysfile="$KEYS_LST" -v addedfile="$_add") || _crc=1
+    else
+      (cd "$GRAPH" && run_awk lint -v listfile="$_list" -v pagesfile="$PAGES_LST" -v keysfile="$KEYS_LST" -v nobase=1)
+    fi
+    if [ -z "${SKIP_DIGEST_LINT:-}" ]; then
+      _dl="$(state_dir)/check-digest.out"
+      digest_lint "$_rel" > "$_dl"; cat "$_dl"
+      if [ "$_fresh" = 1 ] && grep -q "$(printf '\terror\t')" "$_dl"; then _crc=1; fi
+    fi
+  done
+  return $_crc
 }
 
 cmd_lint() {
@@ -306,6 +337,7 @@ case $cmd in
   tail)              resolve_graph; cmd_read_tail tail "$@" ;;
   digest)            resolve_graph; cmd_digest "$@" ;;
   lint)              resolve_graph; cmd_lint "$@" ;;
+  check)             resolve_graph; cmd_check "$@" ;;
   # --- dispatch end ---
   *) die "unknown command: $cmd (try: brain help)" ;;
 esac
