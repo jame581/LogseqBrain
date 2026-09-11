@@ -1,5 +1,5 @@
 # map.awk — digest Map computation and checks (skills/_shared/digest.md contract).
-#   -v rel=REL -v nonl=0|1 -v today=yyyy-MM-dd -v archive="[[Projects/X/SessionArchive]]"|"" -v mode=report|lint
+#   -v rel=REL -v nonl=0|1 -v today=yyyy-MM-dd -v archive="[[Projects/X/SessionArchive]]"|"" -v mode=report|lint|apply
 BEGIN { SEP = " · " }
 { L[++N] = $0 }
 
@@ -165,6 +165,18 @@ function report(   i, k, bad, d1, d2, dr, p, pk) {
   return bad
 }
 
+# Apply: the file with only the Map line replaced (or inserted after IP), final-newline status preserved.
+function emit_file(   i, M, nl) {
+  nl = PREFIX "Map: " MAPTXT CRSUF
+  M = 0
+  for (i = 1; i <= N; i++) {
+    if (i == ML) { O[++M] = nl; continue }
+    O[++M] = L[i]
+    if (!ML && i == IP) O[++M] = nl
+  }
+  for (i = 1; i <= M; i++) { printf "%s", O[i]; if (i < M || !NONL) printf "\n" }
+}
+
 function lint_findings(   errs, pk, p, d1, d2, i, det) {
   errs = 0
   if (!ISB) return 0
@@ -192,7 +204,12 @@ END {
   ISB = bearing(rel)
   KD = 0
   for (k = 1; k <= NS; k++) if (SH[k] == "Digest") { KD = k; break }
+  if (mode == "apply") {
+    if (!ISB) { print "brain: not a digest-bearing page: " rel > "/dev/stderr"; exit 2 }
+    if (!KD) { print "brain: no ## Digest section in " rel " — write the prose slots with Edit first" > "/dev/stderr"; exit 2 }
+  }
   if (KD) setup_digest()
+  if (mode == "apply") { emit_file(); exit 0 }
   if (mode == "lint") exit lint_findings()
   exit report()
 }

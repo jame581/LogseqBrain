@@ -210,7 +210,40 @@ cmd_digest() {
   map_awk report "$GRAPH/$PAGE_REL"
 }
 
-cmd_digest_apply() { die "digest --apply lands in Task 5"; }
+# commit_write REL TMP MAX_OLD MAX_NEW SUM_BEFORE [WANT] — verify TMP against the target, then write in place.
+commit_write() {
+  case $1 in
+    *..*|/*) rm -f "$2"; die "refusing to write outside the graph: $1" ;;
+    pages/*.md|journals/*.md) ;;
+    *) rm -f "$2"; die "refusing to write outside pages/ or journals/: $1" ;;
+  esac
+  _t="$GRAPH/$1"; _old=$_t
+  [ -f "$_t" ] || _old=/dev/null
+  if [ -f "$_t" ] && cmp -s "$2" "$_t"; then rm -f "$2"; COMMITTED=0; return 0; fi
+  if ! $AWK -v BINMODE=3 -v max_old="$3" -v max_new="$4" -v want="${6:-}" -f "$LIB/onechange.awk" "$_old" "$2"; then
+    rm -f "$2"; exit 2
+  fi
+  if [ -f "$_t" ] && [ "$(nonl "$_t")" != "$(nonl "$2")" ]; then
+    rm -f "$2"; die "refusing to write — final-newline status of $1 would change"
+  fi
+  [ -n "${BRAIN_TEST_MUTATE_BEFORE_COMMIT:-}" ] && printf ' ' >> "$_t"   # test-only hook
+  if [ -f "$_t" ]; then _now=$(cksum < "$_t"); else _now=absent; fi
+  if [ "$_now" != "$5" ]; then rm -f "$2"; die "$1 changed during apply — rerun"; fi
+  cat "$2" > "$_t" || { rm -f "$2"; die "write failed: $1"; }
+  rm -f "$2"; COMMITTED=1
+}
+
+cmd_digest_apply() {
+  _f="$GRAPH/$PAGE_REL"
+  _sum=$(cksum < "$_f")
+  _tmp="$(state_dir)/apply.$$"
+  map_awk apply "$_f" > "$_tmp"; _rc=$?
+  if [ "$_rc" != 0 ]; then rm -f "$_tmp"; exit "$_rc"; fi
+  commit_write "$PAGE_REL" "$_tmp" 1 1 "$_sum" '^[ \t]*- Map: '
+  if [ "$COMMITTED" = 1 ]; then printf 'applied: Map line written to %s\n' "$PAGE_REL"
+  else printf 'unchanged: Map line already current in %s\n' "$PAGE_REL"; fi
+  map_awk report "$_f"
+}
 
 # --- commands end ---
 
