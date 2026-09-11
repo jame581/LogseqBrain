@@ -323,6 +323,27 @@ cmd_lint() {
   [ $((_e + _w)) -eq 0 ]
 }
 
+cmd_search() {
+  [ $# -ge 1 ] || die "usage: brain search <term> [--page P] [--section S] [--context N]"
+  _term=$1; shift; _pg=; _sec=; _ctx=
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --page)    [ $# -ge 2 ] || die "--page needs a page";     _pg=$2;  shift 2 ;;
+      --section) [ $# -ge 2 ] || die "--section needs a name";  _sec=$2; shift 2 ;;
+      --context) [ $# -ge 2 ] || die "--context needs a number"; _ctx=$2; shift 2 ;;
+      *) die "unknown option: $1" ;;
+    esac
+  done
+  [ -n "$_sec" ] && [ -z "$_pg" ] && die "--section needs --page"
+  _list="$(state_dir)/search.lst"
+  if [ -n "$_pg" ]; then
+    resolve_page "$_pg"; printf '%s\n' "$PAGE_REL" > "$_list"; _scope="$PAGE_REL${_sec:+ ## $_sec}"
+  else
+    (cd "$GRAPH" && { ls pages/*.md 2>/dev/null; ls journals/*.md 2>/dev/null; }) > "$_list"; _scope="pages/, journals/"
+  fi
+  (cd "$GRAPH" && BRAIN_TERM=$_term run_awk search -v listfile="$_list" -v sec="$_sec" -v ctx="$_ctx" -v scope="$_scope")
+}
+
 # --- commands end ---
 
 OPT_GRAPH=
@@ -344,6 +365,7 @@ case $cmd in
   digest)            resolve_graph; cmd_digest "$@" ;;
   lint)              resolve_graph; cmd_lint "$@" ;;
   check)             resolve_graph; cmd_check "$@" ;;
+  search)            resolve_graph; cmd_search "$@" ;;
   # --- dispatch end ---
   *) die "unknown command: $cmd (try: brain help)" ;;
 esac
