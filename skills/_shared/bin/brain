@@ -271,7 +271,11 @@ cmd_lint() {
     (cd "$GRAPH" && { ls pages/*.md 2>/dev/null; ls journals/*.md 2>/dev/null; }) > "$_list"
   else
     : > "$_list"
-    for _a in "$@"; do _r=${_a#"$GRAPH"/}; guard_rel "$_r"; printf '%s\n' "$_r" >> "$_list"; done
+    for _a in "$@"; do
+      _r=${_a#"$GRAPH"/}; guard_rel "$_r"
+      [ -f "$GRAPH/$_r" ] || die "no such file: $_r"
+      printf '%s\n' "$_r" >> "$_list"
+    done
   fi
   (cd "$GRAPH" && run_awk lint -v listfile="$_list" -v pagesfile="$PAGES_LST" -v keysfile="$KEYS_LST") > "$_out"
   while IFS= read -r _r || [ -n "$_r" ]; do digest_lint "$_r" >> "$_out"; done < "$_list"
