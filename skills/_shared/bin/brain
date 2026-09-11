@@ -245,6 +245,43 @@ cmd_digest_apply() {
   map_awk report "$_f"
 }
 
+graph_lists() {
+  _sd=$(state_dir)
+  PAGES_LST="$_sd/pages.lst"; KEYS_LST="$_sd/keys.lst"
+  ls "$GRAPH/pages" 2>/dev/null | sed -n 's#\.md$##p' | sed 's#___#/#g' | tr 'A-Z' 'a-z' > "$PAGES_LST"
+  (cd "$GRAPH" && grep -h -E '^[[:space:]]*(- )?[A-Za-z0-9_][A-Za-z0-9_.-]*:: ' pages/*.md journals/*.md 2>/dev/null) \
+    | sed -E 's/^[[:space:]]*(- )?([A-Za-z0-9_][A-Za-z0-9_.-]*)::.*/\2/' | tr 'A-Z' 'a-z' | sort | uniq -c > "$KEYS_LST"
+}
+
+# digest_lint REL — map.awk lint findings for one digest-bearing candidate.
+digest_lint() {
+  case $1 in
+    pages/Projects___*|pages/Tasks___*)
+      PAGE_REL=$1; PAGE_NAME=$(basename "$1" .md | sed 's#___#/#g'); archive_of
+      map_awk lint "$GRAPH/$1" ;;
+  esac
+  return 0
+}
+
+cmd_lint() {
+  graph_lists
+  _list="$(state_dir)/lint.lst"; _out="$(state_dir)/lint.out"
+  if [ $# -eq 0 ] || [ "$1" = --all ]; then
+    # Two ls calls, not one: a single `ls pages/*.md journals/*.md` sorts journals/ before pages/.
+    (cd "$GRAPH" && { ls pages/*.md 2>/dev/null; ls journals/*.md 2>/dev/null; }) > "$_list"
+  else
+    : > "$_list"
+    for _a in "$@"; do _r=${_a#"$GRAPH"/}; guard_rel "$_r"; printf '%s\n' "$_r" >> "$_list"; done
+  fi
+  (cd "$GRAPH" && run_awk lint -v listfile="$_list" -v pagesfile="$PAGES_LST" -v keysfile="$KEYS_LST") > "$_out"
+  while IFS= read -r _r || [ -n "$_r" ]; do digest_lint "$_r" >> "$_out"; done < "$_list"
+  cat "$_out"
+  _e=$(cut -f3 "$_out" | grep -c '^error$'); _w=$(cut -f3 "$_out" | grep -c '^warn$')
+  _by=$(cut -f2 "$_out" | sort | uniq -c | $AWK '{ printf "%s%s=%s", (NR > 1 ? " · " : ""), $2, $1 }')
+  echo "summary: $_e error, $_w warn${_by:+ · $_by}"
+  [ $((_e + _w)) -eq 0 ]
+}
+
 # --- commands end ---
 
 OPT_GRAPH=
@@ -264,6 +301,7 @@ case $cmd in
   read)              resolve_graph; cmd_read_tail read "$@" ;;
   tail)              resolve_graph; cmd_read_tail tail "$@" ;;
   digest)            resolve_graph; cmd_digest "$@" ;;
+  lint)              resolve_graph; cmd_lint "$@" ;;
   # --- dispatch end ---
   *) die "unknown command: $cmd (try: brain help)" ;;
 esac

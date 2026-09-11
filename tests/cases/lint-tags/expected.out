@@ -1,0 +1,8 @@
+pages/Tasks___Lint.md:3	bare-hash-tag	error	#-parity (after-word)
+pages/Tasks___Lint.md:3	bare-hash-tag	error	#) (after-word)
+pages/Tasks___Lint.md:3	bare-hash-tag	error	#12 (after-word)
+pages/Tasks___Lint.md:3	bare-hash-tag	error	#image (word)
+pages/Tasks___Lint.md:4	bare-hash-tag	error	#44 (number)
+pages/Tasks___Lint.md:5	bare-hash-tag	error	#0066CC; (hex)
+pages/Tasks___Lint.md:1	missing-digest	warn	no ## Digest section
+summary: 6 error, 1 warn · bare-hash-tag=6 · missing-digest=1
