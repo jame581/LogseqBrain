@@ -47,7 +47,7 @@ function map_text(T,   tail, budget, run, i, cost, kept, out) {
   if (NN >= 1) tail = "+" NN " smaller sections, " fig(NB)
   if (archive != "") tail = tail (tail != "" ? SEP : "") "Archive | " archive
   tail = tail (tail != "" ? SEP : "") "page | " fig(T)
-  budget = 800 - OTHER - length(PREFIX) - length("Map: ") - 1 - length(tail)
+  budget = 800 - OTHER - length(PREFIX) - length("Map: ") - 1 - length(CRSUF) - length(tail)
   if (C > 1) budget -= length("+" (C - 1) " more") + length(SEP)
   run = 0; kept = 0; out = ""
   for (i = 1; i <= C; i++) {
@@ -106,7 +106,8 @@ function find_label(lab,   k, p, n, hit) {
 function stale_details(   n, parts, i, c, lab, fc, k, want, out, pos) {
   out = ""; NLB = 0
   if (index(OLDTXT, SEP)) n = split(OLDTXT, parts, SEP)
-  else { n = split(OLDTXT, parts, ", "); out = " · separator \",\" (expected \" · \")" }
+  else if (index(OLDTXT, ", ")) { n = split(OLDTXT, parts, ", "); out = " · separator \",\" (expected \" · \")" }
+  else { n = 1; parts[1] = OLDTXT }
   for (i = 1; i <= n; i++) {
     c = parts[i]; pos = index(c, " | ")
     if (!pos) continue
