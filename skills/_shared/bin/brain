@@ -148,6 +148,28 @@ cmd_info() {
   echo "awk: ${_v:-unknown}"
 }
 
+# save_baseline REL — snapshot a graph file (empty if it does not exist yet) for `brain check`.
+save_baseline() {
+  case $1 in pages/*|journals/*) ;; *) die "baseline outside pages/ or journals/: $1" ;; esac
+  _sd="$(state_dir)/base"; mkdir -p "$_sd" || die "cannot create $_sd"
+  _key=$(printf '%s' "$1" | sed 's#/#%#g')
+  if [ -f "$GRAPH/$1" ]; then cp "$GRAPH/$1" "$_sd/$_key"; else : > "$_sd/$_key"; fi
+  date +%s > "$_sd/$_key.ts"
+}
+
+cmd_sections() {
+  [ $# -ge 1 ] || die "usage: brain sections <page> [--baseline FILE…]"
+  resolve_page "$1"; shift
+  _f="$GRAPH/$PAGE_REL"
+  run_awk sections -v rel="$PAGE_REL" -v nonl="$(nonl "$_f")" "$_f" || die "sections failed on $PAGE_REL"
+  save_baseline "$PAGE_REL"; _saved=$PAGE_REL
+  if [ "${1:-}" = --baseline ]; then
+    shift
+    for _b in "$@"; do _b=${_b#"$GRAPH"/}; save_baseline "$_b"; _saved="$_saved $_b"; done
+  fi
+  echo "# baseline saved: $_saved"
+}
+
 # --- commands end ---
 
 OPT_GRAPH=
@@ -163,6 +185,7 @@ case $cmd in
   help|-h|--help)    usage ;;
   version|--version) echo "logseq-brain $BRAIN_VERSION" ;;
   info)              resolve_graph; cmd_info ;;
+  sections)          resolve_graph; cmd_sections "$@" ;;
   # --- dispatch end ---
   *) die "unknown command: $cmd (try: brain help)" ;;
 esac
