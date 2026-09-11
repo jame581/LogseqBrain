@@ -8,3 +8,18 @@ repeat_lines() {
   _i=0
   while [ "$_i" -lt "$1" ]; do pad_line "$2" "$3"; _i=$((_i + 1)); done
 }
+# demo_page — the 1444-byte project page used by several cases (same bytes as sections-basic).
+demo_page() {
+  {
+    printf '%s\n' 'type:: project' 'status:: active' '- ## Digest'
+    pad_line '  - Id' 40
+    pad_line '  - Map: x' 30
+    printf '%s\n' '- ## Overview'
+    repeat_lines 3 '  - o' 100
+    printf '%s\n' '- ## Session Log'
+    pad_line '  - 2026-09-01: a' 200
+    pad_line '    - child' 300
+    pad_line '  - 2026-09-02: b' 200
+    pad_line '    - child' 300
+  } > pages/Projects___Demo.md
+}

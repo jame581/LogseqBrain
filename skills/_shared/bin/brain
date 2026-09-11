@@ -170,6 +170,25 @@ cmd_sections() {
   printf '# baseline saved: %s\n' "$_saved"
 }
 
+# cmd_read_tail read|tail <page> <section> [--max BYTES] [--entries N]
+cmd_read_tail() {
+  _mode=$1; shift
+  [ $# -ge 2 ] || die "usage: brain $_mode <page> <section> [--max BYTES] [--entries N]"
+  resolve_page "$1"; _sec=$2; shift 2
+  if [ "$_mode" = read ]; then _max=8192; else _max=4096; fi
+  _n=3
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --max)     [ $# -ge 2 ] || die "--max needs a number"; _max=$2; shift 2 ;;
+      --entries) [ $# -ge 2 ] || die "--entries needs a number"; _n=$2; shift 2 ;;
+      *) die "unknown option: $1" ;;
+    esac
+  done
+  _f="$GRAPH/$PAGE_REL"
+  run_awk read -v rel="$PAGE_REL" -v nonl="$(nonl "$_f")" -v mode="$_mode" \
+    -v sec="$_sec" -v max="$_max" -v entries="$_n" "$_f"
+}
+
 # --- commands end ---
 
 OPT_GRAPH=
@@ -186,6 +205,8 @@ case $cmd in
   version|--version) echo "logseq-brain $BRAIN_VERSION" ;;
   info)              resolve_graph; cmd_info ;;
   sections)          resolve_graph; cmd_sections "$@" ;;
+  read)              resolve_graph; cmd_read_tail read "$@" ;;
+  tail)              resolve_graph; cmd_read_tail tail "$@" ;;
   # --- dispatch end ---
   *) die "unknown command: $cmd (try: brain help)" ;;
 esac

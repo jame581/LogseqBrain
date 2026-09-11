@@ -1,0 +1,1 @@
+tail Tasks/Tail "Session Log" --entries 0 --max 150
