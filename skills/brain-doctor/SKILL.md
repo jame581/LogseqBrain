@@ -31,7 +31,7 @@ If the trigger is ambiguous, run Report first and offer to fix.
 
 2. **Report**, grouped by the catalog's `auto-fixable` field:
    - **Auto-fixable:** `code-in-braces`, `bare-hash-tag`, `unnamespaced-link`, `file-link`, `relative-link`, `malformed-property` (page-top only), and `stale-map` / `map-label`. The digest ones are fixed with `brain digest <page> --apply`.
-   - **Needs your call:** `description-link`, `broken-link`, `new-property-key`, `duplicate-entry`, `structural-integrity`, `jira-markup`, `missing-digest`, `stale-digest`, `oversized-digest`.
+   - **Needs your call:** `description-link`, `broken-link`, `new-property-key`, `duplicate-entry`, `structural-integrity`, `jira-markup`, `missing-digest`, `stale-digest`, `oversized-digest`, `nonconvergent-map`, `duplicate-map` — the helper refuses to write on either (see the catalog), so the fix is a human edit, not a bulk pass.
 
    The headline total counts **every** bucket. Example:
 
@@ -56,7 +56,7 @@ If the trigger is ambiguous, run Report first and offer to fix.
 6. **Verify.**
    - `brain lint <every file you changed>`: expect zero for the fixed classes.
    - Per-file backtick parity (the catalog's "After repair — verify").
-   - Then `brain digest <page> --apply` on every digest-bearing page whose bytes changed. This is a Remap: `digest-updated::` and the prose stay untouched.
+   - Then `brain digest <page> --apply` on every digest-bearing page whose bytes changed. This is a Remap: `digest-updated::` and the prose stay untouched. Skip a page with no `## Digest` section — that's a `missing-digest` finding, not a Remap, and `--apply` exits 2 on it; leave it to the guided digest backfill below.
 
 7. **`brain activity "ran brain-doctor · fixed <N> issues"`** and report the result.
 

@@ -85,7 +85,7 @@ When the user wants to add a project (e.g., "add MyProject to brain", "init brai
 
 4. **`brain digest Projects/<ProjectName> --apply`** — replaces the template's `- Map: pending` line with the measured Map. Its report must say `map: ok`.
 
-5. **Confirm no template placeholder survives.** Check for **this template's two placeholders specifically**, not for `{{` in general:
+5. **Confirm no template placeholder survives.** Step 4's report saying `map: ok` is the explicit gate for the Map placeholder — do not proceed to this step if it didn't, since a failed or skipped step 4 leaves the literal word `pending` in the `- Map:` bullet (`references/templates.md`), which isn't `{{…}}` syntax and the grep below won't catch it. Then check for **this template's two remaining placeholders specifically**, not for `{{` in general:
    ```bash
    grep -cE '\{\{(today|project_description)\}\}' "pages/Projects___<ProjectName>.md"
    ```

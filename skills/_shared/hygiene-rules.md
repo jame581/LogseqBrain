@@ -47,7 +47,7 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **enforced-at:** compose, scan
 - **auto-fixable:** yes
 - **detection:** `brain lint` → `unnamespaced-link`: any `[[ABC-123]]` (uppercase prefix, dash, digits).
-- **remediation:** `[[CRMGM-1234]]` → `[[Tasks/CRMGM-1234]]`. Regex `\[\[(CRMGM-\d+|GLOPRICE-\d+)\]\]` → `[[Tasks/\1]]`. Already-namespaced `[[Tasks/…]]` won't match. Bare *text* mentions (no `[[ ]]`) are not links — leave them.
+- **remediation:** `[[CRMGM-1234]]` → `[[Tasks/CRMGM-1234]]`. Regex `\[\[([A-Z][A-Z0-9]*-[0-9]+)\]\]` → `[[Tasks/\1]]`. Already-namespaced `[[Tasks/…]]` won't match. Bare *text* mentions (no `[[ ]]`) are not links — leave them.
 
 ## `file-link`
 - **severity:** phantom-page
@@ -159,6 +159,13 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **detection:** `digest-updated::` more than 30 days behind `last-updated::` on the same page. `brain digest <page>` prints `drift: N days`; `brain lint` reports `stale-digest` when N > 30.
 - **remediation:** report both dates and the gap; suggest rebuild-from-source. Never rebuild without confirmation — a rebuild reads real content and costs real tokens.
 
+## `nonconvergent-map`
+- **severity:** data-quality
+- **enforced-at:** scan, and every save via `brain check`
+- **auto-fixable:** report — there is no transform to apply; the helper itself refuses to write
+- **detection:** `brain lint` / `brain digest <page> --apply`: the page's own byte total sits within ~2 bytes of a KiB boundary, so recomputing the Map has no fixed point — the figure oscillates between two values each time it's measured (e.g. `1023 B` vs `1 KB`, exactly the 2 bytes the shorter label costs) because the Map line's own length feeds back into the total it describes. `--apply` **refuses to write** rather than publish a figure it knows is wrong (exit 2); `brain lint` / `brain check` report it as `nonconvergent-map` instead of silently falling back to a guess.
+- **remediation:** never hand-write the Map figure to "fix" the oscillation. Change the page by an ordinary edit — any edit that adds or removes even one byte elsewhere on the page moves the total off the boundary — then rerun `brain digest <page> --apply`.
+
 ## `stale-map`
 - **severity:** data-quality
 - **enforced-at:** scan, and every save via `brain check`
@@ -173,6 +180,13 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **detection:** a Map clause whose label is neither a real heading nor its 40-byte cut, e.g. `Session 08-12` for `Session 2026-08-12 — solved…` (7 of 66 digests measured on the live graph). A label that doesn't resolve can't lead back to its section.
 - **remediation:** `brain digest <page> --apply`.
 
+## `duplicate-map`
+- **severity:** data-quality
+- **enforced-at:** scan, and every save via `brain check`
+- **auto-fixable:** report — deleting the extra line needs a human choice, not a bulk pass
+- **detection:** `brain lint` / `brain digest <page> --apply`: the `## Digest` section carries more than one `- Map:` bullet — most plausibly a Logseq Sync merge that duplicated the block. `--apply` refuses to write (exit 2) until only one remains; `brain lint` / `brain check` report it as `duplicate-map`, naming the count.
+- **remediation:** delete all but one `- Map:` line with Edit — either copy is fine to keep, since the surviving one gets recomputed on the next `--apply` — then rerun `brain digest <page> --apply`. Never let a bulk pass guess which copy to keep.
+
 ## `oversized-digest`
 - **severity:** data-quality
 - **enforced-at:** compose, scan
@@ -182,7 +196,14 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 
 ## Post-write verify (scoped)
 
-After all writes in an operation, run `brain check <every file written>`. It lints only the lines added since the baseline that `brain sections <page> --baseline <other files>` recorded before the first Edit. That scoping covers the mechanical rules only: the digest rules (`stale-map`, `map-label`, `oversized-digest`, a missing Map) are always measured over the whole page, so a digest finding may predate this save. It prints `check <file>: N new (E error, W warn), P pre-existing` and exits 1 on any new error-tier finding. Fix those with Edit and re-run `check` on that file. Warn-tier findings go in the confirmation to the user. Pre-existing findings belong to brain-doctor: mention them, don't silently fix them.
+After all writes in an operation, run `brain check <every file written>`. It prints, in order: the mechanical findings on lines added since the baseline that `brain sections <page> --baseline <other files>` recorded before the first Edit; then the digest findings for that page (`missing-digest`, `nonconvergent-map`, `stale-map`, `map-label`, `duplicate-map`, `oversized-digest`, `stale-digest`) — these are always measured over the whole page, not just the lines this save added, so a digest finding may predate this save; then, **last**, a summary line: `check <file>: N new (E error, W warn), P pre-existing`, with a `· digest: D error, M warn` suffix appended whenever digest findings exist. Example:
+```
+pages/Projects___X.md:19  bare-hash-tag  error  #44 (number)
+pages/Projects___X.md:12  stale-map      error  Session Log | 1 KB (1 entries) → 326 B (2 entries) · page | 2 KB → 712 B
+pages/Projects___X.md:7   stale-digest   warn   digest-updated 2026-08-01 is 31 days behind last-updated 2026-09-01
+check pages/Projects___X.md: 1 new (1 error, 0 warn), 0 pre-existing · digest: 1 error, 1 warn
+```
+It exits 1 on any new error-tier finding, mechanical or digest. Fix a mechanical error with Edit and re-run `check` on that file; fix a digest error by re-running `brain digest <page> --apply` (never by hand-editing the Map — and never on a line a rotation moved verbatim, per `references/rotation.md`). Warn-tier findings go in the confirmation to the user. Pre-existing findings belong to brain-doctor: mention them, don't silently fix them. Also check per-file backtick parity on every file this save touched — an odd number of `` ` `` characters means a broken inline-code span (see "After repair — verify" below); no lint rule catches this.
 
 ## After repair — verify
 

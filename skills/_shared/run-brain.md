@@ -22,7 +22,7 @@ The script resolves the graph itself: `--graph DIR`, then `LOGSEQ_BRAIN_PATH`, t
 | `digest <page>` | Load: the property block, the whole `## Digest`, and `map:` / `digest:` / `drift:` / `staleness:` / `coverage:` lines. With no digest: the section table instead. |
 | `digest <page> --apply` | Save, rotation, doctor: rewrite **only** the Map line from measurement, then report caps and lint. Never hand-edit the Map line. |
 | `journal <page> [--date d]` | That page's mentions in a journal, shrunk to ~2 KB, with coverage |
-| `sections <page> [--baseline FILE…]` | Section sizes, and baselines for `check`. Call it before a save's first Edit, naming every file the save will touch. |
+| `sections <page> [--baseline FILE…]` | Section sizes, and baselines for `check`. Call it before a save's first Edit, naming every file the save will touch. **Side effect:** it (re)saves the baselines `brain check` diffs against — calling it again mid-save resets them and invalidates that save's verification. |
 | `read <page> "<section>" [--max B]` | A whole section, if it is under the cap (default 8 KB) |
 | `tail <page> "<section>" [--entries N] [--max B]` | The newest dated entries, byte-bounded, never zero |
 | `search "<term>" [--page P] [--section S] [--context N]` | Counts first. Hits only when there are ≤ 20 and they fit in 4 KB; context windows only up to 8 KB. Never searches `logseq/`. |

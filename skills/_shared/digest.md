@@ -1,6 +1,6 @@
 # Digest — the cheap-recall surface
 
-Every project and task page carries a small, always-current summary that Claude reads *instead of* the page. Brief load costs one Read (~2 KB) rather than reading the whole page — measured on the maintainer's largest project page, `Projects___Unicorn-Globus.md` (109,760 B, truncates to 107 KB): the digest-mode Read costs 1,435 B (~1.4 KB) — and the digest's map bullet states exactly what was **not** read — which is what stops the model reasoning from a fragment as though it held the whole history. (An earlier draft of this figure said "~27 KB"; that number was never a brief-mode measurement — see the design spec's Motivation section for how it was corrected.)
+Every project and task page carries a small, always-current summary that Claude reads *instead of* the page. A brief load is one helper call, `brain digest <page>`: it prints the property block and the whole `## Digest` section, then stops — on the maintainer's largest project page, `Projects___Unicorn-Globus.md` (109,760 B), that call reads about 1.4 KB rather than the whole page. The Map bullet it prints states exactly what was **not** read, which is what stops the model reasoning from a fragment as though it held the whole history.
 
 Read this file whenever you build, refresh, rebuild, or lint a digest.
 

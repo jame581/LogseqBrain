@@ -37,10 +37,15 @@ Run `brain info` once, and use its `graph:` path for any Read this skill makes i
 
 Read-only. Exclude template stubs (`_…_` placeholder bullets) from every count.
 
-1. **Projects and tasks:** from `brain status`. Active = `fresh` + `aging`; stale = `stale` + `abandoned`.
+1. **Projects and tasks:** from `brain status`. Active = `fresh` + `aging`; stale = `stale` + `abandoned` — derive both from each row's `staleness` column, never from the counts line's `(N active)` figure, which counts `status:: active` and means something else entirely.
 2. **Decisions:** (a) cross-project, the entries in `pages/Decisions.md` (`brain sections Decisions`); (b) on project pages, each project's `Decisions` entry count from `brain sections <page>`. Never sum (a) and (b): cross-project decisions are deliberately duplicated. Break both down by `status::` (use `brain search "status:: superseded"` to count superseded ones).
 3. **Sessions:** the sum of each project's `Session Log` entry count from `brain sections`.
-4. **Activity:** bullets under `## Activity` in journals dated within the last 30 days.
+4. **Activity:** bullets under `## Activity` in journals dated within the last 30 days. No helper command counts this; use a read-only shell pass over `journals/` (journal filenames sort as `yyyy_MM_dd`, so a string compare against the cutoff selects the files):
+   ```
+   CUTOFF=$(date -d '-30 days' +%Y_%m_%d)
+   for f in journals/*.md; do [ "$(basename "$f" .md)" '>' "$CUTOFF" ] && cat "$f"; done \
+     | awk '/^[ \t]*- ## Activity/{f=1; next} /^[ \t]*- ## /{f=0} f && /^[ \t]*- /{n++} END{print n+0}'
+   ```
 5. **Present:**
    ```
    Brain stats:
