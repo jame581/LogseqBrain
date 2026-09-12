@@ -166,6 +166,10 @@ def find_sh(explicit):
 
 
 def main():
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
     ap = argparse.ArgumentParser()
     ap.add_argument('--graph', required=True)
     ap.add_argument('--transit')
@@ -176,11 +180,17 @@ def main():
     if os.path.getmtime(transit) < newest:
         print('warning: the transit cache is older than the newest page; open the graph in Logseq to re-parse first')
     npages, ph = phantoms(transit)
+    if npages == 0:
+        sys.exit('oracle: transit decode produced no pages — the cache format may have changed; this is a decoder failure, not a clean graph')
     kinds = collections.Counter(k for _, k in ph)
     print(f'oracle: {npages} pages known to Logseq, {npages - len(ph)} with a file · ' +
           ' · '.join(f'{k} {n}' for k, n in sorted(kinds.items())))
-    out = subprocess.run([find_sh(a.sh), BRAIN, '--graph', a.graph, 'lint', '--all'],
-                         capture_output=True, text=True, encoding='utf-8').stdout
+    proc = subprocess.run([find_sh(a.sh), BRAIN, '--graph', a.graph, 'lint', '--all'],
+                          capture_output=True, text=True, encoding='utf-8', errors='replace')
+    if proc.returncode not in (0, 1):
+        first_err = next((l for l in proc.stderr.splitlines() if l.strip()), '(no stderr)')
+        sys.exit(f'brain lint --all failed (exit {proc.returncode}): {first_err}')
+    out = proc.stdout
     rows = [l.split('\t') for l in out.splitlines() if l.count('\t') >= 3]
     tags = {r[3].split(' ')[0][1:].lower() for r in rows if r[1] == 'bare-hash-tag'}
     rels = [r[3] for r in rows if r[1] == 'relative-link']

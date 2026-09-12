@@ -8,7 +8,7 @@ graph (its input mentions --graph-marker), instructions (a logseq-brain skills p
 
 Usage: python tools/measure/cost.py [--since yyyy-mm-dd] [--projects ~/.claude/projects] [--graph-marker ClaudeBrain] [--csv]
 """
-import argparse, collections, glob, json, os, statistics
+import argparse, collections, glob, json, os, statistics, sys
 
 
 def text_of(c):
@@ -74,19 +74,27 @@ def windows(path, marker):
 
 
 def main():
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
     ap = argparse.ArgumentParser()
     ap.add_argument('--since', default='')
     ap.add_argument('--projects', default=os.path.expanduser('~/.claude/projects'))
     ap.add_argument('--graph-marker', default='ClaudeBrain')
     ap.add_argument('--csv', action='store_true')
     a = ap.parse_args()
-    ws = [w for f in glob.glob(os.path.join(a.projects, '*', '*.jsonl'))
+    transcripts = glob.glob(os.path.join(a.projects, '*', '*.jsonl'))
+    ws = [w for f in transcripts
           for w in windows(f, a.graph_marker) if w['ts'][:10] >= a.since]
     if a.csv:
         print('ts,skill,calls,graph_bytes,instruction_bytes,other_bytes,output_tokens,file')
         for w in sorted(ws, key=lambda w: w['ts']):
             b = w['bytes']
             print(f"{w['ts']},{w['skill']},{w['calls']},{b['graph']},{b['instructions']},{b['other']},{w['out']},{w['file']}")
+        return
+    if not ws:
+        print(f'no brain-skill windows found ({len(transcripts)} transcripts under {a.projects}, --since {a.since or "(none)"})')
         return
     by = collections.defaultdict(list)
     for w in ws:

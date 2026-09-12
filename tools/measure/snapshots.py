@@ -13,7 +13,7 @@ import argparse, collections, datetime, glob, hashlib, os, re, shutil, subproces
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 BRAIN = os.path.join(ROOT, 'skills', '_shared', 'bin', 'brain')
 TS = re.compile(r'^(\d{4})-(\d{2})-(\d{2})T(\d{2})_(\d{2})_(\d{2})')
-DIGEST = re.compile(r'(?ms)^\s*(?:- )?## Digest\s*$.*?(?=^\s*(?:- )?## )')
+DIGEST = re.compile(r'(?ms)^\s*(?:- )?## Digest\s*$.*?(?=^\s*(?:- )?## |\Z)')
 
 
 def timelines(graph):
@@ -28,7 +28,8 @@ def timelines(graph):
     for key in list(v):
         cur = os.path.join(graph, key)
         if os.path.exists(cur):
-            v[key].append((datetime.datetime.utcfromtimestamp(os.path.getmtime(cur)), open(cur, 'rb').read()))
+            v[key].append((datetime.datetime.fromtimestamp(os.path.getmtime(cur), datetime.timezone.utc).replace(tzinfo=None),
+                           open(cur, 'rb').read()))
     for key, vs in v.items():
         vs.sort(key=lambda x: x[0])
         seen, uniq = set(), []
@@ -41,18 +42,43 @@ def timelines(graph):
     return v
 
 
+def find_sh(explicit):
+    if explicit:
+        return explicit
+    sh = shutil.which('sh')
+    if sh:
+        return sh
+    git = shutil.which('git')
+    if git:
+        cand = os.path.join(os.path.dirname(os.path.dirname(git)), 'bin', 'bash.exe')
+        if os.path.exists(cand):
+            return cand
+    sys.exit('no sh found; pass --sh (Git for Windows: C:\\Program Files\\Git\\bin\\bash.exe)')
+
+
 def main():
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
     ap = argparse.ArgumentParser()
     ap.add_argument('--graph', required=True)
     ap.add_argument('--since', default='')
-    ap.add_argument('--sh', default=shutil.which('sh') or 'sh')
+    ap.add_argument('--sh')
     a = ap.parse_args()
+    sh = find_sh(a.sh)
     tmp = tempfile.mkdtemp(prefix='brain-snap-')
     try:
         for d in ('pages', 'journals'):
             shutil.copytree(os.path.join(a.graph, d), os.path.join(tmp, d))
-        brain = lambda *args: subprocess.run([a.sh, BRAIN, '--graph', tmp, *args], capture_output=True,
-                                             text=True, encoding='utf-8').stdout
+        fails = collections.Counter()
+
+        def brain(*args):
+            p = subprocess.run([sh, BRAIN, '--graph', tmp, *args], capture_output=True,
+                               text=True, encoding='utf-8', errors='replace')
+            if p.returncode not in (0, 1):
+                fails['n'] += 1
+            return p.stdout
         maps = collections.Counter(); bad = []; errs = collections.Counter(); intervals = 0
         for key, vs in timelines(a.graph).items():
             target = os.path.join(tmp, key)
@@ -83,6 +109,8 @@ def main():
             print('  ' + b)
         print(f'intervals checked: {intervals} · new error-tier findings: ' +
               (', '.join(f'{k} {n}' for k, n in errs.most_common()) or 'none'))
+        if fails['n']:
+            print(f'helper failures: {fails["n"]}')
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
