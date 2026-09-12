@@ -43,7 +43,7 @@ function emit(i, rule, tier, detail) {
   if (tier == "error") NE++; else NW++
 }
 
-function lint_file(f,   i, inf, t, m1, m2, j, nx, tok, pv, cls, rest, pos, e, tgt, k) {
+function lint_file(f,   i, inf, t, m1, m2, j, nx, tok, pv, cls, rest, pos, e, tgt, k, pre) {
   CURF = f
   scan_props()
   inf = 0
@@ -67,7 +67,10 @@ function lint_file(f,   i, inf, t, m1, m2, j, nx, tok, pv, cls, rest, pos, e, tg
     for (j = 1; j <= length(m2); j++) {
       if (substr(m2, j, 1) != "#") continue
       nx = substr(m2, j + 1, 1)
-      if (nx == "" || index(" \t#[]`,\"*.;:!?'", nx)) continue
+      if (nx == "" || index(" \t#[]`,\":!?'", nx)) continue
+      # A "*" that closes an already-open ** span is emphasis, not a tag: **C#** makes no page,
+      # while #**i** (no earlier opener) makes page **i**. Both verified against Logseq's cache.
+      if (nx == "*") { pre = substr(m2, 1, j - 1); if (gsub(/\*\*/, "", pre) % 2) continue }
       tok = substr(m2, j + 1); sub(/[ \t].*$/, "", tok)
       pv = (j > 1) ? substr(m2, j - 1, 1) : ""
       if (pv ~ /[A-Za-z0-9]/) cls = "after-word"

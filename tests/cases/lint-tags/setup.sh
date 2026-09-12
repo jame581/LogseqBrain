@@ -5,4 +5,6 @@ printf '%s\n' 'type:: project' '- ## Notes' '  - x' > pages/Projects___Real.md
   printf '%s\n' '  - PR #44 and `#45` and [#65](https://x/pull/65) and #[[Projects/Real]] and C# alone'
   printf '%s\n' '  - color #0066CC; also #, and #"x" and #**b**'
   printf '%s\n' '  - ranges `#25`–`#28`, a link [[C#]], macros {{cloze x}} {{youtube-timestamp 10}}, a ref [label](((abc-uuid)))'
+  printf '%s\n' "  - dot #.a semicolon #;b colon #:c bang #!d question #?e quote #'f"
+  printf '%s\n' '  - a bold **C#** term'
 } > pages/Tasks___Lint.md
