@@ -16,7 +16,7 @@ Five skills make up the save/load cycle against a Logseq graph: `brain-init` (se
 
 ### Shared references (since v0.6.0)
 
-Cross-skill logic lives under `skills/_shared/` — sibling to the skill folders, not inside any individual skill's `references/`. Each `SKILL.md` reads from `skills/_shared/<name>.md` on demand. This keeps `SKILL.md` orchestrators compact and avoids duplicating logic across skills. One of these is still large — `hygiene-rules.md` (18 KB) — so grep to the relevant rule rather than reading it whole.
+Cross-skill logic lives under `skills/_shared/` — sibling to the skill folders, not inside any individual skill's `references/`. Each `SKILL.md` reads from `skills/_shared/<name>.md` on demand. This keeps `SKILL.md` orchestrators compact and avoids duplicating logic across skills. One of these is still large — `hygiene-rules.md` (22 KB) — so grep to the relevant rule rather than reading it whole.
 
 When adding a new shared reference, prefer this directory. Per-skill references stay in `skills/<skill>/references/`.
 

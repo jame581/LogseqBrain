@@ -2,6 +2,14 @@
 
 ## Shipped
 
+### v0.11.0 — Deterministic helper: exact figures, fewer round trips
+- One POSIX `sh` + `awk` helper (`skills/_shared/bin/brain` + `skills/_shared/lib/*.awk`) performs every mechanical step: section measurement, the digest Map (`digest --apply`), cap checks, count-first scoped search, format lint, and the activity line. It writes only the Map line and one activity bullet.
+- Write safety: path guard, no-op detection, region-and-kind guard, final-newline and checksum race checks, and a staged rollback — a refusal leaves the file byte-identical
+- Lint validated against Logseq's own parse cache (`tools/oracle/`): `bare-hash-tag` redefined — `.`, `;` and `*` start a tag, a `*` closing an open `**` span does not; new rules `relative-link`, `new-property-key`, `nonconvergent-map`, `duplicate-map`
+- First test suite: 74 golden cases (`tests/run.sh`) with a write-safety assertion; CI on mawk, BWK awk and gawk across Linux, macOS and Windows
+- Instruction diet — skills delegate mechanics to the helper: `brain-load` 17.7 → 6.1 KB, `section-locator` 18.6 → 2.2 KB, `hygiene-rules` 40 → 22 KB
+- Target: saves from ~29 tool calls to ≤ 13, loads from ~12 to ≤ 4 — measured by `tools/measure/` two weeks after release
+
 ### v0.10.0 — Digest layer: cheap recall, honest coverage
 - `## Digest` section + `focus::` / `next::` / `open::` / `digest-updated::` properties on project and task pages (`skills/_shared/digest.md`)
 - brain-load brief mode = one Read of the digest (~2 KB regardless of page size), with automatic fallback to the pre-digest path on un-backfilled pages
@@ -73,12 +81,7 @@
 - Save/load cycle against a Logseq graph
 - Initial graph layout (`pages/`, `journals/`, `Index.md`, `Meta.md`)
 
-## Current — v0.11.0: Deterministic helper
-
-- One POSIX `sh` + `awk` helper (`skills/_shared/bin/brain`) performs every mechanical step: section measurement, the digest Map (`digest --apply`), cap checks, scoped count-first search, Logseq-faithful lint (validated against Logseq's parse cache), and the activity line.
-- Target: saves drop from ~29 tool calls to ~10–13, loads from ~12 to ~3. Measured by `tools/measure/` two weeks after release.
-- First test suite (`tests/`, CI on three awks) and dev tools (`tools/oracle`, `tools/measure`).
-- See `docs/superpowers/specs/2026-09-11-v0.11.0-design.md`.
+## Current — v0.12.0 (TBD)
 
 ## Future — OG (markdown)
 
