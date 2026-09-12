@@ -12,10 +12,18 @@ END {
       na - p - s, nb - p - s, max_old, max_new > "/dev/stderr"
     exit 1
   }
-  if (want != "")
+  if (want != "") {
+    # The loop below is vacuous when the region holds no new lines at all: old=a,b,c → new=a,c
+    # passed with the Map regex set, and a one-line file could be emptied. map.awk cannot delete a
+    # line today, so this is defence in depth on the write guard.
+    if (nb - s < p + 1) {
+      printf "brain: refusing to write — the change writes no new line where one was expected\n" > "/dev/stderr"
+      exit 1
+    }
     for (i = p + 1; i <= nb - s; i++)
       if (B[i] !~ want) {
         printf "brain: refusing to write — changed line %d is not the expected kind\n", i > "/dev/stderr"
         exit 1
       }
+  }
 }

@@ -7,7 +7,10 @@ END {
   for (i = 1; i <= N; i++) {
     if (FENCE[i]) continue
     t = cr(L[i])
-    if (t !~ /^[ \t]*- \[\[/ || index(tolower(bullet_text(t)), key) != 1) continue
+    # §1.1 is a whole-file search: the link may sit anywhere in the bullet, not only at its start.
+    # Requiring it first made "- Worked on [[Projects/Zed]] today" report "no mention" — a false
+    # statement from the command whose whole purpose is honest coverage.
+    if (t !~ /^[ \t]*- / || !index(tolower(bullet_text(t)), key)) continue
     ind = indent_w(t); e = i
     for (j = i + 1; j <= N; j++) { u = cr(L[j]); if (u != "" && indent_w(u) <= ind) break; e = j }
     m++; BS[m] = i; BE[m] = e; BB[m] = 0

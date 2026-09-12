@@ -121,8 +121,6 @@ nonl() {
   if [ -s "$1" ] && [ "$(tail -c 1 "$1" | wc -l | tr -d ' ')" = 0 ]; then echo 1; else echo 0; fi
 }
 
-fig() { if [ "$1" -ge 1024 ]; then echo "$(($1 / 1024)) KB"; else echo "$1 B"; fi; }
-
 # guard_rel REL — refuse anything that could leave the graph's pages/ or journals/.
 guard_rel() {
   case $1 in
@@ -421,7 +419,7 @@ cmd_lint() {
   while IFS= read -r _r || [ -n "$_r" ]; do digest_lint "$_r" >> "$_out"; done < "$_list"
   cat "$_out"
   _e=$(cut -f3 "$_out" | grep -c '^error$'); _w=$(cut -f3 "$_out" | grep -c '^warn$')
-  _by=$(cut -f2 "$_out" | sort | uniq -c | $AWK '{ printf "%s%s=%s", (NR > 1 ? " · " : ""), $2, $1 }')
+  _by=$(cut -f2 "$_out" | sort | uniq -c | $AWK -v BINMODE=3 '{ printf "%s%s=%s", (NR > 1 ? " · " : ""), $2, $1 }')
   echo "summary: $_e error, $_w warn${_by:+ · $_by}"
   [ $((_e + _w)) -eq 0 ]
 }
