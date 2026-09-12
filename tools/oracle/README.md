@@ -2,7 +2,9 @@
 
 `brain lint` must flag exactly the text that Logseq OG turns into pages. This tool checks that against Logseq's own parse cache instead of a guess about the parser.
 
-    python tools/oracle/oracle.py --graph E:\Loqsec\ClaudeBrain
+    python tools/oracle/oracle.py --graph /path/to/ClaudeBrain
+
+Spell the path the way Logseq stored it — forward slashes, no trailing slash (on Windows, e.g. `--graph C:/Users/you/ClaudeBrain`) — so the transit cache filename resolves; otherwise pass `--transit` explicitly.
 
 Run it before any release that touches `skills/_shared/lib/lint.awk`. Open the graph in Logseq first so the cache is current.
 
