@@ -1,0 +1,8 @@
+journals/2026_09_10.md:2	code-in-braces	error	{{IMProxy}}
+journals/2026_09_10.md:3	unnamespaced-link	error	[[CRMGM-1234]]
+journals/2026_09_10.md:3	file-link	error	[[file:///C:/x.md]]
+journals/2026_09_10.md:4	relative-link	error	docs/specs/x.md
+journals/2026_09_10.md:5	jira-markup	error	h3. Shrnutí
+journals/2026_09_10.md:6	jira-markup	error	[~jan.m] please check {code}x{code}
+journals/2026_09_10.md:10	new-property-key	warn	new-key:: used nowhere else in the graph
+summary: 6 error, 1 warn · code-in-braces=1 · file-link=1 · jira-markup=2 · new-property-key=1 · relative-link=1 · unnamespaced-link=1

@@ -38,6 +38,7 @@ body:
         - brain-load (context retrieval)
         - brain-save (persistence)
         - brain-status (dashboard)
+        - brain-doctor (graph hygiene)
         - Graph schema / page format
         - Cross-platform support (Copilot / Gemini / other)
         - Documentation

@@ -19,6 +19,7 @@ body:
         - brain-load
         - brain-save
         - brain-status
+        - brain-doctor
         - Plugin packaging or installation
         - Documentation
         - Other / unsure

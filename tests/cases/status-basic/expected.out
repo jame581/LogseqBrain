@@ -1,0 +1,7 @@
+page	type	status	last-updated	digest-updated	drift	staleness	focus	next	open
+Projects/A	project	active	2026-09-10	2026-08-01	40	fresh (1 day)	ship it	test	-
+Projects/A/Tasks	task-index	active	-	-	-	aging (no valid last-updated)	-	-	-
+Tasks/T1	-	done	2026-05-01	-	-	exempt	-	-	-
+Tasks/T2	-	blocked	2026-08-01	-	-	stale (41 days)	-	-	waiting on infra
+Tasks/T3	-	-	-	-	-	no properties — run brain-doctor	-	-	-
+# projects: 1 (1 active) · tasks: 3 (0 active, 1 blocked, 1 done, 1 legacy) · no digest: 0 projects, 3 tasks · stale digest: 1

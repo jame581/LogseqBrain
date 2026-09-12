@@ -1,0 +1,5 @@
+pages/Projects___A.md:3 [Decisions] - 2026-04-01: keep Hangfire 1.7
+pages/Projects___A.md:5 [Session Log] - 2026-05-01: hangfire queue fixed
+pages/Tasks___Done.md:3 [Notes] (done task) - Hangfire dashboard URL
+journals/2026_09_01.md:2 [Sessions] - [[Projects/A]]: hangfire again
+coverage: showed 4 of 4 hits in 3 files (scope: pages/, journals/)
