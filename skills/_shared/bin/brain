@@ -209,8 +209,15 @@ cmd_read_tail() {
     esac
   done
   _f="$GRAPH/$PAGE_REL"
-  run_awk read -v rel="$PAGE_REL" -v nonl="$(nonl "$_f")" -v mode="$_mode" \
-    -v sec="$_sec" -v max="$_max" -v entries="$_n" "$_f"
+  # Same guard as digest_report, without a state dir: read/tail must work on an unwritable TMPDIR.
+  # $( ) strips the trailing newline that printf puts back, so the bytes are unchanged.
+  _out=$(run_awk read -v rel="$PAGE_REL" -v nonl="$(nonl "$_f")" -v mode="$_mode" \
+    -v sec="$_sec" -v max="$_max" -v entries="$_n" "$_f"); _rc=$?
+  [ "$_rc" = 2 ] && exit 2                              # read.awk already named the reason
+  [ "$_rc" -le 1 ] || die "$_mode failed on $PAGE_REL (awk exit $_rc)"
+  [ -n "$_out" ] || die "$_mode failed on $PAGE_REL — the read engine produced no output"
+  printf '%s\n' "$_out"
+  return $_rc
 }
 
 ARCH=
@@ -226,12 +233,23 @@ map_awk() {
   run_awk map -v rel="$PAGE_REL" -v nonl="$(nonl "$2")" -v today="$TODAY" -v archive="$ARCH" -v mode="$1" "$2"
 }
 
+# digest_report FILE — map.awk's report, guarded. Exit 1 here means findings (§1.4); any other
+# code, or no output at all, means the engine never ran and must not be reported as findings.
+digest_report() {
+  _ro="$RUN_DIR/report.out"
+  map_awk report "$1" > "$_ro"; _rc=$?
+  [ "$_rc" -le 1 ] || die "digest failed on $PAGE_REL (awk exit $_rc)"
+  [ -s "$_ro" ] || die "digest failed on $PAGE_REL — the report engine produced no output"
+  cat "$_ro"
+  return $_rc
+}
+
 cmd_digest() {
   [ $# -ge 1 ] || die "usage: brain digest <page> [--apply]"
   resolve_page "$1"; shift
   archive_of
   if [ "${1:-}" = --apply ]; then cmd_digest_apply; return; fi
-  map_awk report "$GRAPH/$PAGE_REL"
+  digest_report "$GRAPH/$PAGE_REL"
 }
 
 # commit_write REL TMP MAX_OLD MAX_NEW SUM_BEFORE [WANT] — verify TMP against the target, then write in place.
@@ -262,11 +280,13 @@ cmd_digest_apply() {
   _sum=$(cksum < "$_f")
   _tmp="$RUN_DIR/apply"
   map_awk apply "$_f" > "$_tmp"; _rc=$?
-  if [ "$_rc" != 0 ]; then rm -f "$_tmp"; exit "$_rc"; fi
+  if [ "$_rc" = 2 ]; then rm -f "$_tmp"; exit 2; fi      # map.awk already named the reason
+  if [ "$_rc" != 0 ]; then rm -f "$_tmp"; die "digest failed on $PAGE_REL (awk exit $_rc)"; fi
+  [ -s "$_tmp" ] || { rm -f "$_tmp"; die "digest failed on $PAGE_REL — the apply engine produced no output"; }
   commit_write "$PAGE_REL" "$_tmp" 1 1 "$_sum" '^[ \t]*- Map: '
   if [ "$COMMITTED" = 1 ]; then printf 'applied: Map line written to %s\n' "$PAGE_REL"
   else printf 'unchanged: Map line already current in %s\n' "$PAGE_REL"; fi
-  map_awk report "$_f"; _r1=$?
+  digest_report "$_f"; _r1=$?
   echo "--"
   SKIP_DIGEST_LINT=1 cmd_check "$PAGE_REL"; _r2=$?
   [ "$_r1" = 0 ] && [ "$_r2" = 0 ]
@@ -307,17 +327,42 @@ cmd_check() {
         *) [ $(( $(date +%s) - _ts )) -le 43200 ] && _fresh=1 ;;
       esac
     fi
+    _lo="$RUN_DIR/check-lint.out"; _cnt="$RUN_DIR/check.cnt"; : > "$_cnt"
     if [ "$_fresh" = 1 ]; then
       _add="$RUN_DIR/added.lst"
-      $AWK -v BINMODE=3 -f "$LIB/added.awk" "$_b" "$GRAPH/$_rel" > "$_add"
-      (cd "$GRAPH" && run_awk lint -v listfile="$_list" -v pagesfile="$PAGES_LST" -v keysfile="$KEYS_LST" -v addedfile="$_add") || _crc=1
+      $AWK -v BINMODE=3 -f "$LIB/added.awk" "$_b" "$GRAPH/$_rel" > "$_add" \
+        || die "check failed on $_rel — could not diff it against its baseline"
+      (cd "$GRAPH" && run_awk lint -v listfile="$_list" -v pagesfile="$PAGES_LST" -v keysfile="$KEYS_LST" \
+        -v addedfile="$_add" -v countfile="$_cnt") > "$_lo"
     else
-      (cd "$GRAPH" && run_awk lint -v listfile="$_list" -v pagesfile="$PAGES_LST" -v keysfile="$KEYS_LST" -v nobase=1)
+      (cd "$GRAPH" && run_awk lint -v listfile="$_list" -v pagesfile="$PAGES_LST" -v keysfile="$KEYS_LST" \
+        -v nobase=1 -v countfile="$_cnt") > "$_lo"
     fi
+    _lrc=$?
+    [ "$_lrc" = 2 ] && exit 2                           # lint.awk already named the unreadable file
+    [ "$_lrc" -le 1 ] || die "check failed on $_rel (lint engine exit $_lrc)"
+    # The verification step of a save: an engine that did not lint the file must not read as clean.
+    _nf=$(cut -f1 "$_cnt")
+    [ "${_nf:-}" = 1 ] || die "check failed on $_rel — the engine linted ${_nf:-no} file(s), expected 1"
+    _ne=$(cut -f2 "$_cnt"); _nw=$(cut -f3 "$_cnt"); _pre=$(cut -f4 "$_cnt")
+    [ "$_lrc" = 1 ] && _crc=1
+    cat "$_lo"
+    _ds=
     if [ -z "${SKIP_DIGEST_LINT:-}" ]; then
       _dl="$RUN_DIR/check-digest.out"
       digest_lint "$_rel" > "$_dl"; cat "$_dl"
-      if [ "$_fresh" = 1 ] && grep -q "$(printf '\terror\t')" "$_dl"; then _crc=1; fi
+      # Named in the summary, so the summary and the exit code agree: a page whose only new problem
+      # is a digest finding used to print "0 new (0 error, 0 warn)" and exit 1.
+      _de=$(cut -f3 "$_dl" | grep -c '^error$'); _dw=$(cut -f3 "$_dl" | grep -c '^warn$')
+      [ $((_de + _dw)) -gt 0 ] && _ds=" · digest: $_de error, $_dw warn"
+      if [ "$_fresh" = 1 ] && [ "$_de" -gt 0 ]; then _crc=1; fi
+    fi
+    if [ "$_fresh" = 1 ]; then
+      printf 'check %s: %d new (%d error, %d warn), %d pre-existing%s\n' \
+        "$_rel" "$((_ne + _nw))" "$_ne" "$_nw" "$_pre" "$_ds"
+    else
+      printf 'check %s: no baseline — %d finding(s) shown, may be pre-existing%s\n' \
+        "$_rel" "$((_ne + _nw))" "$_ds"
     fi
   done
   return $_crc
@@ -337,7 +382,16 @@ cmd_lint() {
       printf '%s\n' "$_r" >> "$_list"
     done
   fi
-  (cd "$GRAPH" && run_awk lint -v listfile="$_list" -v pagesfile="$PAGES_LST" -v keysfile="$KEYS_LST") > "$_out"
+  _cnt="$RUN_DIR/lint.cnt"; : > "$_cnt"
+  (cd "$GRAPH" && run_awk lint -v listfile="$_list" -v pagesfile="$PAGES_LST" -v keysfile="$KEYS_LST" \
+    -v countfile="$_cnt") > "$_out"
+  _lrc=$?
+  [ "$_lrc" = 2 ] && exit 2                             # lint.awk already named the unreadable file
+  [ "$_lrc" = 0 ] || die "lint failed (lint engine exit $_lrc)"
+  # An engine that linted fewer files than were listed must not report a clean graph: an empty or
+  # truncated count file is a failure, not "0 error, 0 warn".
+  _want=$(wc -l < "$_list" | tr -d ' '); _nf=$(cut -f1 "$_cnt")
+  [ "${_nf:-}" = "$_want" ] || die "lint failed — the engine linted ${_nf:-no} of $_want file(s)"
   while IFS= read -r _r || [ -n "$_r" ]; do digest_lint "$_r" >> "$_out"; done < "$_list"
   cat "$_out"
   _e=$(cut -f3 "$_out" | grep -c '^error$'); _w=$(cut -f3 "$_out" | grep -c '^warn$')
@@ -368,6 +422,9 @@ cmd_search() {
     while IFS= read -r _f || [ -n "$_f" ]; do printf '%s\t%s\n' "$_f" "$(nonl "$GRAPH/$_f")"; done < "$_list" > "$_list.n" && mv "$_list.n" "$_list"
   fi
   (cd "$GRAPH" && BRAIN_TERM=$_term run_awk search -v listfile="$_list" -v sec="$_sec" -v ctx="$_ctx" -v scope="$_scope")
+  _rc=$?
+  [ "$_rc" = 2 ] && exit 2                              # search.awk already named the reason
+  [ "$_rc" = 0 ] || die "search failed (awk exit $_rc)"
 }
 
 cmd_journal() {
@@ -378,6 +435,8 @@ cmd_journal() {
   _rel="journals/$(printf '%s' "$_d" | tr '-' '_').md"
   if [ ! -f "$GRAPH/$_rel" ]; then printf 'coverage: no journal for %s (%s)\n' "$_d" "$_rel"; return 0; fi
   run_awk journal -v rel="$_rel" -v nonl="$(nonl "$GRAPH/$_rel")" -v name="$PAGE_NAME" -v target=2048 "$GRAPH/$_rel"
+  _rc=$?
+  [ "$_rc" = 0 ] || die "journal failed on $_rel (awk exit $_rc)"
 }
 
 cmd_activity() {
@@ -402,6 +461,8 @@ cmd_status() {
   _list="$RUN_DIR/status.lst"
   (cd "$GRAPH" && ls pages/Projects___*.md pages/Tasks___*.md 2>/dev/null) | grep -v '___SessionArchive\.md$' > "$_list"
   (cd "$GRAPH" && run_awk status -v listfile="$_list" -v today="$TODAY")
+  _rc=$?
+  [ "$_rc" = 0 ] || die "status failed (awk exit $_rc)"
 }
 
 # --- commands end ---

@@ -4,6 +4,8 @@
 #   -v keysfile=FILE   "count key" lines: property-key usage over the whole graph
 #   -v addedfile=FILE  check mode: only these line numbers are reported; other findings are counted
 #   -v nobase=1        check mode without a baseline: report everything, suffixed, never exit 1
+#   -v countfile=FILE  write "files<TAB>errors<TAB>warns<TAB>pre-existing" there; the caller asserts
+#                      the file count against the number of files it listed and composes the summary
 
 function blank(n,   s) { s = ""; while (n-- > 0) s = s " "; return s }
 
@@ -134,11 +136,17 @@ BEGIN {
   nf = 0
   while ((getline f < listfile) > 0) {
     reset()
-    while ((getline ln < f) > 0) L[++N] = ln
+    # getline's -1 (cannot open) is not its 0 (empty file). A listed file that was never read must
+    # not pass silently as "no findings" — report it and leave it out of the count.
+    r = (getline ln < f)
+    if (r < 0) { printf("brain: cannot read %s\n", f) > "/dev/stderr"; close(f); UNREAD = 1; continue }
+    while (r > 0) { L[++N] = ln; r = (getline ln < f) }
     close(f)
-    lint_file(f); nf++; last = f
+    lint_file(f); nf++
   }
-  if (CHECK) printf "check %s: %d new (%d error, %d warn), %d pre-existing\n", last, NE + NW, NE, NW, PRE
-  else if (nobase) printf "check %s: no baseline — %d finding(s) shown, may be pre-existing\n", last, NE + NW
-  exit ((CHECK && NE > 0) ? 1 : 0)
+  # Counts go to a file rather than stdout: the caller asserts the file count against the number of
+  # files it listed (an engine that never ran must not read as a clean graph) and composes the
+  # summary itself, so the summary can account for the digest findings the caller adds.
+  if (countfile != "") { printf("%d\t%d\t%d\t%d\n", nf, NE + 0, NW + 0, PRE + 0) > countfile; close(countfile) }
+  exit (UNREAD ? 2 : ((CHECK && NE > 0) ? 1 : 0))
 }
