@@ -80,18 +80,42 @@ resolve_graph() {
   die "graph not resolved — pass --graph DIR, set LOGSEQ_BRAIN_PATH, or set graphPath in $(config_file)"
 }
 
-state_dir() {
-  _d="${TMPDIR:-/tmp}/logseq-brain/$(printf '%s' "$GRAPH" | cksum | cut -d' ' -f1)"
-  mkdir -p "$_d" || die "cannot create state dir $_d"
-  printf '%s\n' "$_d"
-}
-
 valid_date() {
   case $1 in [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) return 0 ;; esac
   printf 'brain: not a yyyy-MM-dd date: %s\n' "$1" >&2; return 2
 }
-today()  { _t=${BRAIN_TODAY:-$(date +%Y-%m-%d)}; valid_date "$_t" || return 2; printf '%s\n' "$_t"; }
 now_hm() { printf '%s\n' "${BRAIN_NOW:-$(date +%H:%M)}"; }
+
+# State directory, run directory and today's date: resolved once, here in the main shell.
+# Resolved inside $( ) instead, a die would exit only the subshell and could not stop the run —
+# the caller would get a full section table *and* a failure, or a temp path at the filesystem root.
+STATE_DIR=; RUN_DIR=; TODAY=; INFLIGHT=; ROLLBACK=
+
+cleanup() {
+  if [ -n "$INFLIGHT" ] && [ -n "$ROLLBACK" ] && [ -f "$ROLLBACK" ]; then
+    _i=$INFLIGHT; INFLIGHT=
+    if cat "$ROLLBACK" > "$GRAPH/$_i" 2>/dev/null
+    then printf 'brain: interrupted mid-write — %s restored\n' "$_i" >&2
+    else printf 'brain: interrupted mid-write — %s NOT restored; recover it from %s\n' "$_i" "$ROLLBACK" >&2; fi
+  fi
+  INFLIGHT=
+  [ -n "$RUN_DIR" ] && rm -rf "$RUN_DIR"
+  RUN_DIR=
+  return 0
+}
+trap cleanup EXIT
+trap 'cleanup; exit 130' INT
+trap 'cleanup; exit 143' TERM
+
+# init_run — before any command that needs graph state or today's date. Per-run file names:
+# two concurrent runs once shared check.lst/lint.out/… and reported each other's findings.
+init_run() {
+  TODAY=${BRAIN_TODAY:-$(date +%Y-%m-%d)}
+  valid_date "$TODAY" || exit 2
+  STATE_DIR="${TMPDIR:-/tmp}/logseq-brain/$(printf '%s' "$GRAPH" | cksum | cut -d' ' -f1)"
+  RUN_DIR="$STATE_DIR/run.$$"
+  mkdir -p "$STATE_DIR/base" "$RUN_DIR" || { RUN_DIR=; die "cannot create state dir $RUN_DIR"; }
+}
 
 nonl() {
   if [ -s "$1" ] && [ "$(tail -c 1 "$1" | wc -l | tr -d ' ')" = 0 ]; then echo 1; else echo 0; fi
@@ -151,7 +175,7 @@ cmd_info() {
 # save_baseline REL — snapshot a graph file (empty if it does not exist yet) for `brain check`.
 save_baseline() {
   guard_rel "$1"
-  _sd="$(state_dir)/base"; mkdir -p "$_sd" || die "cannot create $_sd"
+  _sd="$STATE_DIR/base"
   _key=$(printf '%s' "$1" | sed 's#/#%#g')
   if [ -f "$GRAPH/$1" ]; then cp "$GRAPH/$1" "$_sd/$_key"; else : > "$_sd/$_key"; fi
   date +%s > "$_sd/$_key.ts"
@@ -199,7 +223,7 @@ archive_of() {  # sets ARCH for a project page that has a SessionArchive page
 
 # map_awk MODE FILE — map.awk over FILE (PAGE_REL/ARCH already set).
 map_awk() {
-  run_awk map -v rel="$PAGE_REL" -v nonl="$(nonl "$2")" -v today="$(today)" -v archive="$ARCH" -v mode="$1" "$2"
+  run_awk map -v rel="$PAGE_REL" -v nonl="$(nonl "$2")" -v today="$TODAY" -v archive="$ARCH" -v mode="$1" "$2"
 }
 
 cmd_digest() {
@@ -236,7 +260,7 @@ commit_write() {
 cmd_digest_apply() {
   _f="$GRAPH/$PAGE_REL"
   _sum=$(cksum < "$_f")
-  _tmp="$(state_dir)/apply.$$"
+  _tmp="$RUN_DIR/apply"
   map_awk apply "$_f" > "$_tmp"; _rc=$?
   if [ "$_rc" != 0 ]; then rm -f "$_tmp"; exit "$_rc"; fi
   commit_write "$PAGE_REL" "$_tmp" 1 1 "$_sum" '^[ \t]*- Map: '
@@ -249,8 +273,7 @@ cmd_digest_apply() {
 }
 
 graph_lists() {
-  _sd=$(state_dir)
-  PAGES_LST="$_sd/pages.lst"; KEYS_LST="$_sd/keys.lst"
+  PAGES_LST="$RUN_DIR/pages.lst"; KEYS_LST="$RUN_DIR/keys.lst"
   ls "$GRAPH/pages" 2>/dev/null | sed -n 's#\.md$##p' | sed 's#___#/#g' | tr 'A-Z' 'a-z' > "$PAGES_LST"
   (cd "$GRAPH" && grep -h -E '^[[:space:]]*(- )?[A-Za-z0-9_][A-Za-z0-9_.-]*:: ' pages/*.md journals/*.md 2>/dev/null) \
     | sed -E 's/^[[:space:]]*(- )?([A-Za-z0-9_][A-Za-z0-9_.-]*)::.*/\2/' | tr 'A-Z' 'a-z' | sort | uniq -c > "$KEYS_LST"
@@ -274,8 +297,8 @@ cmd_check() {
     _rel=${_a#"$GRAPH"/}
     case $_rel in pages/*|journals/*) guard_rel "$_rel" ;; *) resolve_page "$_a"; _rel=$PAGE_REL ;; esac
     [ -f "$GRAPH/$_rel" ] || die "no such file: $_rel"
-    _b="$(state_dir)/base/$(printf '%s' "$_rel" | sed 's#/#%#g')"
-    _list="$(state_dir)/check.lst"; printf '%s\n' "$_rel" > "$_list"
+    _b="$STATE_DIR/base/$(printf '%s' "$_rel" | sed 's#/#%#g')"
+    _list="$RUN_DIR/check.lst"; printf '%s\n' "$_rel" > "$_list"
     _fresh=0
     if [ -f "$_b" ] && [ -f "$_b.ts" ]; then
       _ts=$(cat "$_b.ts")
@@ -285,14 +308,14 @@ cmd_check() {
       esac
     fi
     if [ "$_fresh" = 1 ]; then
-      _add="$(state_dir)/added.lst"
+      _add="$RUN_DIR/added.lst"
       $AWK -v BINMODE=3 -f "$LIB/added.awk" "$_b" "$GRAPH/$_rel" > "$_add"
       (cd "$GRAPH" && run_awk lint -v listfile="$_list" -v pagesfile="$PAGES_LST" -v keysfile="$KEYS_LST" -v addedfile="$_add") || _crc=1
     else
       (cd "$GRAPH" && run_awk lint -v listfile="$_list" -v pagesfile="$PAGES_LST" -v keysfile="$KEYS_LST" -v nobase=1)
     fi
     if [ -z "${SKIP_DIGEST_LINT:-}" ]; then
-      _dl="$(state_dir)/check-digest.out"
+      _dl="$RUN_DIR/check-digest.out"
       digest_lint "$_rel" > "$_dl"; cat "$_dl"
       if [ "$_fresh" = 1 ] && grep -q "$(printf '\terror\t')" "$_dl"; then _crc=1; fi
     fi
@@ -302,7 +325,7 @@ cmd_check() {
 
 cmd_lint() {
   graph_lists
-  _list="$(state_dir)/lint.lst"; _out="$(state_dir)/lint.out"
+  _list="$RUN_DIR/lint.lst"; _out="$RUN_DIR/lint.out"
   if [ $# -eq 0 ] || [ "$1" = --all ]; then
     # Two ls calls, not one: a single `ls pages/*.md journals/*.md` sorts journals/ before pages/.
     (cd "$GRAPH" && { ls pages/*.md 2>/dev/null; ls journals/*.md 2>/dev/null; }) > "$_list"
@@ -335,7 +358,7 @@ cmd_search() {
     esac
   done
   [ -n "$_sec" ] && [ -z "$_pg" ] && die "--section needs --page"
-  _list="$(state_dir)/search.lst"
+  _list="$RUN_DIR/search.lst"
   if [ -n "$_pg" ]; then
     resolve_page "$_pg"; printf '%s\n' "$PAGE_REL" > "$_list"; _scope="$PAGE_REL${_sec:+ ## $_sec}"
   else
@@ -350,7 +373,7 @@ cmd_search() {
 cmd_journal() {
   [ $# -ge 1 ] || die "usage: brain journal <page> [--date yyyy-MM-dd]"
   resolve_page "$1"; shift
-  _d=$(today) || exit 2
+  _d=$TODAY
   if [ "${1:-}" = --date ]; then [ $# -ge 2 ] || die "--date needs yyyy-MM-dd"; _d=$2; valid_date "$_d" || exit 2; fi
   _rel="journals/$(printf '%s' "$_d" | tr '-' '_').md"
   if [ ! -f "$GRAPH/$_rel" ]; then printf 'coverage: no journal for %s (%s)\n' "$_d" "$_rel"; return 0; fi
@@ -360,9 +383,9 @@ cmd_journal() {
 cmd_activity() {
   [ $# -ge 1 ] || die "usage: brain activity <text>"
   if [ "$(json_get journeyLog "$(config_file)")" = false ]; then echo "journey log disabled (journeyLog: false)"; return 0; fi
-  _d=$(today) || exit 2; _rel="journals/$(printf '%s' "$_d" | tr '-' '_').md"; _t="$GRAPH/$_rel"
+  _d=$TODAY; _rel="journals/$(printf '%s' "$_d" | tr '-' '_').md"; _t="$GRAPH/$_rel"
   _line="$(now_hm) $*"
-  _tmp="$(state_dir)/activity.$$"
+  _tmp="$RUN_DIR/activity"
   if [ -f "$_t" ]; then
     _sum=$(cksum < "$_t")
     BRAIN_BULLET=$_line run_awk activity -v nonl="$(nonl "$_t")" -v new=0 "$_t" > "$_tmp" || { rm -f "$_tmp"; die "activity failed on $_rel"; }
@@ -376,9 +399,9 @@ cmd_activity() {
 }
 
 cmd_status() {
-  _list="$(state_dir)/status.lst"
+  _list="$RUN_DIR/status.lst"
   (cd "$GRAPH" && ls pages/Projects___*.md pages/Tasks___*.md 2>/dev/null) | grep -v '___SessionArchive\.md$' > "$_list"
-  (cd "$GRAPH" && run_awk status -v listfile="$_list" -v today="$(today)")
+  (cd "$GRAPH" && run_awk status -v listfile="$_list" -v today="$TODAY")
 }
 
 # --- commands end ---
@@ -396,16 +419,16 @@ case $cmd in
   help|-h|--help)    usage ;;
   version|--version) echo "logseq-brain $BRAIN_VERSION" ;;
   info)              resolve_graph; cmd_info ;;
-  sections)          resolve_graph; cmd_sections "$@" ;;
+  sections)          resolve_graph; init_run; cmd_sections "$@" ;;
   read)              resolve_graph; cmd_read_tail read "$@" ;;
   tail)              resolve_graph; cmd_read_tail tail "$@" ;;
-  digest)            resolve_graph; cmd_digest "$@" ;;
-  lint)              resolve_graph; cmd_lint "$@" ;;
-  check)             resolve_graph; cmd_check "$@" ;;
-  search)            resolve_graph; cmd_search "$@" ;;
-  journal)           resolve_graph; cmd_journal "$@" ;;
-  activity)          resolve_graph; cmd_activity "$@" ;;
-  status)            resolve_graph; cmd_status ;;
+  digest)            resolve_graph; init_run; cmd_digest "$@" ;;
+  lint)              resolve_graph; init_run; cmd_lint "$@" ;;
+  check)             resolve_graph; init_run; cmd_check "$@" ;;
+  search)            resolve_graph; init_run; cmd_search "$@" ;;
+  journal)           resolve_graph; init_run; cmd_journal "$@" ;;
+  activity)          resolve_graph; init_run; cmd_activity "$@" ;;
+  status)            resolve_graph; init_run; cmd_status ;;
   # --- dispatch end ---
   *) die "unknown command: $cmd (try: brain help)" ;;
 esac
