@@ -29,7 +29,7 @@ Run `brain info` once, and use its `graph:` path for any Read this skill makes i
 4. **Pages without a digest** (`digest-updated` is `-`): show what the row has, one page at a time. For "Currently:", use the first bullet of `brain read <page> "Current Plan" --max 8192`; over the cap, say "Current Plan is N KB — not read". For the latest activity, use `brain tail <page> "Session Log" --entries 1 --max 2048`. End with "<N> projects have no digest — run brain-doctor to backfill" (the counts line gives N).
 5. **Recent cross-project decisions:** `brain tail Decisions "Decision Log" --entries 10 --max 4096`; keep those from the last 30 days.
 6. **Meta date:** `Read pages/Meta.md` with `limit 5` for `last-updated::` only.
-7. **Tasks, from the same rows:** list active and blocked tasks by ID (with `focus` when present), collapse done tasks into "N done", and list tasks with no `status` as "legacy — run brain-doctor".
+7. **Tasks, from the same rows:** list active and blocked tasks by ID (with `focus` when present), collapse done tasks into "N done", and list tasks with no `status` as "legacy — run brain-doctor to backfill".
 8. **Present** per project: name, status, staleness, drift note, focus, open. Then tasks, recent cross-project decisions and totals.
 9. **`brain activity "viewed dashboard"`**.
 

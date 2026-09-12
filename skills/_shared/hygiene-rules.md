@@ -3,7 +3,7 @@
 The single source of truth for the format violations that corrupt a Logseq brain graph. Two consumers read this file:
 
 - **`skills/brain-doctor/SKILL.md`** — iterates every rule whose `enforced-at` includes `scan` (reactive whole-graph lint + repair).
-- **`skills/brain-save/SKILL.md`** — follows the compose-time rules while composing, including `jira-markup`'s "fence it up front" instruction. After writing, it runs `brain check` on every file it wrote. That reports every mechanical rule, plus `stale-map`, `map-label`, `oversized-digest` and a missing Map, on the lines the save added (see "Post-write verify" below). The whole-graph judgment rules (`description-link`, `duplicate-entry`, `structural-integrity`) stay brain-doctor's.
+- **`skills/brain-save/SKILL.md`** — follows the compose-time rules while composing, including `jira-markup`'s "fence it up front" instruction. After writing, it runs `brain check` on every file it wrote. That reports every mechanical rule on the lines the save added, plus `stale-map`, `map-label`, `oversized-digest` and a missing Map measured over the whole page (see "Post-write verify" below). The whole-graph judgment rules (`description-link`, `duplicate-entry`, `structural-integrity`) stay brain-doctor's.
 
 The narrative "why" and the compose-time guidance live in `skills/_shared/logseq-format.md`; this file is the operational catalog.
 
@@ -28,7 +28,7 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **severity:** breaks-render
 - **enforced-at:** compose, scan
 - **auto-fixable:** yes
-- **detection:** `brain lint` → `code-in-braces`: a `{{` outside inline code and fences that does not open a Logseq macro (`query`, `embed`, `video`, `renderer`, `cards`, `function`, `namespace`, `tutorial`). If `logseq/config.edn` defines custom `:macros`, hits naming them are intentional.
+- **detection:** `brain lint` → `code-in-braces`: a `{{` outside inline code and fences that does not open a Logseq macro (`query`, `embed`, `video`, `renderer`, `cards`, `function`, `namespace`, `tutorial`, `cloze`, `youtube`, `youtube-timestamp`, `vimeo`, `bilibili`, `tweet`, `twitter`, `pdf`, `contents`, `zotero-imported-file`, `zotero-linked-file`). If `logseq/config.edn` defines custom `:macros`, hits naming them are intentional.
 - **remediation:** `{{X}}` → `` `X` ``. The bulk pass must skip fenced blocks — mask them before the regex replace and unmask after. Two edge cases the bulk pass must skip and you hand-fix:
   - Span contains a backtick (e.g. `` Expression`1 ``): use a double-backtick fence `` `` … `` ``.
   - Span contains a literal `{` or `}` (Mongo query `countDocuments({ … })`, a CSS rule, a `{list}` template): the simple regex won't match it; reconstruct the literal braces (a bad save sometimes *doubled* them, `{`→`{{`) and wrap the whole thing in backticks.
@@ -135,7 +135,7 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **severity:** phantom-page
 - **enforced-at:** compose, scan
 - **auto-fixable:** yes
-- **detection:** `brain lint` → `relative-link`: a markdown link whose target is not a URL, `mailto:`, an anchor or `assets/`. For example, `[design](docs/specs/x.md)` makes Logseq create a page named after the target (two live cases on 2026-09-11).
+- **detection:** `brain lint` → `relative-link`: a markdown link whose target is not a URL, `mailto:`, `file:`, an anchor, a block ref, a `[[page]]` ref or `assets/` (`lint.awk` carries the full exclusion list). For example, `[design](docs/specs/x.md)` makes Logseq create a page named after the target (two live cases on 2026-09-11).
 - **remediation:** keep the label and backtick the path: ``design (`docs/specs/x.md`)``. For a real local file, use a `file:///` markdown link instead.
 
 ## `new-property-key`
@@ -182,7 +182,7 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 
 ## Post-write verify (scoped)
 
-After all writes in an operation, run `brain check <every file written>`. It lints only the lines added since the baseline that `brain sections <page> --baseline <other files>` recorded before the first Edit. It prints `check <file>: N new (E error, W warn), P pre-existing` and exits 1 on any new error-tier finding. Fix those with Edit and re-run `check` on that file. Warn-tier findings go in the confirmation to the user. Pre-existing findings belong to brain-doctor: mention them, don't silently fix them.
+After all writes in an operation, run `brain check <every file written>`. It lints only the lines added since the baseline that `brain sections <page> --baseline <other files>` recorded before the first Edit. That scoping covers the mechanical rules only: the digest rules (`stale-map`, `map-label`, `oversized-digest`, a missing Map) are always measured over the whole page, so a digest finding may predate this save. It prints `check <file>: N new (E error, W warn), P pre-existing` and exits 1 on any new error-tier finding. Fix those with Edit and re-run `check` on that file. Warn-tier findings go in the confirmation to the user. Pre-existing findings belong to brain-doctor: mention them, don't silently fix them.
 
 ## After repair — verify
 

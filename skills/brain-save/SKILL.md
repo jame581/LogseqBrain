@@ -86,6 +86,7 @@ Six categories. `references/categories.md` gives each one's format:
 10. **`brain check <page> pages/Index.md journals/<yyyy_MM_dd>.md`**, plus Meta and Decisions if you wrote them.
     - **error**: a mechanical violation on a line this save wrote. Fix it with Edit, then re-run `check` on that file.
     - **warn** (`broken-link`, `new-property-key`): tell the user; don't block on it. For example: "linked `Tasks/CRMGM-2070`, which has no page yet".
+    - **digest findings** (`stale-map`, `map-label`, `oversized-digest`, a missing Map) are measured over the whole page, not only this save's lines. Step 8 should have prevented them; if one appears, re-run `brain digest <page> --apply`.
 
 11. **`brain activity "saved [[Projects/<Name>]]"`**, then **confirm** in plain language what was written, including the check result and any warn-tier items.
 
