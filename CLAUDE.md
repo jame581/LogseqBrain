@@ -4,42 +4,33 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-A Claude Code plugin (`logseq-brain`) that gives Claude persistent memory via a user-owned Logseq graph. There is **no build, no tests, no runtime code** — the plugin is entirely markdown skills (`skills/<name>/SKILL.md`) plus `.claude-plugin/plugin.json`. Claude itself is the runtime: skills instruct Claude to read/write markdown files in the user's `ClaudeBrain` graph using the standard Read/Write/Edit/Bash tools.
+A Claude Code plugin (`logseq-brain`) that gives Claude persistent memory via a user-owned Logseq graph. The plugin is markdown skills (`skills/<name>/SKILL.md`), `.claude-plugin/plugin.json`, and, since v0.11.0, **one POSIX `sh` + `awk` helper**: `skills/_shared/bin/brain` plus `skills/_shared/lib/*.awk`. Claude does the judgment (what to save, the prose). The helper does every mechanical step: section measurement, the digest Map, caps, scoped search, lint, the activity line. This deliberately reverses the earlier "no runtime code" rule, within a narrow boundary: POSIX sh/awk only, no new dependencies, and the script writes only the Map line and the activity line (`docs/superpowers/specs/2026-09-11-v0.11.0-design.md`).
 
 **Target: Logseq OG (the markdown version) only.** Logseq split in 2026 — OG moved to <https://github.com/logseq/og> and is in maintenance mode (security and Electron upgrades, no new features), while the DB/SQLite version continues at the original repo. There is no API or CLI for file graphs (`@logseq/cli` serves DB graphs only), so all leverage here is file layout, property discipline, and ripgrep. Do not propose DB-version features.
 
-The plugin is distributed via the [skillsmith](https://github.com/jame581/skillsmith) marketplace, the Gemini extension URL, and (for Cowork) a locally-built `logseq-brain.plugin` zip. The `.plugin` archive is a **build artifact** — gitignored (`*.plugin`), not checked in. Edit files under `skills/` and `.claude-plugin/`, never inside an archive.
+The plugin is distributed via the [skillsmith](https://github.com/jame581/skillsmith) marketplace, the Gemini extension URL, and (for Cowork) a locally-built `logseq-brain.plugin` zip. The `.plugin` archive is a **build artifact** — gitignored (`*.plugin`), not checked in. Edit files under `skills/` and `.claude-plugin/`, never inside an archive. Rebuild it from committed content after every release — `git archive --format=zip -o logseq-brain.plugin HEAD .claude-plugin skills README.md` — nothing else keeps it current, and a stale one silently ships old skills to Cowork.
 
 ## Architecture
 
-Five skills make up the save/load cycle against a Logseq graph:
-
-- **brain-init** — First-time graph setup (creates `pages/Index.md`, `Meta.md`, `Decisions.md`, `logseq/config.edn`, `journals/.gitkeep`) and adds new project pages. New project pages ship with a digest scaffold, so a fresh page never lands in a `missing-digest` report.
-- **brain-load** — Reads a project page back into the session. Since v0.10.0 the default is **digest mode**: one `Read(offset 0, limit 20)` of the page-top properties + `## Digest`, plus today's journal's mention(s) of the project (shrunk to fit), and then nothing else — everything further is fetched on demand through the escalation ladder, announced. A page with no digest falls back to the pre-v0.10.0 brief mode unchanged and is *offered* a digest, never given one uninvited. Also full mode, fuzzy project name matching, and cross-graph search ("what do we know about X").
-- **brain-save** — Surgically appends session logs, decisions, plan updates to the relevant `Projects___<Name>.md` page via Edit. Also updates journals, Meta, Index. Detects cross-project decisions and decision conflicts (marks old as `status:: superseded`); seeds/updates task `status::`, suggests rotation of Session Logs past 64 KB/40 entries, refreshes the project's `Index.md` one-liner on every save, prompts on decision-shaped statements, and runs a mechanical post-write verify grep over the files it wrote. Since v0.10.0, step 9 of 13 **unconditionally refreshes the page's digest** — properties plus the `## Digest` section, with the Map bullet recomputed from the file rather than remembered.
-- **brain-status** — Dashboard across all project pages, built from a **single ripgrep** over digest properties since v0.10.0; pages not yet backfilled fall back to section-targeted reads one page at a time. Flags stale projects; groups task pages by `status::`. Separate `brain-stats` analytics mode.
-- **brain-doctor** — Graph-hygiene lint/repair (v0.8.0, extended in v0.9.0). Scans pages + journals for format violations that spawn phantom pages or broken macros (`{{ }}` mis-used for inline code, bare `#number`/hex tags, un-namespaced `[[Task]]` links, `[[file://]]` links, junk/description links), reports them, and — after a backup — repairs them. Includes the `jira-markup` residue check and the guided task-status backfill. v0.10.0 takes the rule catalog to **14** — adding `missing-digest`, `stale-digest`, `oversized-digest`, and (wave A) `stale-map`, all report-tier except the safe-only subset of `oversized-digest` — plus a guided whole-graph digest backfill ("backfill digests") that states its read cost before spending it. Maintenance tool, run on demand; not part of the per-session save/load cycle.
+Five skills make up the save/load cycle against a Logseq graph: `brain-init` (setup / new project pages), `brain-load` (read a page back), `brain-save` (surgical appends), `brain-status` (dashboard + `brain-stats`), `brain-doctor` (hygiene lint/repair, on demand only). Read each `skills/<name>/SKILL.md` for current behavior — don't rely on a summary here.
 
 ### Shared references (since v0.6.0)
 
-Cross-skill logic lives under `skills/_shared/` — sibling to the skill folders, not inside any individual skill's `references/`. Each `SKILL.md` reads from `skills/_shared/<name>.md` on demand. This keeps `SKILL.md` orchestrators compact and avoids duplicating logic across skills.
-
-Current shared references:
-
-- `skills/_shared/path-resolution.md` — host-aware graph path resolution (Cowork vs. Claude Code/Copilot/Gemini)
-- `skills/_shared/journey-log.md` — one-line activity-trail write logic, called by every brain skill
-- `skills/_shared/staleness.md` — stale-project rules (used by `brain-load` and `brain-status`)
-- `skills/_shared/section-locator.md` — grep-anchored section-targeted reads (used by `brain-load`, `brain-save`, `brain-status` to avoid full-page reads)
-- `skills/_shared/logseq-format.md` — Logseq parse-time normalization behaviors + read-before-edit survival rules + compose-time content-generation invariants (used by brain-save, journey-log, brain-doctor; defers detection/remediation to hygiene-rules.md)
-- `skills/_shared/hygiene-rules.md` — canonical graph-hygiene rule catalog (detection + remediation for all 14 issue classes; used by `brain-doctor` to scan and by `brain-save` to self-check)
-- `skills/_shared/digest.md` — the digest contract: scope, the two surfaces, slot order, byte caps, the measured Map bullet, refresh vs. rebuild-from-source (used by `brain-load`, `brain-save`, `brain-doctor`, `brain-init`)
-- `skills/_shared/escalation.md` — the 0–5 lazy-retrieval ladder used once a digest is loaded (used by `brain-load`)
+Cross-skill logic lives under `skills/_shared/` — sibling to the skill folders, not inside any individual skill's `references/`. Each `SKILL.md` reads from `skills/_shared/<name>.md` on demand. This keeps `SKILL.md` orchestrators compact and avoids duplicating logic across skills. One of these is still large — `hygiene-rules.md` (18 KB) — so grep to the relevant rule rather than reading it whole.
 
 When adding a new shared reference, prefer this directory. Per-skill references stay in `skills/<skill>/references/`.
 
+### The helper (since v0.11.0)
+
+`skills/_shared/bin/brain` is a sh dispatcher. Each command is an awk program loaded after `lib/core.awk` (`awk -f core.awk -f <prog>.awk`). Skills invoke it as described in `skills/_shared/run-brain.md`: via `sh`, or via Git's `bash.exe` on PowerShell-only Windows hosts. It is required, and there is no prose fallback. Portability rules are non-negotiable: `LC_ALL=C` (lengths are bytes), POSIX awk only (no `gensub`, three-argument `match`, `strftime`/`mktime`, `{n,m}` intervals, or `length(array)`), and graph-relative paths in output (`brain info`'s `graph:` line is absolute by design). Its only writes are the Map line (`digest --apply`) and one activity bullet (`activity`). Both are verified to touch only those lines before an in-place commit.
+
+### Design docs
+
+Each minor version gets a design spec in `docs/superpowers/specs/` and an implementation plan in `docs/superpowers/plans/`, both dated `yyyy-MM-dd`. After launch, corrections are **annotated into** the spec (`Post-launch correction (wave A, <date>)`), never rewritten over — the spec stays an honest record of what shipped vs. what was fixed after. Plans are left frozen. (`.superpowers/` at the repo root is gitignored subagent scratch — not this.)
+
 ### Graph path resolution (every skill does this)
 
-See `skills/_shared/path-resolution.md` — branches by host (Cowork uses `request_cowork_directory`; Claude Code / Copilot CLI / Gemini CLI use `LOGSEQ_BRAIN_PATH` env var → durable user config file at `%APPDATA%\logseq-brain\config.json` / `~/.config/logseq-brain/config.json` → ask-and-persist). The config file lives outside the plugin cache so it survives `/reload-plugins`. Once resolved, all other brain operations in the session use that path. When editing skills, preserve this host-aware branching — don't collapse it into a single chain.
+See `skills/_shared/path-resolution.md`. When editing skills, preserve this host-aware branching — don't collapse it into a single chain.
 
 ### Logseq format invariants (non-negotiable when editing skills)
 
@@ -50,7 +41,7 @@ Skills generate content that must round-trip through Logseq's outliner without c
 - **Properties use `key:: value` on bullet lines** (e.g. `status:: accepted`).
 - **Page links use `[[Page Name]]` or `[[Namespace/Page Name]]`** — and links to task/project pages must be **namespaced** (`[[Tasks/CRMGM-1234]]`, not bare `[[CRMGM-1234]]`), or they create a phantom duplicate page.
 - **Inline code uses backticks, NEVER `{{ }}`.** `{{ }}` is Logseq *macro* syntax; with the default `:macros {}` it renders broken. Code, identifiers, file:line refs, CSS, and DB queries get backticks.
-- **Escape `#` before a number or hex color** (PR `#44`, `#0066CC`) — a bare `#44` becomes a tag → an empty phantom page. Real tags use `#[[Page Name]]`.
+- **Escape `#` before a number or hex color** (PR `#44`, `#0066CC`) — a bare `#44` becomes a tag → an empty phantom page. Real tags use `#[[Page Name]]` — and never put `#` directly before non-space text even after a letter: `C#-parity` makes a page `-parity`, `PKCS#12` a page `12` (measured against Logseq's parse cache, 2026-09-11).
 - **Local file paths are markdown links `[label](file:///…)` or backticks — never `[[file://]]`** (which makes a phantom page titled with the path).
 - **Foreign markup (Jira etc.) never goes raw into bullets — store drafts verbatim in fenced code blocks.**
 - **Dates are always `yyyy-MM-dd`.** Journal filenames use underscores: `journals/yyyy_MM_dd.md`.
@@ -70,5 +61,7 @@ The compose-time rules (backticks, `#`-escaping, namespaced links, file links) a
 ## Working in this repo
 
 - Edits almost always mean editing a `SKILL.md` frontmatter/body. The `description` field controls when Claude invokes the skill — change it carefully.
-- There is nothing to run or test locally. Validation = invoke the skill against a real ClaudeBrain graph (see `CONTRIBUTING.md` for the manual round-trip checklist).
+- Run `sh tests/run.sh` after any change to `skills/_shared/bin/` or `lib/`. CI runs it on mawk, BWK awk and gawk. Skill prose is still validated by the manual round-trip in `CONTRIBUTING.md`. Before changing a lint rule, run `python tools/oracle/oracle.py --graph <graph>`: detection is validated against Logseq's own parse cache. `tools/` is dev-only and never shipped.
 - Current version is in `.claude-plugin/plugin.json`. `ROADMAP.md` lists shipped/current/future phases — verify shipped status by reading the skills, not the roadmap.
+- **One branch per minor version.** Work happens on a `vX.Y.Z` branch merged to `main` by PR (#1–#4 all did); commits are conventional with a scope — `feat(brain-init):`, `fix(digest):`, `docs(claude-md):`.
+- **Releasing touches two repos.** Bumping `.claude-plugin/plugin.json`, tagging, and cutting the GitHub release is only half — new installs don't move until `.claude-plugin/marketplace.json` in the separate [`skillsmith`](https://github.com/jame581/skillsmith) repo is bumped too. Full steps: `CONTRIBUTING.md` § Releasing a new version.

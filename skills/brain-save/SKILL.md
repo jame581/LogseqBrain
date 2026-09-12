@@ -9,87 +9,95 @@ description: >
 
 # Brain Save
 
-Persist session context — decisions, progress, plans, implementation details — to the Claude Brain Logseq graph for cross-session and cross-device continuity.
+Persist session context — decisions, progress, plans, implementation details — to the Claude Brain Logseq graph for cross-session and cross-device continuity. Mechanical steps run through the helper; see `skills/_shared/run-brain.md`.
 
 ## Prerequisites
 
-Resolve the graph path per `skills/_shared/path-resolution.md`.
+Run `brain info` once, and use its `graph:` path for every Read, Edit and Write this skill makes. If it exits 2, follow `skills/_shared/path-resolution.md`, then pass `--graph` to every call.
 
 ## What to Save
 
-Six categories — see `references/categories.md` for each one's format and rules. The orchestrator decides which apply based on what the session covered:
+Six categories. `references/categories.md` gives each one's format:
 
 1. Session Log Entry (always)
-2. Decisions (when made — see `references/decisions.md` for conflict + cross-project rules)
-3. Plan Updates (when plans changed — replace, don't append)
+2. Decisions (when made; `references/decisions.md` covers conflicts and cross-project decisions)
+3. Plan Updates (replace, don't append)
 4. Implementation Details (when significant)
-5. Jira Task Context (when tasks were worked on — store pointers, not full plans)
-6. User Preferences & Meta (when newly discovered — update `pages/Meta.md`)
+5. Jira Task Context (pointers, not full plans)
+6. User Preferences & Meta (update `pages/Meta.md`)
 
 ## Save Process
 
-1. **Identify target project(s).** Look for project names mentioned, files/repos discussed, or explicit user statements ("we're working on X"). If multiple projects, save to each. If unclear, ask: "This touched [X] and [Y] — save to both?"
+1. **Identify target project(s)** from the project names, files and repos discussed, or the user's own words. If there are several, save to each. If it's unclear, ask: "This touched [X] and [Y] — save to both?"
 
-2. **Verify project page exists.** Glob for `pages/Projects___<ProjectName>.md`. If missing:
-   - Tell user: "No project page found for [name]. Want me to create one first?"
-   - If yes, hand off to `brain-init` "Adding a New Project" flow, then continue.
-   - If no, list available projects and let the user pick.
-   - Never write session data to a non-existent project page.
+2. **Verify the page exists.** If `brain sections` (step 3) exits 2 with `page not found`, tell the user and offer to create the page via `brain-init`'s "Adding a New Project". If they decline, list the available projects (`brain status`) and let them pick. Never write session data to a non-existent page.
 
-   **Task pages:** a save may also target a task page (`pages/Tasks___<ID>.md`) when the session was about that task. Task pages have no fixed template, but their page-top property block must contain `status::` with one of `active | blocked | done`. If the page exists without `status::`, seed `status:: active` as part of this save. If the session content signals completion ("merged", "deployed", "closed", "released", "hotovo"), **suggest** `status:: done` — never write a status change the user didn't confirm (same rule as auto-save). If no task page exists for a worked task, keep the Current Plan pointer entry only — don't create `Tasks___<ID>.md` uninvited; offer to create one and only do so if the user wants it.
+   **Task pages** (`pages/Tasks___<ID>.md`): the page-top block must hold `status::` with one of `active | blocked | done`. Seed `status:: active` if it's missing. When the session signals completion ("merged", "deployed", "closed", "released", "hotovo"), **suggest** `status:: done`; never write a status change the user didn't confirm. If a worked task has no page, keep only the Current Plan pointer and offer to create the page. Never create it uninvited.
 
-3. **Read the current project page selectively** using the section-targeted-read pattern in `skills/_shared/section-locator.md`. Read only the sections you'll touch (Session Log, Decisions, Current Plan, Implementation) — never the whole file. The read serves two purposes: detect duplicates before appending, and provide enough surrounding lines for the Edit `old_string` to be unique.
-
-4. **Prepare the updates** for each applicable category from `references/categories.md`. When composing the text, follow the **content-generation invariants** in `skills/_shared/logseq-format.md` — backticks for code (never `{{ }}`), escape `#` before numbers/hex, namespace every `[[Tasks/…]]` / `[[Projects/…]]` link, and use markdown links (not `[[file://]]`) for file paths. Violating these silently spawns phantom pages and broken macros. Also run the decision-detection scan on your composed session summary per the "Decision detection (forward-only)" section of `references/decisions.md`.
-
-5. **Self-check the composed text** against `skills/_shared/hygiene-rules.md` before writing — the rules with `enforced-at: compose` and `auto-fixable` of `yes`/`safe-only`: `code-in-braces`, `bare-hash-tag`, `unnamespaced-link`, `file-link`, `malformed-property`. Scan only the block(s) you just composed (pure in-memory; no extra file reads), and silently correct any violation to the invariant form — it's your own output, so no prompt. For `malformed-property` specifically, only auto-correct `key:` → `key::` when the composed block is a page-top property block (e.g. updating `last-updated::`); in a section append such as Session Log or Decisions a `key: value` line may be prose, so leave it for `brain-doctor` to report. Do **not** run the `report` rules (`broken-link`, `duplicate-entry`, `structural-integrity`, `description-link`); those need whole-graph context and belong to `brain-doctor`. Contract: never emit a mechanical violation.
-
-6. **Write the updates** using the Edit tool — surgical updates per section, never rewrite the whole page:
-
-   > Before any Edit, account for Logseq's parse-time normalization (dropped `- ` on headings, space→tab indents, stripped empty headings). Confirm the region's current normalized form before editing and anchor on heading text — see `skills/_shared/logseq-format.md`.
-
-   - Append to Session Log
-   - Append to Decisions (with conflict check per `references/decisions.md`)
-   - Replace Current Plan if changed
-   - Update Implementation if needed
-   - Update `last-updated::` to today's date
-   - Seed/update the task page's page-top `status::` when the save targets a task page (per step 2 — seed `active` if missing; write `done`/`blocked` only with the user's confirmation)
-   - After appending to Session Log, check the rotation trigger per `references/rotation.md` (64 KB / 40 entries) and suggest rotation if exceeded — suggestion only.
-
-7. **Update the journal — `## Sessions`.** Append a rich cross-reference to today's `journals/yyyy_MM_dd.md`:
-
-   ```markdown
-   - ## Sessions
-     - [[Projects/ProjectName]]: Brief summary of session
+3. **Baseline, then read only what you'll touch.** One call, naming every file this save may write:
    ```
+   brain sections <page> --baseline pages/Index.md journals/<yyyy_MM_dd>.md [pages/Meta.md] [pages/Decisions.md]
+   ```
+   It prints the section map and records the baselines that `brain check` diffs against. Then read only the sections you'll edit, with enough surrounding text for a unique Edit anchor and a duplicate check:
+   - `brain tail <page> "Session Log" --entries 1 --max 4096`
+   - `brain read <page> "Current Plan"`
+   - `brain read <page> Decisions`, only when a decision was made (the conflict check in `references/decisions.md`)
+   - `brain read <page> Implementation`, only when you'll update it
 
-8. **Update `pages/Meta.md`** if new user preferences emerged (see `references/categories.md` category 6).
+4. **Compose the updates** per `references/categories.md`, following the content invariants in `skills/_shared/logseq-format.md`:
+   - backticks for code, never `{{ }}`
+   - no `#` directly before a number or word, **including after a letter** (`C#-parity`, `PKCS#12`); backtick the token or rephrase
+   - namespaced `[[Tasks/…]]` / `[[Projects/…]]` links
+   - markdown links for file paths, never `[[file://…]]`, and never relative `[x](docs/x.md)` links
+   - Jira drafts fenced, verbatim
+   - `key:` → `key::` only in the page-top property block; never in a Session Log append, where `- status: we are blocked` may be prose, not a property
 
-9. **Refresh the digest.** Unconditional on every save — the same discipline as the Index one-liner below, and for the same reason: rot comes precisely from "only when it changed" judgment calls. Follow `skills/_shared/digest.md`:
-   1. **Recompute the Map from the page's real section map** — the derivation shell in `skills/_shared/digest.md`: enumerate the page's actual `## ` sections, measure each, keep the ones at or above the 1 KB threshold, largest first, annotating `Session Log`/`Decisions` with their dated-entry counts when they clear it. This is not a fixed field list — a page whose real second-largest section is `## Active Tasks` gets `Active Tasks` in the Map, not just the sections a template happened to name. Byte figures are authoritative; when a session-entry or decision count comes back 0 **or comes back lower than the section's own top-level child-bullet count**, omit the count rather than writing `0 entries`/`(0)` or a number already known to be a floor. Labels longer than 40 **bytes** (not characters — cut with `LC_ALL=C` and drop a trailing partial UTF-8 sequence, `skills/_shared/digest.md`'s Format section) are truncated (`…` marker, diff key preserved) and joined to their figure with the reserved ` | ` separator — never key two different labels to the same truncated string. Sections that never clear the 1 KB threshold are summarized in one reconciling `+N smaller sections, X KB` clause, not omitted outright, so the Map's figures account for the whole page. All of this is specified once in `skills/_shared/digest.md` — follow it there, not a paraphrase here.
-   2. **Rewrite the page-top properties** `focus::`, `next::`, and `digest-updated::` (today). Write `open::` only when something is genuinely open — otherwise remove the line entirely. Each value is **one line, ≤ 120 bytes** — the same `oversized-digest` rule caps properties as well as the section.
-   3. **Rewrite the `## Digest` bullets** from the same session knowledge that produced the Session Log entry and the Current Plan, in slot order: Identity, Now, Binding, Hazard, free, Map.
-   4. **Check the 800-byte cap before writing** (`oversized-digest`, compose tier — `skills/_shared/hygiene-rules.md`). The Map's own fitting rule (`skills/_shared/digest.md` "Fitting the 800-byte cap") reserves room for `+N more`, the reconciling residual, the `Archive` pointer, and the page total *before* accepting a candidate, so this recompression path is now the rare case — a fitting bug once let a Map reach 808 B by discovering those costs only after the fact. Still over cap → recompress: shrink the Map first (drop its smallest above-threshold candidates, append `+N more`), then the free slot, then shorten Binding and Hazard. Never drop the Map wholesale.
-   5. **Write the two surgical Edits** — one on the page-top property block, one on the `## Digest` section (creating it, if absent, immediately after the property block and before the page's first `## ` section — `## Overview` on project pages; task pages have no fixed template, so it's simply whichever heading comes first).
-   6. **Re-measure the page and correct `page` if it changed — then repeat until stable.** The Edits in step 5 change the file's own byte count, so the `page` figure computed in step 1 (before those Edits) can already be stale the instant it lands — on a large page this can cross a KB boundary (measured live: a pre-write `page 106 KB` against a 109,786 B post-write file, which is 107 KB). `wc -c` the file again; if the rounded figure differs from what step 1 computed, Edit just that bullet to correct it — but the corrective Edit itself changes the file's length again (`9 KB` → `10 KB` adds a digit), which can in principle push the total across another KB boundary. Re-measure after the correction and repeat the check; stop once the written figure and a fresh `wc -c` agree. In practice this converges in one extra round — each correction changes the file by at most a couple of bytes — but "at most a one-character digit swap" is not a guarantee against a second boundary crossing, so check rather than assume. See `skills/_shared/digest.md`'s "second pass" step. No other Map figure needs this: they measure sections these Edits don't touch.
-   7. **If the page has no digest yet**, build one now from what is already in context — this is the lazy backfill path. Say so in the step-13 confirmation and mention that a full rebuild-from-source is available for richer history.
-   8. **Task pages get a digest too**, thinner: Identity + Now + Map.
+   **Self-check the composed text against these before any Edit, and correct violations silently.** Step 10's `brain check` is the backstop, not the first line: Logseq parses a file as soon as it changes and never deletes a page it created, so a bad line fixed seconds later can still leave a phantom page.
 
-10. **Refresh `pages/Index.md`.** Every save rewrites the saved project's one-liner: keep the stable descriptor before the parenthetical untouched; replace the parenthetical with `(<latest version or milestone> — <current focus>)`, e.g. `(v0.8.0 shipped 2026-06-23 — v0.9.0 in design)`. One surgical single-line Edit. This is unconditional — Index rot comes precisely from "only when status changed" judgment calls. If the project's one-liner has no parenthetical yet, append one after the stable descriptor. If the project is missing from `pages/Index.md` entirely, add a one-liner under `## Projects` — descriptor taken from the project page's first Overview bullet, then the parenthetical.
+   Also run the decision-detection scan in `references/decisions.md` on your summary.
 
-11. **Post-write verify.** Run the "Post-write verify (scoped)" procedure in `skills/_shared/hygiene-rules.md` over exactly the files written in steps 6–10. Fix any hit per the catalog remediation and re-verify. This is mandatory — the compose self-check (step 5) is necessary but not sufficient.
+5. **Write with Edit, surgically.** Never rewrite a whole page. Account for Logseq's normalization first (`skills/_shared/logseq-format.md`):
+   - append to Session Log
+   - append to Decisions (with the conflict check)
+   - replace Current Plan if it changed
+   - update Implementation if needed
+   - set `last-updated::` to today
+   - seed or update a task page's `status::` (step 2)
 
-12. **Write a journey-log entry** per `skills/_shared/journey-log.md` with activity line: `saved [[Projects/<ProjectName>]]`.
+   **Rotation check:** if step 3's page total exceeds 64 KB or Session Log holds more than 40 entries, suggest rotation per `references/rotation.md`. Suggestion only.
 
-13. **Confirm to the user** in plain language what was saved. List each thing written.
+6. **Journal `## Sessions`:** append `- [[Projects/<Name>]]: <brief summary>` under `## Sessions` in today's `journals/yyyy_MM_dd.md`, at the end of the section. If the journal doesn't exist yet, create it with Write as `- ## Sessions` plus the bullet (and `mkdir -p journals` first if needed). If it exists without `## Sessions`, add the heading first.
+
+7. **`pages/Meta.md`**, if new preferences emerged (`references/categories.md` category 6).
+
+8. **Refresh the digest** (`skills/_shared/digest.md`). This runs unconditionally on every save:
+   1. **Edit the page-top properties:** `focus::` and `next::` (required), `open::` only when something is genuinely open (otherwise remove the line), and `digest-updated::` set to today. Each value is one line of at most 120 bytes.
+   2. **Edit the `## Digest` prose slots** from this session's knowledge, in slot order: Identity, Now, Binding, Hazard, then the free slot. Task pages usually need only Identity and Now. If the page has no `## Digest`, create it right after the property block, before the first `## ` heading. **Leave the Map line alone, or absent.**
+   3. **`brain digest <page> --apply`.** It writes the Map from measurement and reports the caps:
+      - `digest prose over cap by N B`: shorten the free slot first, then Binding and Hazard, and rerun.
+      - `over: <focus|next|open>:: … B > 120 B`: shorten that property and rerun.
+      - A page with no digest before this save has just been backfilled lazily. Say so in step 11, and mention that a Rebuild from source is available.
+
+9. **`pages/Index.md`:** every save rewrites this project's one-liner, as one single-line Edit.
+   - Keep the stable descriptor before the parenthetical untouched.
+   - Replace the parenthetical with `(<latest version or milestone> — <current focus>)`, e.g. `(v0.8.0 shipped 2026-06-23 — v0.9.0 in design)`. If the one-liner has no parenthetical yet, append one.
+   - This is unconditional: Index rot comes from "only when status changed" judgment calls.
+   - If the project is missing from `pages/Index.md`, add a one-liner under `## Projects`, with the descriptor taken from the page's first Overview bullet.
+
+10. **`brain check <page> pages/Index.md journals/<yyyy_MM_dd>.md`**, plus Meta and Decisions if you wrote them.
+    - **error**: a mechanical violation on a line this save wrote. Fix it with Edit, then re-run `check` on that file. **Exception:** a rotation (`references/rotation.md`) moves Session Log entries verbatim, so `check` on the archive page reports every moved line as newly added — a finding there is pre-existing content the rotation carried over, not something this save wrote. Report it to the user and leave it for `brain-doctor`; never edit an entry while archiving it.
+    - **warn** (`broken-link`, `new-property-key`): tell the user; don't block on it. For example: "linked `Tasks/CRMGM-2070`, which has no page yet".
+    - **digest findings** (`stale-map`, `map-label`, `oversized-digest`, `missing-digest`) are measured over the whole page, not only this save's lines. Step 8 should have prevented them; if one appears, re-run `brain digest <page> --apply`. `nonconvergent-map` and `duplicate-map` are the exception: `--apply` refuses to write on either, so re-running it alone won't clear them — see the catalog (`skills/_shared/hygiene-rules.md`) for the actual fix.
+
+11. **`brain activity "saved [[Projects/<Name>]]"`**, then **confirm** in plain language what was written, including the check result and any warn-tier items.
 
 ## Auto-Suggest Save
 
-See `references/auto-suggest.md`. Suggestion only — never auto-save.
+See `references/auto-suggest.md`. Suggestion only; never auto-save.
 
 ## Important Notes
 
-- Edit tool for surgical updates only. Never rewrite a whole page (sync conflicts).
-- All content in bullet-point format. See `CLAUDE.md` for Logseq invariants.
-- When appending, place new entries at the end of the section, before the next `##` heading.
-- If `journals/` doesn't exist, create it (Bash `mkdir -p`) before writing the journal entry.
+- Edit for surgical updates only; never rewrite a whole page (Sync conflicts). New entries go at the end of their section, before the next `## ` heading.
+- **Call `brain sections` once per save, before the first Edit.** Calling it again resets the baselines `brain check` diffs against. Later measurements come from `brain digest`, `read` and `tail`, which don't touch baselines. A rotation the user accepts runs after step 10's check.
+- Never hand-edit the Map line, and never compute a byte figure yourself.
+- All content is bullets. See `CLAUDE.md` for the Logseq invariants.

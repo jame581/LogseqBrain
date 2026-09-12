@@ -1,60 +1,17 @@
 # Journey Log
 
-Every brain skill records a single-line entry under `## Activity` in today's journal whenever it runs. This is the "journey trail" — terse, time-ordered, distinct from the rich `## Sessions` summary that `brain-save` writes.
+Every brain skill records one line under `## Activity` in today's journal, once, after its main work succeeds. Skip it when the work failed:
 
-## When to call this
+    brain activity "<activity line>"
 
-Each skill calls journey-log **once**, after completing its main work. Failures during the main work skip the journey-log call (don't log incomplete work).
+The helper adds the `HH:mm` prefix. It creates the journal, or the `- ## Activity` heading after the whole `## Sessions` block, when either is missing. It matches Logseq's reformatted headings and indentation, and writes nothing (it prints a one-line notice) when the user config sets `"journeyLog": false`.
 
-## Input
+Activity lines:
+- `loaded [[Projects/X]] (digest)` · `(brief)` · `(full)` — or `[[Tasks/ID]]`
+- `saved [[Projects/X]]`
+- `searched "strategy pattern" · 3 hits`
+- `viewed dashboard` · `viewed brain stats`
+- `ran brain-doctor · fixed N issues` · `ran brain-doctor (clean)` · `backfilled N digests`
+- `initialized graph at <path>` · `created project [[Projects/X]]`
 
-A single `activity-line` string describing what happened. No leading bullet marker — this module adds the bullet.
-
-Examples:
-
-- `"loaded [[Projects/LogseqBrain]] (brief)"`
-- `"saved [[Projects/LogseqBrain]]"`
-- `"searched \"strategy pattern\" · 3 hits"`
-- `"viewed dashboard"`
-- `"initialized graph at /path/to/ClaudeBrain"`
-- `"created project [[Projects/MyProject]]"`
-
-## Algorithm
-
-1. **Read config.** Read the durable user config file (location per `skills/_shared/path-resolution.md` → "Config file location") if present. If it contains `"journeyLog": false`, return immediately — no write.
-2. **Compute today's journal path:** `<graphPath>/journals/yyyy_MM_dd.md` (date with underscores, e.g., `2026_05_01.md`).
-3. **If the journal file does not exist:** create it with this content (Write tool):
-
-   ```markdown
-   - ## Sessions
-   - ## Activity
-     - HH:mm <activity-line>
-   ```
-
-   where `HH:mm` is the current local time in 24-hour format (e.g. `14:32`).
-
-   Then stop.
-
-4. **If the journal file exists but lacks `## Activity`:** insert a new top-level bullet `- ## Activity` after the **entire** `## Sessions` block — i.e., immediately before the next top-level heading (a `## …` line, with or without a leading `- `), or at end of file if `## Sessions` is the last block (or missing entirely). The insertion must be at indent 0 (no leading spaces), regardless of how deeply `## Sessions` is nested at the time. Then append the new bullet as a child at indent 2: `  - HH:mm <activity-line>`.
-
-5. **If the journal file exists with `## Activity`:** append a child bullet at the end of the `## Activity` section, before the next top-level heading (a `## …` line, with or without a leading `- `) or end of file.
-
-   Surgical Edit anchoring: the `old_string` must be unique within the file, so don't use just the last bullet's text (it may repeat — e.g., two `viewed dashboard` calls in a day; the `HH:mm` prefix usually differs but don't rely on it). Read the last 3 lines of the `## Activity` section and use the multi-line block as `old_string`; replace with the same block plus the new bullet appended (indent 2, with `HH:mm ` prefix). If the section is empty, use the `## Activity` heading line **exactly as you just read it** as the `old_string` (it may be `- ## Activity` as we wrote it, or `## Activity` after Logseq normalized it — match the form actually present), and replace it with that same line plus a child bullet `  - HH:mm <activity-line>` appended below.
-
-   Before editing, account for Logseq normalization — see `skills/_shared/logseq-format.md`. When constructing `old_string`, anchor the block on the `## Activity` heading text rather than relying on a leading `- ` or specific indentation surviving Logseq normalization intact.
-
-## Format rules
-
-- Write the bullet indented two spaces under the `## Activity` heading. (Logseq may store the indent as a tab after sync; when reading back, match what you see — see `skills/_shared/logseq-format.md` survival rule 3.)
-- Each bullet begins with an `HH:mm ` local-time prefix (24-hour, e.g. `14:32 `). This restores the quick-scan chronological signal; v0.6.0 dropped it on the assumption Logseq would render `created-at::` inline, which it does not. See `docs/superpowers/specs/2026-05-31-v0.7.0-design.md` §3.
-- One bullet per call. Multiple calls in the same session each produce a new bullet.
-
-## Side effects
-
-A single Edit (or Write, for first-time creation) on `<graphPath>/journals/yyyy_MM_dd.md`. No reads of the project page, no reads of `pages/Index.md`. Cheap.
-
-## Failure modes
-
-- **User config file invalid JSON:** treat as if `journeyLog` is `true` (default) and log the error to the user, but don't block the main skill.
-- **Graph path not resolved:** journey-log is called from skills that have already resolved the path. If the path is missing here, that's a programming error in the calling skill — surface it.
-- **Journal write fails (e.g., permission denied):** report the error to the user but don't fail the parent skill. The brain-load itself succeeded; the journey-log entry just didn't land.
+If the call fails, tell the user the activity line didn't land. Never fail the parent skill over it.

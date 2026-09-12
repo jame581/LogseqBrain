@@ -43,6 +43,8 @@ gemini extensions install https://github.com/jame581/LogseqBrain
 
 ## Setup
 
+**Requirements:** a POSIX shell with `awk`. That is built into macOS, Linux and Cowork; on Windows, install [Git for Windows](https://git-scm.com/download/win) (Git Bash). The skills call a small bundled helper (`skills/_shared/bin/brain`) for every byte count, digest Map and format check.
+
 After installing, create a Logseq graph (e.g. "ClaudeBrain") and tell the plugin where to find it. Pick one:
 
 - **Environment variable**: `export LOGSEQ_BRAIN_PATH=/path/to/ClaudeBrain` (highest precedence)
@@ -114,3 +116,5 @@ Every project and task page carries a small summary at the top — four properti
 The last digest bullet is a **map** — e.g. `Session Log | 87 KB (47 entries) · Active Tasks | 10 KB · Current Plan | 3 KB · Decisions | 2 KB (2) · page | 107 KB` — computed from the file, never written from memory, and derived from whatever sections the page actually has (not a fixed list — a page whose real second-largest section is `Active Tasks` shows `Active Tasks`). It does two jobs: it tells Claude what it doesn't have (so it can't quietly reason as though it read everything), and it's the index Claude uses when you ask for more.
 
 Pages without a digest keep working exactly as before, and get one the first time you load or save them. Run `brain-doctor` and say "backfill digests" to do the whole graph at once.
+
+The Map is computed by the bundled helper from the page itself, never written by hand.

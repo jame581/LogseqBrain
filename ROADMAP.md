@@ -73,10 +73,18 @@
 - Save/load cycle against a Logseq graph
 - Initial graph layout (`pages/`, `journals/`, `Index.md`, `Meta.md`)
 
-## Current — v0.11.0 (TBD)
+## Current — v0.11.0: Deterministic helper
+
+- One POSIX `sh` + `awk` helper (`skills/_shared/bin/brain`) performs every mechanical step: section measurement, the digest Map (`digest --apply`), cap checks, scoped count-first search, Logseq-faithful lint (validated against Logseq's parse cache), and the activity line.
+- Target: saves drop from ~29 tool calls to ~10–13, loads from ~12 to ~3. Measured by `tools/measure/` two weeks after release.
+- First test suite (`tests/`, CI on three awks) and dev tools (`tools/oracle`, `tools/measure`).
+- See `docs/superpowers/specs/2026-09-11-v0.11.0-design.md`.
 
 ## Future — OG (markdown)
 
+- **Instruction diet, part 2** — trim the remaining prose now that the helper owns the mechanics.
+- **Graph policy** — task-first entry (stub task pages, loading by Jira ID), size-based Session Log rotation, a property vocabulary and the `:property-pages/enabled?` setting, re-checking stale `open::` items on save.
+- **Maintainer graph cleanup** — fix what `brain lint --all` reports, re-index in Logseq, backfill digests.
 - **Block refs for decisions.** Write a cross-project decision once with `id:: <uuid>` and reference it as `((uuid))` from `pages/Decisions.md`, ending the physical duplication between the project page and the decision log.
 - **`{{query}}` dashboards.** Live Logseq-rendered views (active projects, open blockers) that cost nothing to maintain. Human-facing only — no token effect for Claude.
 - **Retrieval rethink.** Drop project pre-loading entirely; grep purely on demand with `Index.md` as the only always-loaded surface. v0.10.0's escalation ladder is a bounded step in this direction.
@@ -93,4 +101,4 @@ This plugin targets OG. The items below were previously listed as "deferred unti
 - **Logseq DB plugin API integration.** Not an OG capability. The plugin API only runs inside the desktop app.
 - **Headless sync via the Logseq CLI.** `@logseq/cli` serves **DB graphs only** and cannot operate on a markdown graph.
 
-Rejected outright (recorded so it is not re-proposed): driving a file graph through `logseq/nbb-logseq` or `cldwalker/logseq-query` to run Datalog from the command line. It works, but `logseq-query` is alpha and it would put a Node/nbb runtime under a plugin whose whole identity is markdown skills with no runtime code.
+Rejected outright (recorded so it is not re-proposed): driving a file graph through `logseq/nbb-logseq` or `cldwalker/logseq-query` to run Datalog from the command line. It works, but `logseq-query` is alpha and it would put a Node/nbb runtime under a plugin whose whole identity is markdown skills with no runtime code. [v0.11.0 note: the plugin now carries one narrow POSIX sh/awk helper; what was rejected here is a heavier Node/nbb runtime, and that still stands.]

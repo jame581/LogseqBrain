@@ -1,37 +1,12 @@
 # Stale-Project Rules
 
-Detect when a project page hasn't been touched recently and surface it to the user.
+`brain digest` prints a `staleness:` line and `brain status` a staleness column. Both are computed from `last-updated::`, `status::` and today's date. Use this phrasing:
 
-## Inputs
-
-- `last-updated::` property from the project page (a `yyyy-MM-dd` string)
-- `status::` property from the project page (one of `active`, `paused`, `completed`, `archived`)
-- Today's date (`yyyy-MM-dd`)
-
-## Output
-
-One of four staleness levels, with suggested phrasing for each:
-
-| Days since `last-updated::` | Status filter      | Level        | Phrasing                                                                         |
-|-----------------------------|--------------------|--------------|----------------------------------------------------------------------------------|
-| 0–7                         | any                | fresh        | (no message)                                                                     |
-| 8–14                        | any                | aging        | "Note: last updated [N] days ago."                                               |
-| 15–29                       | any                | stale        | "⚠ This project hasn't been updated in [N] days. Context may be outdated — verify before acting on it." |
-| 30+                         | `status:: active`  | abandoned    | "This project is marked active but hasn't been touched in [N] days. Want to update it or mark it paused?" |
-| 30+                         | not `active`       | stale        | (use the stale phrasing above)                                                   |
-
-## When to use
-
-- `brain-load` calls staleness on the loaded project's `last-updated::`. Surfaces the message before presenting the load summary.
-- `brain-status` calls staleness on every project's `last-updated::`. Annotates the dashboard line.
-
-## Computation
-
-`days_since = (today - last-updated)` in calendar days. Use straightforward date subtraction; no timezone gymnastics needed since dates are date-only.
-
-If `last-updated::` is missing or malformed, treat as `aging` and log: "Project [name] has no valid `last-updated::` property — consider running brain-save to set one."
-
-## Task and archive pages
-
-- **Task pages** (`pages/Tasks___*.md`) with `status:: done` are **exempt** — finished work is never "stale". `active`/`blocked` task pages follow the table above when a caller checks them. A task page with no `status::` is legacy — don't nag about staleness; brain-doctor's guided backfill (see `hygiene-rules.md` → `structural-integrity`) is the fix.
-- **Session-archive pages** (`type:: session-archive`) are exempt — they are cold storage by design.
+| Level (days since `last-updated::`) | Phrasing |
+|---|---|
+| `fresh` (0–7) | (no message) |
+| `aging` (8–14) | "Note: last updated [N] days ago." |
+| `stale` (15–29, or 30+ when not `active`) | "⚠ This project hasn't been updated in [N] days. Context may be outdated — verify before acting on it." |
+| `abandoned` (30+ and `status:: active`) | "This project is marked active but hasn't been touched in [N] days. Want to update it or mark it paused?" |
+| `aging (no valid last-updated)` | "Project [name] has no valid `last-updated::` property — consider running brain-save to set one." |
+| `exempt` | (no message) — a `done` task page, a legacy task page with no `status::` (brain-doctor's backfill is the fix, not a nag), or a session archive |
