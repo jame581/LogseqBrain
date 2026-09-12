@@ -1,6 +1,6 @@
 # Contributing to logseq-brain
 
-Thanks for your interest in contributing! `logseq-brain` is a Claude Code plugin that gives agents persistent memory via a user-owned [Logseq](https://logseq.com) graph. It has **no build step and no runtime code** — the plugin is entirely markdown skills (`skills/<name>/SKILL.md`) plus `.claude-plugin/plugin.json`. The agent itself is the runtime.
+Thanks for your interest in contributing! `logseq-brain` is a Claude Code plugin that gives agents persistent memory via a user-owned [Logseq](https://logseq.com) graph. It has **no build step**. The plugin is markdown skills (`skills/<name>/SKILL.md`), `.claude-plugin/plugin.json`, and — since v0.11.0 — one POSIX `sh` + `awk` helper (`skills/_shared/bin/brain` plus `skills/_shared/lib/*.awk`) that performs the mechanical steps: section measurement, the digest Map, caps, scoped search, lint, the activity line. The agent supplies the judgment.
 
 Please open an issue before large changes so we can align on scope.
 

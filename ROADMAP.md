@@ -101,4 +101,4 @@ This plugin targets OG. The items below were previously listed as "deferred unti
 - **Logseq DB plugin API integration.** Not an OG capability. The plugin API only runs inside the desktop app.
 - **Headless sync via the Logseq CLI.** `@logseq/cli` serves **DB graphs only** and cannot operate on a markdown graph.
 
-Rejected outright (recorded so it is not re-proposed): driving a file graph through `logseq/nbb-logseq` or `cldwalker/logseq-query` to run Datalog from the command line. It works, but `logseq-query` is alpha and it would put a Node/nbb runtime under a plugin whose whole identity is markdown skills with no runtime code.
+Rejected outright (recorded so it is not re-proposed): driving a file graph through `logseq/nbb-logseq` or `cldwalker/logseq-query` to run Datalog from the command line. It works, but `logseq-query` is alpha and it would put a Node/nbb runtime under a plugin whose whole identity is markdown skills with no runtime code. [v0.11.0 note: the plugin now carries one narrow POSIX sh/awk helper; what was rejected here is a heavier Node/nbb runtime, and that still stands.]

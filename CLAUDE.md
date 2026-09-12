@@ -22,7 +22,7 @@ When adding a new shared reference, prefer this directory. Per-skill references 
 
 ### The helper (since v0.11.0)
 
-`skills/_shared/bin/brain` is a sh dispatcher. Each command is an awk program loaded after `lib/core.awk` (`awk -f core.awk -f <prog>.awk`). Skills invoke it as described in `skills/_shared/run-brain.md`: via `sh`, or via Git's `bash.exe` on PowerShell-only Windows hosts. It is required, and there is no prose fallback. Portability rules are non-negotiable: `LC_ALL=C` (lengths are bytes), POSIX awk only (no `gensub`, three-argument `match`, `strftime`/`mktime`, `{n,m}` intervals, or `length(array)`), and graph-relative paths in output. Its only writes are the Map line (`digest --apply`) and one activity bullet (`activity`). Both are verified to touch only those lines before an in-place commit.
+`skills/_shared/bin/brain` is a sh dispatcher. Each command is an awk program loaded after `lib/core.awk` (`awk -f core.awk -f <prog>.awk`). Skills invoke it as described in `skills/_shared/run-brain.md`: via `sh`, or via Git's `bash.exe` on PowerShell-only Windows hosts. It is required, and there is no prose fallback. Portability rules are non-negotiable: `LC_ALL=C` (lengths are bytes), POSIX awk only (no `gensub`, three-argument `match`, `strftime`/`mktime`, `{n,m}` intervals, or `length(array)`), and graph-relative paths in output (`brain info`'s `graph:` line is absolute by design). Its only writes are the Map line (`digest --apply`) and one activity bullet (`activity`). Both are verified to touch only those lines before an in-place commit.
 
 ### Design docs
 
