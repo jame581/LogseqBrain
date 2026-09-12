@@ -95,7 +95,7 @@ export LOGSEQ_BRAIN_PATH=/tmp/scratch-brain
 22. **Escalation:** a question answerable only from the Session Log triggers an announced `brain search --page` (counts first), then a bounded `--context` or `brain tail` read — never a whole-page read.
 23. **Dashboard:** `brain status` is one call; a project with no digest falls back alone, and the count is reported.
 24. **Doctor:** `missing-digest` lists exactly the un-backfilled pages largest-first; `backfill digests` states the read cost before doing any work.
-25. **Oracle.** `python tools/oracle/oracle.py --graph <graph>` exits 0 on the live graph and on `tools/oracle/fixture-graph` (opened in Logseq desktop first).
+25. **Oracle.** `python tools/oracle/oracle.py --graph <graph>` exits 0 on the live graph and on `tools/oracle/fixture-graph`. For the fixture graph, copy it **outside the repo first** and open the copy in Logseq desktop (see `tools/oracle/README.md`) — opening the in-tree copy makes Logseq generate `logseq/bak`, `logseq/version-files`, and possibly `.recycle/` inside the tracked working tree, none of which `.gitignore` covers, so a careless `git add` commits generated cruft.
 26. **PowerShell host.** On Windows, run `brain status` through Git's `bash.exe` from PowerShell (`skills/_shared/run-brain.md`) and confirm the output matches the Bash run.
 
 ## Releasing a new version
@@ -112,7 +112,13 @@ Releases follow semver and are cut from `main`.
    git push origin vX.Y.Z
    ```
 5. Create a GitHub release with notes summarizing changes.
-6. Bump the version in [`skillsmith`](https://github.com/jame581/skillsmith) `.claude-plugin/marketplace.json` so new installs pick up the release.
+6. Rebuild the `.plugin` archive from committed content and verify it before shipping — nothing else keeps it current, and a stale one silently ships old skills to Cowork:
+   ```bash
+   git archive --format=zip -o logseq-brain.plugin HEAD .claude-plugin skills README.md
+   python -m zipfile -l logseq-brain.plugin
+   ```
+   Confirm the listing contains `skills/_shared/bin/brain` and `skills/_shared/lib/core.awk`, and contains **no** `tests/` or `tools/` entries.
+7. Bump the version in [`skillsmith`](https://github.com/jame581/skillsmith) `.claude-plugin/marketplace.json` so new installs pick up the release.
 
 ## Pull request checklist
 
