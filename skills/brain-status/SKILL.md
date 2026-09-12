@@ -10,78 +10,38 @@ description: >
 
 # Brain Status
 
-Display a quick dashboard of all projects in the Claude Brain graph — status, last activity, current focus, blockers.
-
-## Modes
-
-- **Dashboard** (default, "brain status" / "show projects" / …): the per-project overview in "Dashboard Generation" below.
-- **Analytics** ("brain stats" / "graph analytics" / "graph activity over time"): the aggregate counts in "Analytics (brain stats)" below.
-
-Both resolve the graph path first (Prerequisites). Pick the mode from the trigger phrase; if ambiguous, default to Dashboard.
+A dashboard of every project in the Claude Brain graph (status, last activity, focus, blockers), or aggregate analytics. Mechanical steps run through the helper (`skills/_shared/run-brain.md`).
 
 ## Prerequisites
 
-Resolve the graph path per `skills/_shared/path-resolution.md`.
+Run `brain info` once, and use its `graph:` path for any Read this skill makes itself. If it exits 2, follow `skills/_shared/path-resolution.md`, then pass `--graph` to every call.
 
-## Dashboard Generation
+## Modes
 
-1. **Census first — this decides what appears.** Glob (or `ls`) `pages/Projects___*.md` and `pages/Tasks___*.md` — one free call. This file list, not the ripgrep in step 2, is authoritative for "what's in my brain": a page belongs on the dashboard because it exists, not because a later grep happened to match its content. At census time you have **filenames only**, so apply only the exclusion a filename can decide: drop pages ending `___SessionArchive.md`. **Do not try to filter on `type::` here** — that requires reading each file, which would turn one free call into 45, and step 2's ripgrep already returns `type::` for every page. The census is therefore a *candidate* list; step 2 narrows it.
+- **Dashboard** (default).
+- **Analytics** ("brain stats" / "graph analytics" / "graph activity over time").
 
-2. **Collect every census page's state in one call.** Digest properties make the whole dashboard greppable:
+## Dashboard
 
-   ```
-   rg "^(type|status|last-updated|focus|next|open|digest-updated):: " pages/ \
-      -g "Projects___*.md" -g "Tasks___*.md"
-   ```
-
-   One result set gives, per page with a readable property block: its type, status, freshness, current focus, next action, and any open blocker. **This is where `type::` becomes available, so this is where the type-based exclusions happen** — the census (step 1) could not make them. Drop from the candidate list: any page with `type:: session-archive`, and any `Projects___*.md` whose `type::` is not `project` — e.g. `type:: task-index` (a project's task inventory, like `Projects___Unicorn-Globus___Tasks.md`) or `type:: project-note` (a standalone note, like `Projects___Unicorn-Globus___ClaudeCodeAutomation.md`). Both match the glob but are not projects; counting them would inflate the dashboard and the "N projects have no digest" line with pages that were never supposed to carry one (`skills/_shared/digest.md`'s scope rule). A census page with **no** `type::` at all is not excluded here — it has a damaged or missing property block, and step 3 surfaces it rather than dropping it.
-
-3. **Reconcile the census against the grep.** The grep is a content search, not the page list — a page whose property block is damaged or absent produces zero hits and would otherwise vanish from the dashboard entirely, which for a memory tool reads as "the project isn't there." Match every census file (step 1) against the hits (step 2); any census file with **zero** hits is listed explicitly — "ProjectName — no properties, run brain-doctor" — never silently dropped. The census, not the grep, decides what is listed.
-
-4. **Fall back per project, not wholesale.** A project page that has some properties but no `focus::` / `next::` has not been backfilled with a digest yet (distinct from step 3's zero-hit pages, which have no readable properties at all). For **those pages only**, use the section-targeted reads in `skills/_shared/section-locator.md` — property block, first bullet of `## Current Plan`, last entry of `## Session Log` — exactly as before. A partially-backfilled graph therefore degrades one page at a time, never all at once. Mention the count once at the end: "<N> projects have no digest — run brain-doctor to backfill." Report the real count; never a placeholder digit.
-
-5. **Apply staleness rules.** Use `skills/_shared/staleness.md` to flag stale or abandoned projects. Also flag **digest drift**: step 2's results already carry both `digest-updated::` and `last-updated::` for every page with a digest, so the comparison costs no extra reads. Where the gap exceeds 30 days, the digest may be describing older content (e.g. another device still on v0.9.x saved without refreshing it, or a Logseq hand-edit) — flag it the same way stale projects are flagged, and mention the count once: "<N> projects have a stale digest — see `skills/_shared/digest.md` to rebuild." Report the real count; never a placeholder digit.
-
-6. **Read cross-project decisions.** Check `pages/Decisions.md` for entries from the last 30 days.
-
-7. **Read Meta date.** Check `pages/Meta.md` `last-updated::` only — don't read the whole file.
-
-8. **Task summary — no extra reads.** The single ripgrep in step 2 already covered `pages/Tasks___*.md`. Group from those results: **active** and **blocked** tasks listed by ID with their status; **done** tasks collapsed to one count line ("N done"); tasks with no `status::` listed as "legacy — run brain-doctor to backfill". Where a task has a `focus::`, show it; otherwise show the ID alone.
-
-9. **Present the dashboard.** For each project: name, status, staleness annotation (if any), digest-drift annotation (if any), current focus, open questions/blockers. Then: task summary (from step 8), recent cross-project decisions, total counts.
-
-10. **Write a journey-log entry** per `skills/_shared/journey-log.md` with activity line: `viewed dashboard`.
-
-## Example Output
-
-```
-Here's your brain status:
-
-**LogseqBrain** (active, last updated <yyyy-MM-dd>)
-Currently: <first bullet of Current Plan>
-No blockers.
-
-**ChivalricQuest** (active, last updated <yyyy-MM-dd>)
-Currently: No active plan yet.
-No blockers.
-
-Tasks: CRMGM-2002 (active), CRMGM-1994 (blocked) · 31 done
-
-2 projects tracked (2 active). No recent cross-project decisions.
-```
+1. **One call: `brain status`.** It prints a TSV row per project and task page (`page type status last-updated digest-updated drift staleness focus next open`), then a counts line. Every page appears. A page whose property block is missing is listed as `no properties — run brain-doctor`, never dropped. Session archives are already excluded.
+2. **Projects** are rows under `Projects/` whose `type` is `project`. Other types (`task-index`, `project-note`) match the file glob but are not projects, so leave them out of the list and the counts.
+3. **Staleness and drift:** phrase each row's `staleness` per `skills/_shared/staleness.md`. When `drift` exceeds 30, the digest may describe older content; flag it, and give the count once.
+4. **Pages without a digest** (`digest-updated` is `-`): show what the row has, one page at a time. For "Currently:", use the first bullet of `brain read <page> "Current Plan" --max 8192`; over the cap, say "Current Plan is N KB — not read". For the latest activity, use `brain tail <page> "Session Log" --entries 1 --max 2048`. End with "<N> projects have no digest — run brain-doctor to backfill" (the counts line gives N).
+5. **Recent cross-project decisions:** `brain tail Decisions "Decision Log" --entries 10 --max 4096`; keep those from the last 30 days.
+6. **Meta date:** `Read pages/Meta.md` with `limit 5` for `last-updated::` only.
+7. **Tasks, from the same rows:** list active and blocked tasks by ID (with `focus` when present), collapse done tasks into "N done", and list tasks with no `status` as "legacy — run brain-doctor".
+8. **Present** per project: name, status, staleness, drift note, focus, open. Then tasks, recent cross-project decisions and totals.
+9. **`brain activity "viewed dashboard"`**.
 
 ## Analytics (brain stats)
 
-Read-only aggregate view. Writes nothing except the journey-log entry. Stay token-frugal — use `skills/_shared/section-locator.md` for targeted reads; never full-read project pages.
+Read-only. Exclude template stubs (`_…_` placeholder bullets) from every count.
 
-When counting, **exclude template placeholder stubs** — the italic markers a fresh `brain-init` page seeds, e.g. `_Project-specific decisions._` under `## Decisions`, `_Session entries are added by brain-save._` under `## Session Log`, and `_No active plan yet._` under `## Current Plan`. They denote an empty section, so a section that contains only its stub counts as **0**, not 1.
-
-1. **Projects.** Glob `pages/Projects___*.md`. Count total. Apply `skills/_shared/staleness.md`, then collapse its four levels into two buckets for the count: **active** = `fresh` + `aging`, **stale** = `stale` + `abandoned`. Exclude session-archive pages from the project count, and exclude pages whose `type::` isn't `project` (`task-index`, `project-note`, etc. — same exclusion as Dashboard step 1) — they match the glob but aren't projects.
-2. **Decisions.** Count two distinct figures, because cross-project decisions are intentionally duplicated in both places (so never sum them): (a) **cross-project** decisions in `pages/Decisions.md`, and (b) decisions recorded on project pages (in their `## Decisions` sections; this includes the project-page copy of any cross-project decision). Break each down by `status::` value (e.g. accepted, superseded).
-3. **Sessions.** For each project page, count real entries under `## Session Log` (section-targeted read; skip the placeholder stub). Sum across projects.
-4. **Activity (recent window).** Glob `journals/*.md`. For journals dated within the last 30 days (filename `yyyy_MM_dd.md`), count bullets under `## Activity`. Report the total as the recent activity signal.
-5. **Present** a compact block. The Tasks line is computed as in Dashboard step 8 — grouped from the **same single ripgrep** as step 2, which already covers `pages/Tasks___*.md`; no per-task reads. **legacy** = task pages with no `status::`.
-
+1. **Projects and tasks:** from `brain status`. Active = `fresh` + `aging`; stale = `stale` + `abandoned`.
+2. **Decisions:** (a) cross-project, the entries in `pages/Decisions.md` (`brain sections Decisions`); (b) on project pages, each project's `Decisions` entry count from `brain sections <page>`. Never sum (a) and (b): cross-project decisions are deliberately duplicated. Break both down by `status::` (use `brain search "status:: superseded"` to count superseded ones).
+3. **Sessions:** the sum of each project's `Session Log` entry count from `brain sections`.
+4. **Activity:** bullets under `## Activity` in journals dated within the last 30 days.
+5. **Present:**
    ```
    Brain stats:
 
@@ -91,10 +51,6 @@ When counting, **exclude template placeholder stubs** — the italic markers a f
    Sessions logged: <S>
    Activity (last 30 days): <A> entries
    ```
+6. **`brain activity "viewed brain stats"`**.
 
-6. **Write a journey-log entry** per `skills/_shared/journey-log.md` with activity line: `viewed brain stats`.
-
-## Important Notes
-
-- Concise overview, not a deep load — bias toward fewer reads.
-- If no projects yet: "Your brain is empty. Use 'init brain project [name]' to add your first project."
+If there are no projects yet: "Your brain is empty. Use 'init brain project [name]' to add your first project."

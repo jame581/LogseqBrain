@@ -3,9 +3,11 @@
 The single source of truth for the format violations that corrupt a Logseq brain graph. Two consumers read this file:
 
 - **`skills/brain-doctor/SKILL.md`** — iterates every rule whose `enforced-at` includes `scan` (reactive whole-graph lint + repair).
-- **`skills/brain-save/SKILL.md`** — applies rules whose `enforced-at` includes `compose` and `auto-fixable` is `yes`/`safe-only` as a write-time self-check on its own composed text. It also follows the compose-time *composition instructions* of `compose`+`report` rules — currently only `jira-markup`, whose "Compose (brain-save):" line tells it how to format content in the first place (fence it up front) rather than fixing it after the fact. It never runs the scan-only `report` rules (`description-link`, `broken-link`, `duplicate-entry`, `structural-integrity`, `missing-digest`, `stale-digest`, `stale-map`), which need whole-graph context brain-save doesn't have. It *does* apply `oversized-digest` at compose time, recompressing its own digest before writing — see that rule's remediation. It (and later `brain-init`) also runs the `## Post-write verify (scoped)` procedure below after writing files, re-checking on disk what the compose self-check checked in memory.
+- **`skills/brain-save/SKILL.md`** — follows the compose-time rules while composing, including `jira-markup`'s "fence it up front" instruction. After writing, it runs `brain check` on every file it wrote. That reports every mechanical rule, plus `stale-map`, `map-label`, `oversized-digest` and a missing Map, on the lines the save added (see "Post-write verify" below). The whole-graph judgment rules (`description-link`, `duplicate-entry`, `structural-integrity`) stay brain-doctor's.
 
 The narrative "why" and the compose-time guidance live in `skills/_shared/logseq-format.md`; this file is the operational catalog.
+
+**Detection lives in the helper.** Every mechanical rule and every digest rule below is implemented in `skills/_shared/lib/lint.awk` / `map.awk` and reported by `brain lint` (whole files) or `brain check` (only lines a save added). Detection is validated against Logseq's own parse cache (`tools/oracle/`), not against a guess about the parser. The `detection:` lines below say what the helper reports; they are not commands to retype.
 
 ## Rule entry schema
 
@@ -26,8 +28,7 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **severity:** breaks-render
 - **enforced-at:** compose, scan
 - **auto-fixable:** yes
-- **detection:** `grep -rohE "\{\{[^}]*\}\}" pages/ journals/ | sort | uniq -c | sort -rn`
-  Confirm it's not an intentional macro: check `logseq/config.edn` for a non-empty `:macros {…}`, and that none are real macros (`{{query`, `{{embed`, `{{video`, `{{renderer`, `{{cards`, `{{function`, `{{namespace`, `{{tutorial`). If `:macros {}` and none match, every hit is mis-wrapped code. Mask fenced code blocks first — `{{x}}` inside a fence is intentional verbatim content (see `jira-markup`), never a hit.
+- **detection:** `brain lint` → `code-in-braces`: a `{{` outside inline code and fences that does not open a Logseq macro (`query`, `embed`, `video`, `renderer`, `cards`, `function`, `namespace`, `tutorial`). If `logseq/config.edn` defines custom `:macros`, hits naming them are intentional.
 - **remediation:** `{{X}}` → `` `X` ``. The bulk pass must skip fenced blocks — mask them before the regex replace and unmask after. Two edge cases the bulk pass must skip and you hand-fix:
   - Span contains a backtick (e.g. `` Expression`1 ``): use a double-backtick fence `` `` … `` ``.
   - Span contains a literal `{` or `}` (Mongo query `countDocuments({ … })`, a CSS rule, a `{list}` template): the simple regex won't match it; reconstruct the literal braces (a bad save sometimes *doubled* them, `{`→`{{`) and wrap the whole thing in backticks.
@@ -38,26 +39,21 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **severity:** phantom-page
 - **enforced-at:** compose, scan
 - **auto-fixable:** yes
-- **detection:** `grep -rnP "(?<![\w/&\x60#\]])#([0-9]{1,4}|[0-9A-Fa-f]{6})\b" pages/ journals/`
-  (PCRE lookbehind: `\x60` is the backtick. Not preceded by a word char, `/`, `&`, a backtick, `#`, or `]` — this also catches punctuation-adjacent tags like `(#1)`, `#2–#5`, `[#4`. If `grep -P` is unavailable, fall back to the POSIX ERE form below — note `]` must be the first character after `^` in the bracket expression to be literal, and the backtick is written literally (no `\x60` escape in ERE):
-  `` grep -rnE '(^|[^][:alnum:]_/&#`])#([0-9]{1,4}|[0-9A-Fa-f]{6})\b' pages/ journals/ ``
-  — single-quote the pattern: the literal backtick inside it would start command substitution in a double-quoted shell string.)
-  Hits already inside backticks, `{{ }}`, or fenced code blocks are false positives (Logseq won't linkify code/macro/fenced content) — mask those before counting.
-- **remediation:** `#44` → `` `#44` ``, `#0066CC` → `` `#0066CC` ``. Punctuation-adjacent hits are in scope — `(#1)` → `` (`#1`) ``, `#2–#5` → `` `#2`–`#5` ``. **Never touch `#[[Page Name]]`** (valid tag-link) or `#` already inside backticks/`{{ }}`/fenced blocks. Mask inline-code spans (`` `…` ``), macro spans (`{{…}}`), fenced code blocks (``` … ```), and `#[[…]]` first, transform on the remainder, then unmask.
+- **detection:** `brain lint` → `bare-hash-tag`. Logseq makes a tag of `#` followed by any character except whitespace, `#`, `[`, a backtick, `,`, `"` or `*` (verified), or `]` `.` `;` `:` `!` `?` `'` (assumed until the fixture-graph check; `]` covers `[[C#]]`), **whatever precedes the `#`**. Measured against Logseq's parse cache on 2026-09-11: `C#-parity` → page `-parity`, `C#)` → `)`, `PKCS#12` → `12`, CSS `#image` → `image`. The previous rule caught 0 of those 6. Masked first: fenced blocks, inline code, whole markdown links (`[#65](url)` is not a tag), bare URLs, `#[[…]]`, heading markers. Each hit is classified `number`, `hex`, `after-word`, `word` or `punct`.
+- **remediation:** `#44` → `` `#44` ``, `#0066CC` → `` `#0066CC` ``. Punctuation-adjacent hits are in scope — `(#1)` → `` (`#1`) ``, `#2–#5` → `` `#2`–`#5` ``. **Never touch `#[[Page Name]]`** (valid tag-link) or `#` already inside backticks/`{{ }}`/fenced blocks. Mask inline-code spans (`` `…` ``), macro spans (`{{…}}`), fenced code blocks (``` … ```), and `#[[…]]` first, transform on the remainder, then unmask. `after-word` hits: backtick the token (`` `C#`-parity ``) or rephrase (`C# parity`). `word` hits (e.g. a CSS selector): backtick them.
 
 ## `unnamespaced-link`
 - **severity:** phantom-page
 - **enforced-at:** compose, scan
 - **auto-fixable:** yes
-- **detection:** `grep -rnE "\[\[(CRMGM|GLOPRICE)-[0-9]+\]\]" pages/ journals/`
-  (Add other task prefixes the graph uses.)
+- **detection:** `brain lint` → `unnamespaced-link`: any `[[ABC-123]]` (uppercase prefix, dash, digits).
 - **remediation:** `[[CRMGM-1234]]` → `[[Tasks/CRMGM-1234]]`. Regex `\[\[(CRMGM-\d+|GLOPRICE-\d+)\]\]` → `[[Tasks/\1]]`. Already-namespaced `[[Tasks/…]]` won't match. Bare *text* mentions (no `[[ ]]`) are not links — leave them.
 
 ## `file-link`
 - **severity:** phantom-page
 - **enforced-at:** compose, scan
 - **auto-fixable:** yes
-- **detection:** `grep -rnE "\[\[file:///" pages/ journals/`
+- **detection:** `brain lint` → `file-link`: `[[file:` outside inline code and fences.
 - **remediation:**
   - Labeled `[[file:///URL][LABEL]]` → `[LABEL](file:///URL)`.
   - Bare `[[file:///URL]]` → `[<basename>](file:///URL)` (use the last path segment as the label), or backtick the path if a link isn't wanted.
@@ -66,8 +62,7 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **severity:** breaks-render
 - **enforced-at:** compose, scan
 - **auto-fixable:** report
-- **detection:** Jira wiki markup outside fenced code blocks. Mask fenced blocks (``` … ```) first — a hit *inside* a fence is a false positive (that is exactly where Jira markup belongs). Then:
-  `grep -rnE "(^|[[:space:]])h[1-6]\.[[:space:]]|\{code(:[a-z]+)?\}|\{noformat\}|\[~[A-Za-z0-9._@-]+\]" pages/ journals/`
+- **detection:** `brain lint` → `jira-markup`: outside fences, an `h1.`–`h6.` heading, `{code}`, `{noformat}`, a `[~mention]`, or a bullet starting `||` (a Jira table row).
   Raw `{{x}}` outside fences is **not** this rule — it stays covered by `code-in-braces`. This rule catches the *rest* of the Jira residue that signals an unfenced draft.
 - **remediation:** report — never auto-write. A Jira comment draft belongs **verbatim inside a fenced code block**: one pointer bullet above it (date, ticket, one-line gist), the fence as its child bullet, e.g.
   ```
@@ -93,9 +88,7 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **severity:** data-quality
 - **enforced-at:** compose, scan
 - **auto-fixable:** safe-only
-- **detection:** single-colon `key: value` where the key is one lowercase-dashed token at property position. Grep:
-  `grep -rnE "^[[:space:]-]*[a-z][a-z0-9-]*: " pages/ journals/`
-  The single-token-no-space key excludes prose ("Root cause:" has a space in the phrase), leading `[a-z]` excludes times ("18:18") and capitalized prose. A URL in *key position* (`https://…`) is excluded too, but note a URL *value* line (`- url: https://…`) still matches the grep — it lands in the report tier below, never auto-fixed. Open vocabulary — do NOT use a fixed key whitelist (a real graph invents ~60 keys).
+- **detection:** `brain lint` → `malformed-property`: a single-colon `key: value` inside the page-top property block (the auto-fix tier). Inline candidates further down may be prose; surface them for review with `grep -rnE "^[[:space:]-]*[a-z][a-z0-9-]*: " pages/ journals/`.
 - **remediation:** `key:` → `key::`, applied by confidence tier:
   - **page-top property block** (lines before the first `- ##` heading): unambiguously properties → **auto-fix**. This is the only tier `safe-only` auto-fixes.
   - **inline** bullet (anywhere below the first heading): ambiguous — a prose line like `- status: we are blocked` would be silently turned into a property → **report with suggestion, never auto-write**. If the key also appears as `key::` elsewhere in the graph, surface that as a higher-confidence suggestion, but still leave the decision to the user.
@@ -104,7 +97,7 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **severity:** data-quality
 - **enforced-at:** scan
 - **auto-fixable:** report
-- **detection:** real-page set (filenames `___`→`/`) vs. all `[[…]]` targets — run this **once** per scan session; the result feeds `description-link` (prose/slug sub-case) and `unnamespaced-link` (missing-namespace sub-case):
+- **detection:** `brain lint` reports `[[Projects/…]]` / `[[Tasks/…]]` targets with no page file, as tier `warn`. That is the most common save-time error: 71 links in 13 of 16 saves measured. The full phantom-target list that `description-link` and `unnamespaced-link` consume still comes from this procedure:
   ```
   ls pages/*.md | sed 's#pages/##; s/\.md$//; s/___/\//g' | sort -u > /tmp/real.txt
   grep -rohE "\[\[[^]]+\]\]" pages/ journals/ | sed 's/^\[\[//; s/\]\]$//' | grep -v '^file:///' | sort -u > /tmp/links.txt
@@ -138,290 +131,62 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 
   For missing task `status::`, offer the **guided batch backfill**: list every flagged task page with the date of its most recent Session Log entry; propose `done` for each, **except** propose `active` when the task is *visibly active* — a session entry within the last 30 days, **or** the task is listed in any project page's `## Active Tasks` / `## Current Plan` section. Present the full proposal table, apply on one confirmation (surgical Edit inserting the `status::` line into each page-top block). Never write without the confirmation.
 
+## `relative-link`
+- **severity:** phantom-page
+- **enforced-at:** compose, scan
+- **auto-fixable:** yes
+- **detection:** `brain lint` → `relative-link`: a markdown link whose target is not a URL, `mailto:`, an anchor or `assets/`. For example, `[design](docs/specs/x.md)` makes Logseq create a page named after the target (two live cases on 2026-09-11).
+- **remediation:** keep the label and backtick the path: ``design (`docs/specs/x.md`)``. For a real local file, use a `file:///` markdown link instead.
+
+## `new-property-key`
+- **severity:** phantom-page
+- **enforced-at:** compose, scan
+- **auto-fixable:** report
+- **detection:** `brain lint` → `new-property-key`: a `key::` used nowhere else in the graph and not one of the plugin's own keys. With `:property-pages/enabled? true`, every key becomes a Logseq page: 80 on the live graph on 2026-09-11, many of them one-offs.
+- **remediation:** report. Suggest an existing key (`next-action::`, `open-questions::`, …) or plain prose. Whether the graph should turn property pages off is a separate, future graph-policy decision.
+
 ## `missing-digest`
 - **severity:** data-quality
 - **enforced-at:** scan
 - **auto-fixable:** report
-- **detection:** a project or task page carrying no digest, **or one whose `## Digest` section has no `Map:` bullet** — the Map is a required slot (`skills/_shared/digest.md`), so a digest missing it is a missing digest, not a shorter one. Excludes session-archive pages and the singletons.
-  ```
-  for f in pages/Projects___*.md pages/Tasks___*.md; do
-    [ -e "$f" ] || continue    # unexpanded glob on a graph with no task pages
-    case "$f" in *___SessionArchive.md) continue;; esac
-    grep -q "^type:: session-archive" "$f" && continue
-    case "$f" in pages/Projects___*.md) grep -q "^type:: project$" "$f" || continue;; esac   # excludes type:: task-index / project-note / etc. — matches the glob but isn't a project
-    ok=1
-    awk '/^[[:space:]]*-/{exit} 1' "$f" | grep -q "^digest-updated:: " || ok=0
-    grep -qE "^(- )?## Digest" "$f" || ok=0
-    if [ "$ok" -eq 1 ]; then
-      awk '/^(- )?## Digest/{f=1;next} f&&/^(- )?## /{exit} f' "$f" | grep -q "Map:" || ok=0
-    fi
-    [ "$ok" -eq 1 ] || echo "$(wc -c < "$f") $f missing digest"
-  done | sort -rn
-  ```
+- **detection:** a project or task page carrying no digest, **or one whose `## Digest` section has no `Map:` bullet** — the Map is a required slot (`skills/_shared/digest.md`), so a digest missing it is a missing digest, not a shorter one. Excludes session-archive pages and the singletons. `brain lint` (through `map.awk`) reports it for every digest-bearing page: no `## Digest`, or a Digest with no `Map:` line.
 - **remediation:** report each page with its byte size, largest first (biggest pages pay back a digest soonest). Offer the rebuild-from-source procedure in `skills/_shared/digest.md`. **Report-tier**: building a digest is a judgment call with real token cost — never auto-spent. For a whole-graph pass use brain-doctor's guided digest backfill.
 
 ## `stale-digest`
 - **severity:** data-quality
 - **enforced-at:** scan
 - **auto-fixable:** report
-- **detection:** `digest-updated::` more than 30 days behind `last-updated::` on the same page.
-  ```
-  for f in pages/Projects___*.md pages/Tasks___*.md; do
-    [ -e "$f" ] || continue    # unexpanded glob on a graph with no task pages
-    case "$f" in *___SessionArchive.md) continue;; esac
-    grep -q "^type:: session-archive" "$f" && continue
-    case "$f" in pages/Projects___*.md) grep -q "^type:: project$" "$f" || continue;; esac   # excludes type:: task-index / project-note / etc. — matches the glob but isn't a project
-    d=$(grep -m1 "^digest-updated:: " "$f" | awk '{print $2}')
-    l=$(grep -m1 "^last-updated:: " "$f" | awk '{print $2}')
-    [ -n "$d" ] && [ -n "$l" ] || continue
-    ds=$(date -d "$d" +%s 2>/dev/null) || continue
-    ls=$(date -d "$l" +%s 2>/dev/null) || continue
-    [ "$ls" -gt "$ds" ] || continue   # digest newer than page is not stale
-    [ $(( (ls - ds) / 86400 )) -gt 30 ] && echo "$f digest $d vs page $l"
-  done
-  ```
-  (`date -d` is GNU — available in Git Bash and on Linux. On macOS/BSD use `date -j -f %Y-%m-%d "$d" +%s`. If neither is available, compare the `yyyy-MM-dd` strings lexicographically for ordering and report the gap in months rather than days.)
+- **detection:** `digest-updated::` more than 30 days behind `last-updated::` on the same page. `brain digest <page>` prints `drift: N days`; `brain lint` reports `stale-digest` when N > 30.
 - **remediation:** report both dates and the gap; suggest rebuild-from-source. Never rebuild without confirmation — a rebuild reads real content and costs real tokens.
 
 ## `stale-map`
 - **severity:** data-quality
-- **enforced-at:** scan
-- **auto-fixable:** report
-- **detection:** pure arithmetic — recompute the page's **real** section sizes (the same enumerate-and-measure approach as `skills/_shared/digest.md`'s derivation shell, since F2 the Map's field list is derived per page, not fixed), parse **whatever labels the page's own `Map:` bullet actually claims** — however many there are, whatever they're called — and diff each claimed figure against the measured size of the section with that name, keyed by name rather than by a fixed position. A claimed label that matches no real section on the page is its own finding: the Map is describing something that isn't there.
+- **enforced-at:** scan, and every save via `brain check`
+- **auto-fixable:** yes, by `brain digest <page> --apply`, which rewrites only the Map line (a Remap)
+- **detection:** `brain lint` / `brain digest <page>`: the Map line differs from what the helper computes from the page now. The finding names each clause whose figure no longer matches (`Session Log | 147 KB (62 entries) → 151 KB (62 entries)`).
+- **remediation:** `brain digest <page> --apply`. Never hand-edit the Map.
 
-  **Parsing keys off the reserved ` | ` separator (`skills/_shared/digest.md` "Format"), not off "the first space before a digit."** The earlier parser split a clause on the first space-then-digit, which breaks the instant a label contains its own digits — and real task-page headings do, constantly: `'2026-04-23 — Step 2 isolated, real root cause found'` and `'2026-04-23 — Step 2 patch VALIDATED on PROD'` both cut down to the label `'2026-04-23 — Step'`, a false "no such section" finding on the first and a silent same-key collision with the second — whose byte diff then never ran, because the mis-parse `continue`d past it. Splitting on the reserved token instead of guessing where prose ends is what makes the split unambiguous regardless of what a heading contains.
-
-  **A label may be truncated for display (`skills/_shared/digest.md`'s 40-byte cap, `…` marker).** Resolve it by **exact match** when it carries no `…`; when it does, treat the text before `…` as a **prefix** and find the one real heading whose own first N **bytes** — not characters — equal it, measuring both sides with `LC_ALL=C` so "N bytes" means the same thing on the composer's side and here (see the rule's own correction note below for why this must be forced, not assumed). Exactly one match → resolved, diff proceeds. Zero matches → "no such section." **More than one match → its own finding** ("ambiguous — ").
-
-  **A duplicate label — two clauses parsing to the identical string — is its own finding, not a collision to key through.** Track every label already seen in this Map; the second occurrence is reported and **neither** of the pair is diffed, because the key no longer identifies one section.
-
-  The tolerance is derived from the **unit the Map claims**, not a percentage of the measured size — and it is **one-sided for KB**, not a symmetric ± band. `digest.md` mandates truncation (never round-to-nearest), so a claim of `N KB` asserts the section measures **in `[N·1024, N·1024 + 1023]` bytes** — check `0 <= measured − N·1024 <= 1023`, not `|N·1024 − measured| <= 1024`. The old symmetric form silently accepted an entire adjacent KB tier on the low side: a claim of `87 KB` against a true 88,100 B section (which truncates to `86 KB`, one tier down) drifts only 988 B from `87·1024`, under the old 1024 B band — a wrong claim, undetected. The one-sided form catches it (the measured byte count falls *below* the claimed floor, which a correct truncation never does) while still passing a claim of `87 KB` against 89,200 B (`89200 − 89088 = 112`, inside `[0, 1023]`). A figure stated in bytes carries no rounding step and keeps the existing symmetric **64 B** tier — enough to absorb the `page` self-reference noise noted below, far below any real drift.
-
-  **A claimed section now measuring under 1 KB is flagged regardless of whether its figure still diffs correctly.** `digest.md`'s 1 KB inclusion floor means such a section should already have been dropped from the Map (Remap/Refresh) — a Map still naming it, even at an arithmetically-accurate `200 B`, means that step was skipped.
-
-  The `page` figure used to be a special case beyond ordinary rounding: `brain-save` step 9 measured the page and *then* edited the Map bullet, so the just-written claim went stale by the edit's own length delta the instant it landed — 32 B on a fresh project's first save (sub-1 KB, absorbed by the 64 B byte tier), but on a large page the same self-reference can straddle a KB boundary and drift past even the 1024 B KB tier: measured live, a 106 KB pre-write claim against a 109,786 B post-write total drifted 1,242 B — a correctly-computed Map, false-flagged as stale by write order. That is now fixed at the source, not by tolerance: every Map-writing flow re-measures the page *after* writing and corrects `page` if it changed (`skills/_shared/digest.md`'s "second pass" step; `skills/brain-save/SKILL.md` step 9). With that in place, `page`'s residual drift is like any other figure's — the tolerances above cover genuine rounding error only, and widening them again would just hide a bigger version of the same bug on the next boundary crossing.
-
-  The entry count (`(N entries)` on `Session Log`) and decision count (`(N)` on `Decisions`) have no rounding step at all — a claimed count that doesn't exactly equal the measured count is stale, full stop — while still honoring the omit-when-zero-but-nonempty rule from `digest.md`: a Map that correctly omits a count is not compared. The count itself is scoped with the same widened pattern `digest.md` uses — `grep -cE '^[[:space:]]*- (#{3,6} +)?\[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}'`, matching a `### `-style dated sub-heading as well as a plain dash-bullet — so this check agrees with what the Map was built from, rather than re-litigating the count with the narrower pattern the Map has already moved past. The reconciling residual (`+N smaller sections, X KB`) is recognized by its `+…smaller sections` prefix and skipped like `Archive` — it names no single section to diff. Scope is identical to the other three digest rules: skip `___SessionArchive.md` and `type:: session-archive`.
-  ```
-  for f in pages/Projects___*.md pages/Tasks___*.md; do
-    [ -e "$f" ] || continue    # unexpanded glob on a graph with no task pages
-    case "$f" in *___SessionArchive.md) continue;; esac
-    grep -q "^type:: session-archive" "$f" && continue
-    case "$f" in pages/Projects___*.md) grep -q "^type:: project$" "$f" || continue;; esac   # excludes type:: task-index / project-note / etc. — matches the glob but isn't a project
-    grep -qE "^(- )?## Digest" "$f" || continue
-    map=$(awk '/^(- )?## Digest/{f=1;next} f&&/^(- )?## /{exit} f' "$f" | grep -m1 "Map:")
-    [ -n "$map" ] || continue
-
-    total=$(wc -c < "$f")
-    totallines=$(awk 'END{print NR}' "$f")   # not wc -l — see digest.md: no trailing newline
-
-    # Real section map (excluding Digest itself), used to measure whatever the Map claims
-    grep -nE '^(- )?## ' "$f" | grep -v '## Digest$' > /tmp/sm_secmap.txt
-    nsecs=$(wc -l < /tmp/sm_secmap.txt)
-
-    # Build the bytes|heading|lineno|endline table ONCE per file — the same table
-    # skills/_shared/digest.md's derivation shell already emits, reused here instead
-    # of re-deriving lineno/endline and re-measuring section bytes on every clause.
-    # Before this fix, measure_section() re-scanned /tmp/sm_secmap.txt AND re-ran
-    # sed+wc -c on every call (up to 3x per clause: the byte diff plus, for Session
-    # Log/Decisions, the entry-count check), and find_section() re-scanned it again,
-    # with its own per-heading cut/compare subshell, for every …-truncated label —
-    # O(clauses x nsecs) subshell forks. Measured live (Git Bash): 68.2s for
-    # Tasks___CRMGM-1937.md alone (13 clauses), 17.6s for Unicorn-Globus; a
-    # whole-graph run timed out past 2 minutes.
-    : > /tmp/sm_sizes.txt
-    i=1
-    while [ "$i" -le "$nsecs" ]; do
-      line=$(sed -n "${i}p" /tmp/sm_secmap.txt)
-      lineno=$(echo "$line" | cut -d: -f1)
-      heading=$(echo "$line" | sed -E 's/^[0-9]+:(- )?## //')
-      next=$((i+1))
-      if [ "$next" -le "$nsecs" ]; then
-        endline=$(( $(sed -n "${next}p" /tmp/sm_secmap.txt | cut -d: -f1) - 1 ))
-      else
-        endline=$totallines
-      fi
-      bytes=$(sed -n "$((lineno+1)),${endline}p" "$f" | wc -c)
-      echo "${bytes}|${heading}|${lineno}|${endline}" >> /tmp/sm_sizes.txt
-      i=$((i+1))
-    done
-
-    # Table-driven lookups replace measure_section/find_section's repeated
-    # re-scans — one small awk pass over the precomputed table, never a
-    # re-derivation of lineno/endline and never a re-measurement of section bytes.
-    row_by_heading() {   # $1 = exact real heading text -> "bytes|heading|lineno|endline" on stdout
-      awk -F'|' -v h="$1" '$2==h{print; f=1} END{exit !f}' /tmp/sm_sizes.txt
-    }
-    section_body() {     # $1 = exact real heading text -> section body on stdout (still one sed extraction per USE, not per candidate scanned)
-      row=$(row_by_heading "$1") || return 1
-      lineno=$(printf '%s' "$row" | cut -d'|' -f3)
-      endline=$(printf '%s' "$row" | cut -d'|' -f4)
-      sed -n "$((lineno+1)),${endline}p" "$f"
-    }
-
-    # Resolve a claimed (possibly truncated) label to exactly one real heading, via
-    # ONE awk pass over the table rather than a per-clause shell loop over nsecs
-    # headings. LC_ALL=C makes wc -m and substr() byte-based — matching the
-    # composer's byte-safe 40-byte cut (skills/_shared/digest.md's Label rule)
-    # instead of a locale-dependent character cut that could key differently than
-    # what was actually written (a multi-byte label can otherwise disagree on where
-    # its own prefix ends, depending on the host's locale handling of `cut -c`).
-    # Return: 0 resolved (echoes the real heading), 1 no match, 2 ambiguous.
-    find_section() {
-      claim="$1"
-      case "$claim" in
-        *…)
-          prefix="${claim%…}"
-          plen=$(LC_ALL=C printf '%s' "$prefix" | wc -m)
-          result=$(LC_ALL=C awk -F'|' -v p="$prefix" -v n="$plen" '
-            { hp=substr($2,1,n); if (hp==p) { c++; last=$2 } }
-            END { print c "|" last }
-          ' /tmp/sm_sizes.txt)
-          matches=$(printf '%s' "$result" | cut -d'|' -f1)
-          match_heading=$(printf '%s' "$result" | cut -d'|' -f2-)
-          [ "$matches" -eq 1 ] && { echo "$match_heading"; return 0; }
-          [ "$matches" -eq 0 ] && return 1
-          return 2
-          ;;
-        *)
-          row_by_heading "$claim" >/dev/null && { echo "$claim"; return 0; }
-          return 1
-          ;;
-      esac
-    }
-
-    # Split "Map: A | x KB (n) · B | y KB · +N smaller sections, Z KB · page | z KB" on " · "
-    labels_seen=""
-    echo "$map" | sed 's/.*Map: //' | sed 's/ · /\n/g' | while IFS= read -r clause; do
-      case "$clause" in
-        "Archive | [["*) continue ;;                  # pointer clause — recognized by its value starting `[[` (digest.md's own rule), never by the label alone. A real section literally named "## Archive" has a byte-figure value instead ("Archive | 3 KB") and does NOT match this pattern, so it falls through and is diffed normally.
-        "+"*"smaller sections"*) continue ;;           # reconciling residual, not a section name
-      esac
-
-      # A clause with no reserved " | " separator at all is an old-format (pre-E1)
-      # Map clause — every check below keys off that separator, so without this
-      # guard each clause fails its anchored match and silently `continue`s past it
-      # with zero output. Verified against a real pre-E1-format Map (space instead
-      # of ` | `): every clause skipped, zero findings, even though every figure was
-      # stale. `missing-digest` doesn't catch this either — the page does carry a
-      # bullet with `Map:` in it, just not one in the current format — so an
-      # old-format Map (cross-device sync from an older build, a hand-edit) was
-      # checked by nothing at all. This is now its own finding.
-      case "$clause" in
-        *" | "*) : ;;
-        *) echo "$f: Map claims '$clause' with no ' | ' separator — malformed Map (old format?)"; continue ;;
-      esac
-
-      # Reserved-separator split: label is everything before the LAST " | " —
-      # robust even in the (rare) case a label itself contains " | ".
-      label=$(printf '%s' "$clause" | sed -E 's/ \| [^|]*$//')
-      rest=$(printf '%s' "$clause" | sed -E 's/^.* \| //')
-
-      case " ${labels_seen} " in
-        *" ${label} "*) echo "$f: Map claims duplicate label '$label' — ambiguous, not diffed"; continue ;;
-      esac
-      labels_seen="${labels_seen} ${label}"
-
-      figure=$(echo "$rest" | grep -oE '^[0-9]+(\.[0-9]+)? ?(KB|B)')
-      [ -n "$figure" ] || continue
-      v=$(echo "$figure" | grep -oE '[0-9]+(\.[0-9]+)?')
-      isKB=0
-      case "$figure" in
-        *KB) cb=$(awk -v v="$v" 'BEGIN{printf "%d", v*1024}'); isKB=1 ;;
-        *)   cb=$(awk -v v="$v" 'BEGIN{printf "%d", v}');      tol=64 ;;
-      esac
-
-      if [ "$label" = "page" ]; then
-        m=$total; resolved="page"
-      else
-        resolved=$(find_section "$label"); rc=$?
-        if [ "$rc" -eq 1 ]; then
-          echo "$f: Map claims '$label' but no such section exists on the page"
-          continue
-        elif [ "$rc" -eq 2 ]; then
-          echo "$f: Map claims '$label' but it matches more than one section — ambiguous"
-          continue
-        fi
-        row=$(row_by_heading "$resolved")
-        m=$(printf '%s' "$row" | cut -d'|' -f1)
-      fi
-
-      # One-sided KB tolerance (truncation-only): 0 <= measured - claimed_floor <= 1023.
-      # Byte tier stays symmetric (no rounding direction to respect).
-      if [ "$isKB" -eq 1 ]; then
-        d=$((m - cb))
-        { [ "$d" -lt 0 ] || [ "$d" -gt 1023 ]; } && echo "$f: $label claims $figure, measured ${m}B"
-      else
-        diff=$(( cb > m ? cb - m : m - cb ))
-        [ "$diff" -gt "$tol" ] && echo "$f: $label claims $figure, measured ${m}B"
-      fi
-
-      # 1 KB inclusion floor: a claimed (non-page) section now under 1024 B should have been dropped
-      [ "$label" != "page" ] && [ "$m" -lt 1024 ] && \
-        echo "$f: $label claims $figure but now measures ${m}B, below the 1 KB inclusion floor — should have been dropped"
-
-      # Exact count check — only fires when the clause actually carries a count
-      case "$clause" in
-        *"entries)"*)
-          cc=$(echo "$clause" | grep -oE '\([0-9]+ entries\)' | grep -oE '[0-9]+')
-          mc=$(section_body "$resolved" | grep -cE '^[[:space:]]*- (#{3,6} +)?\[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}')
-          [ -n "$cc" ] && [ "$cc" != "$mc" ] && echo "$f: $label claims ($cc entries), measured $mc"
-          ;;
-        *"("*")"*)
-          cc=$(echo "$clause" | grep -oE '\([0-9]+\)' | grep -oE '[0-9]+')
-          if [ -n "$cc" ]; then
-            mc=$(section_body "$resolved" | grep -cE '^[[:space:]]*- (#{3,6} +)?\[?\[?[0-9]{4}-[0-9]{2}-[0-9]{2}')
-            [ "$cc" != "$mc" ] && echo "$f: $label claims ($cc), measured $mc"
-          fi
-          ;;
-      esac
-    done
-  done
-  ```
-  This is the rule that catches what the other three digest rules cannot: `digest-updated::` and `## Digest`'s mere presence say nothing about whether the *bytes it claims* — or the *entry count* it claims, the figure `brain-load` quotes most prominently ("47 sessions of log not read") — still match the page, and F2 means that check must now hold for however many sections a real page's Map actually lists, not just a fixed four. Rotation is the primary offender (see `skills/brain-save/references/rotation.md`) — it moves tens of KB out of `## Session Log` and, absent the digest-remap step added there, leaves the Map quoting a page that no longer exists.
-- **remediation:** report each mismatched figure (claimed vs. measured), report any claimed label that matches no real section (or matches more than one), report any duplicate label, report any claimed section now under the 1 KB inclusion floor, and suggest a rebuild per `skills/_shared/digest.md`. Report-tier, like the other digest rules — a rebuild reads real content and costs real tokens, never spent without confirmation.
-- **Post-launch correction (wave E4, 2026-07-26 — final review):** four gaps found. (1) A Map clause with no reserved ` | ` separator at all — the pre-E1 format, or any hand-edited/cross-device-synced page still carrying it — failed every anchored check below and `continue`d silently; every clause on such a page was skipped with zero output, and no other digest rule caught it either. Now its own finding. (2) `find_section`'s prefix resolution measured a claimed label's length with plain `wc -m` and cut the real heading with plain `cut -c` — both locale-dependent, and disagreeing with each other on a UTF-8 host where `wc -m` counts characters but `cut -c` counts bytes, so a multi-byte label's key could fail to resolve even though the composer (`skills/_shared/digest.md`) wrote it correctly. Both calls now force `LC_ALL=C`, matching the composer's own byte-safe cut. (3) The entry-count pattern `#{2,6}` also matches a genuine `## yyyy-mm-dd` dated *section* heading (10 real instances in the reference graph, e.g. `- ## 2026-04-22 — New PROD OOM…`) — latent only because every use is scoped to a specific section's own `lineno+1`–`endline` range, but copied verbatim into three files with an instruction to reuse it verbatim, so the trap would outlive the scoping that currently protects it. Now `#{3,6}` — identical counts on every real page checked (12 / 13 / 47), since a genuine dated sub-entry is always written with three or more hashes (`### `), never two. (4) `measure_section` and `find_section` each independently re-scanned `/tmp/sm_secmap.txt` and re-ran `sed`+`wc -c` per clause — up to 3 calls per clause for the byte diff and count checks, plus a full per-heading scan for every `…`-truncated label — O(clauses × sections). Measured live (Git Bash): 68.2s for `Tasks___CRMGM-1937.md` alone, 17.6s for Unicorn-Globus. Fixed by building the `bytes|heading|lineno|endline` table once per file (the derivation shell already emits exactly that) and looking up by name — reproduced on the same host: 73.4s → 14.9s for CRMGM-1937.md (13-clause Map), 17.5s → 7.8s for Unicorn-Globus, same findings before and after in both cases.
+## `map-label`
+- **severity:** data-quality
+- **enforced-at:** scan, and every save via `brain check`
+- **auto-fixable:** yes (the same Remap)
+- **detection:** a Map clause whose label is neither a real heading nor its 40-byte cut, e.g. `Session 08-12` for `Session 2026-08-12 — solved…` (7 of 66 digests measured on the live graph). A label that doesn't resolve can't lead back to its section.
+- **remediation:** `brain digest <page> --apply`.
 
 ## `oversized-digest`
 - **severity:** data-quality
 - **enforced-at:** compose, scan
 - **auto-fixable:** safe-only
-- **detection:** the `## Digest` section exceeds 800 bytes, or any digest property value exceeds 120 **bytes**.
-  ```
-  for f in pages/Projects___*.md pages/Tasks___*.md; do
-    [ -e "$f" ] || continue    # unexpanded glob on a graph with no task pages
-    case "$f" in *___SessionArchive.md) continue;; esac
-    grep -q "^type:: session-archive" "$f" && continue
-    case "$f" in pages/Projects___*.md) grep -q "^type:: project$" "$f" || continue;; esac   # excludes type:: task-index / project-note / etc. — matches the glob but isn't a project
-    b=$(awk '/^(- )?## Digest/{f=1;next} f&&/^(- )?## /{exit} f' "$f" | wc -c)
-    [ "$b" -gt 800 ] && echo "$f digest ${b}B > 800B"
-    LC_ALL=C grep -nE "^(focus|next|open):: .{121,}" "$f" | sed "s|^|$f |"
-  done
-  ```
-  **`LC_ALL=C` on the property check is load-bearing, not decoration.** `.` in a regex matches one *character*, and under a UTF-8 locale (`LC_ALL=en_US.UTF-8` etc.) a multi-byte character (`—`, `·` — both appear in this file's own digest examples) counts as one `.`, so a value that is genuinely 121 **bytes** but only 120 **characters** silently passes `.{121,}` and the cap is missed. The section-size check above already uses `wc -c`, which is byte-exact regardless of locale — forcing `LC_ALL=C` makes the property check agree with it on the same machine instead of drifting apart under whatever locale the shell happens to have.
+- **detection:** the `## Digest` section exceeds 800 bytes, or any digest property value exceeds 120 **bytes**. `brain digest <page>` prints `over:` lines, and `brain lint` reports `oversized-digest`: the section over 800 bytes, or `focus::` / `next::` / `open::` over 120 bytes (all counted in bytes by the helper).
 - **remediation:** the safe subset is **compose-time only** — `brain-save` recompresses its own composed digest before writing it: drop the free slot first, then shorten Binding and Hazard; **never drop the Map**. At **scan** time this rule is **report-only**: trimming content already on disk is never safe to automate, because the excess may be the only place something is recorded. Same scoping discipline as `malformed-property`.
 
 ## Post-write verify (scoped)
 
-For skills that write graph files (brain-save; reusable by brain-init): after **all** writes in the operation are done, verify what actually landed on disk. This is the mechanical safety net behind the compose-time self-check — instructions alone demonstrably miss things (see the v0.9.0 design spec).
-
-1. Collect the list of files written in this operation (project/task page, journal, `Index.md`, `Meta.md`, …).
-2. In **one** Bash call, run the detections for `code-in-braces`, `bare-hash-tag`, `unnamespaced-link`, and `file-link` with `pages/ journals/` replaced by that file list, plus per-file backtick parity:
-   ```
-   F="pages/Projects___X.md journals/2026_07_07.md"   # the actual list
-   grep -nE "\{\{[^}]*\}\}" $F
-   grep -nP "(?<![\w/&\x60#\]])#([0-9]{1,4}|[0-9A-Fa-f]{6})\b" $F
-   grep -nE "\[\[(CRMGM|GLOPRICE)-[0-9]+\]\]" $F
-   grep -nE "\[\[file:///" $F
-   for f in $F; do c=$(grep -o '`' "$f" | wc -l); [ $((c%2)) -ne 0 ] && echo "ODD backticks: $f"; done; true
-   ```
-   (Apply each rule's masking notes when judging hits — e.g. a `#N` inside backticks or a `{{x}}` inside a fenced block is a false positive. The `grep -nP` line needs PCRE support — no `-P` on this host → use the ERE fallback documented in `bare-hash-tag`. If an odd backtick count traces into a fenced code block (e.g. a verbatim Jira draft), leave the fence content untouched — verbatim fenced content is exempt; investigate the lines this save wrote instead.)
-3. Any real hit → apply that rule's remediation with a surgical Edit → re-run that detection on that file; expect zero.
-4. Report in the skill's final confirmation: "post-write check: clean" or "post-write check fixed N issues". Hits on lines this save wrote → fix silently, it's the skill's own output. Hits clearly on pre-existing lines this save didn't touch → still safe-tier fixable, but call them out explicitly in the confirmation (e.g. "also fixed a pre-existing `#12` in Index.md") so the user knows content beyond this session's writes was touched — or report-and-defer to brain-doctor if the fix would be invasive. No user prompt needed for the silent case — the skill is correcting its own just-written output, which the compose invariants already commit it to.
+After all writes in an operation, run `brain check <every file written>`. It lints only the lines added since the baseline that `brain sections <page> --baseline <other files>` recorded before the first Edit. It prints `check <file>: N new (E error, W warn), P pre-existing` and exits 1 on any new error-tier finding. Fix those with Edit and re-run `check` on that file. Warn-tier findings go in the confirmation to the user. Pre-existing findings belong to brain-doctor: mention them, don't silently fix them.
 
 ## After repair — verify
 
-- Re-run each detection; expect zero (minus intentional forward-references).
+- `brain lint <files changed>`; expect zero for the classes fixed (minus intentional forward-references).
 - Per-file backtick parity: every file should have an **even** number of `` ` `` characters (odd = a broken inline-code span introduced by the fix).
 ```
 for f in pages/*.md journals/*.md; do c=$(grep -o '`' "$f" | wc -l); [ $((c%2)) -ne 0 ] && echo "ODD: $f"; done; true
