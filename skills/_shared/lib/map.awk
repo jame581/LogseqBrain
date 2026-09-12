@@ -60,26 +60,31 @@ function map_text(T,   tail, budget, run, i, cost, kept, out) {
 }
 
 # The page figure measures the file the new Map line is part of: iterate until it is stable.
+# Within ~2 bytes of a KiB boundary there is no stable value — "1023 B" is 2 bytes longer than
+# "1 KB", so the total flips between the two and the iteration enters a 2-cycle (base=1019:
+# 1021 → 1025 → 1023 → 1025 → …). CONV records whether the figure finally used is the one the
+# finished file would actually measure; a figure that is known-wrong is never written (§5, §8).
 function compute(   T, T2, txt, n, base, ins) {
   base = TOTAL - (ML ? length(L[ML]) : 0); ins = ML ? 0 : 1
-  T = TOTAL
+  T = TOTAL; CONV = 0
   for (n = 0; n < 10; n++) {
     txt = map_text(T)
     T2 = base + length(PREFIX "Map: " txt CRSUF) + ins
-    if (fig(T2) == fig(T)) break
+    if (fig(T2) == fig(T)) { CONV = 1; break }
     T = T2
   }
-  NEWTOTAL = T2
   return txt
 }
 
 function setup_digest(   i, t, fb) {
-  ML = 0; fb = 0; IP = SL[KD]
+  ML = 0; NMAP = 0; fb = 0; IP = SL[KD]
   for (i = SL[KD] + 1; i <= SE[KD]; i++) {
     if (FENCE[i]) continue
     t = cr(L[i])
     if (!fb && t ~ /^[ \t]*- /) fb = i
-    if (!ML && t ~ /^[ \t]*- Map:/) ML = i
+    # Count them, don't just bind the first: a duplicated block is a realistic Logseq Sync conflict
+    # artifact, and emit_file() would rewrite the first Map line and leave the second one stale.
+    if (t ~ /^[ \t]*- Map:/) { NMAP++; if (!ML) ML = i }
     if (t != "") IP = i
   }
   PREFIX = "  - "
@@ -145,7 +150,15 @@ function report(   i, k, bad, d1, d2, dr, p, pk) {
   }
   for (i = SL[KD]; i <= SE[KD]; i++) print cr(L[i])
   print "--"
-  if (!ML) { print "map: missing"; print "computed: " MAPTXT; bad = 1 }
+  if (NMAP > 1) {
+    printf "map: duplicated — ## Digest has %d \"- Map:\" lines; delete all but one with Edit, then rerun\n", NMAP
+    bad = 1
+  }
+  else if (!CONV) {
+    print "map: page figure does not converge — the page total sits within 2 bytes of a 1 KB boundary, where no figure measures the file it is part of; --apply refuses until a byte is added or removed"
+    bad = 1
+  }
+  else if (!ML) { print "map: missing"; print "computed: " MAPTXT; bad = 1 }
   else if (OLDTXT == MAPTXT) print "map: ok"
   else { print "map: stale" stale_details(); print "computed: " MAPTXT; bad = 1 }
   printf "digest: %d B of 800 B cap\n", SB[KD]
@@ -182,11 +195,15 @@ function lint_findings(   errs, pk, p, d1, d2, i, det) {
   if (!ISB) return 0
   if (!KD) { printf "%s:%d\tmissing-digest\twarn\tno ## Digest section\n", rel, 1; return 0 }
   if (!ML) { printf "%s:%d\tmissing-digest\terror\t## Digest has no Map line — run brain digest --apply\n", rel, SL[KD]; errs++ }
+  else if (!CONV) {
+    printf "%s:%d\tnonconvergent-map\terror\tpage figure does not converge — the total sits within 2 bytes of a 1 KB boundary; add or remove a byte\n", rel, ML; errs++
+  }
   else if (OLDTXT != MAPTXT) {
     det = stale_details(); sub(/^ · /, "", det)
     printf "%s:%d\tstale-map\terror\t%s\n", rel, ML, det; errs++
     for (i = 1; i <= NLB; i++) { printf "%s:%d\tmap-label\terror\t\"%s\" matches no heading\n", rel, ML, LB[i]; errs++ }
   }
+  if (NMAP > 1) { printf "%s:%d\tduplicate-map\terror\t## Digest has %d \"- Map:\" lines — delete all but one\n", rel, ML, NMAP; errs++ }
   if (SB[KD] > 800) { printf "%s:%d\toversized-digest\terror\tdigest %d B > 800 B — digest prose over cap by %d B\n", rel, SL[KD], SB[KD], SB[KD] - 800; errs++ }
   split("focus next open", pk, " ")
   for (p = 1; p <= 3; p++) if ((pk[p] in PROP) && length(PROP[pk[p]]) > 120) {
@@ -209,7 +226,17 @@ END {
     if (!KD) { print "brain: no ## Digest section in " rel " — write the prose slots with Edit first" > "/dev/stderr"; exit 2 }
   }
   if (KD) setup_digest()
-  if (mode == "apply") { emit_file(); exit 0 }
+  if (mode == "apply") {
+    if (NMAP > 1) {
+      printf("brain: %s — ## Digest has %d \"- Map:\" lines; delete all but one with Edit, then rerun\n", rel, NMAP) > "/dev/stderr"
+      exit 2
+    }
+    if (!CONV) {
+      printf("brain: %s — the page figure does not converge: the total sits within 2 bytes of a 1 KB boundary, where no Map line measures the file it is part of. Add or remove a byte of digest prose and rerun.\n", rel) > "/dev/stderr"
+      exit 2
+    }
+    emit_file(); exit 0
+  }
   if (mode == "lint") exit lint_findings()
   exit report()
 }
