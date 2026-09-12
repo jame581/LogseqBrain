@@ -19,7 +19,7 @@ Run `brain info` once, and use its `graph:` path for any Read this skill makes i
 
 ## Loading a Specific Project
 
-1. **Find the page** per `references/matching.md`. If a helper call exits 2 with `page not found`, it lists near matches; offer them.
+1. **Find the page** per `references/matching.md`. If a helper call exits 2 with `page not found`, it may list near matches (it greps the typed key as a substring, so a typo that adds a character finds none); offer them when it does.
 
 2. **One call: `brain digest <page>`.** It prints the page-top properties, the whole `## Digest` (however long the property block is), then:
    - `map: ok`: the Map is exact.
@@ -53,7 +53,7 @@ Run `brain info` once, and use its `graph:` path for any Read this skill makes i
 - **Current Plan:** `brain read <page> "Current Plan"` (8 KB cap; over it, `brain tail <page> "Current Plan" --max 8192`). Take the active task IDs from it, skipping task pages whose `status::` is `done`, as step 5 does.
 - **Session Log tail:** `brain tail <page> "Session Log" --entries 3 --max 4096`.
 
-Build the continuity hint from the newest Session Log entry and its `open-questions::`, and state coverage from the coverage lines. Then offer a digest, quoting the bytes this fallback actually read (the sum of its coverage lines): *"This page has no digest yet — this load read ~X KB; a digest brings loads to about 2 KB. Build one?"* Build only on confirmation, via the Rebuild path in `skills/_shared/digest.md`.
+Build the continuity hint from the newest Session Log entry and its `open-questions::`, and state coverage from the coverage lines. Then say what was **not** read: `brain digest` on a digest-less page already printed the whole section table (every section with its bytes) — list every section this fallback didn't fetch, with its bytes, straight from that table. Step 7's statement ("This is mandatory…") is mandatory on this path too; it is just sourced from the section table instead of the Map. (Escalation beyond this fallback starts at level 2 in `skills/_shared/escalation.md` — levels 0–1 presuppose a Map, which a digest-less page doesn't have.) Then offer a digest, quoting the bytes this fallback actually read (the sum of its coverage lines): *"This page has no digest yet — this load read ~X KB; a digest brings loads to about 2 KB. Build one?"* Build only on confirmation, via the Rebuild path in `skills/_shared/digest.md`.
 
 ## Full mode ("load <project> full")
 

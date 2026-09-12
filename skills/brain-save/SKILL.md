@@ -50,6 +50,7 @@ Six categories. `references/categories.md` gives each one's format:
    - namespaced `[[Tasks/…]]` / `[[Projects/…]]` links
    - markdown links for file paths, never `[[file://…]]`, and never relative `[x](docs/x.md)` links
    - Jira drafts fenced, verbatim
+   - `key:` → `key::` only in the page-top property block; never in a Session Log append, where `- status: we are blocked` may be prose, not a property
 
    **Self-check the composed text against these before any Edit, and correct violations silently.** Step 10's `brain check` is the backstop, not the first line: Logseq parses a file as soon as it changes and never deletes a page it created, so a bad line fixed seconds later can still leave a phantom page.
 
@@ -84,9 +85,9 @@ Six categories. `references/categories.md` gives each one's format:
    - If the project is missing from `pages/Index.md`, add a one-liner under `## Projects`, with the descriptor taken from the page's first Overview bullet.
 
 10. **`brain check <page> pages/Index.md journals/<yyyy_MM_dd>.md`**, plus Meta and Decisions if you wrote them.
-    - **error**: a mechanical violation on a line this save wrote. Fix it with Edit, then re-run `check` on that file.
+    - **error**: a mechanical violation on a line this save wrote. Fix it with Edit, then re-run `check` on that file. **Exception:** a rotation (`references/rotation.md`) moves Session Log entries verbatim, so `check` on the archive page reports every moved line as newly added — a finding there is pre-existing content the rotation carried over, not something this save wrote. Report it to the user and leave it for `brain-doctor`; never edit an entry while archiving it.
     - **warn** (`broken-link`, `new-property-key`): tell the user; don't block on it. For example: "linked `Tasks/CRMGM-2070`, which has no page yet".
-    - **digest findings** (`stale-map`, `map-label`, `oversized-digest`, a missing Map) are measured over the whole page, not only this save's lines. Step 8 should have prevented them; if one appears, re-run `brain digest <page> --apply`.
+    - **digest findings** (`stale-map`, `map-label`, `oversized-digest`, `missing-digest`) are measured over the whole page, not only this save's lines. Step 8 should have prevented them; if one appears, re-run `brain digest <page> --apply`. `nonconvergent-map` and `duplicate-map` are the exception: `--apply` refuses to write on either, so re-running it alone won't clear them — see the catalog (`skills/_shared/hygiene-rules.md`) for the actual fix.
 
 11. **`brain activity "saved [[Projects/<Name>]]"`**, then **confirm** in plain language what was written, including the check result and any warn-tier items.
 
