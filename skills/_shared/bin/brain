@@ -271,7 +271,33 @@ commit_write() {
   [ -n "${BRAIN_TEST_MUTATE_BEFORE_COMMIT:-}" ] && printf ' ' >> "$_t"   # test-only hook
   if [ -f "$_t" ]; then _now=$(cksum < "$_t"); else _now=absent; fi
   if [ "$_now" != "$5" ]; then rm -f "$2"; die "$1 changed during apply — rerun"; fi
-  cat "$2" > "$_t" || { rm -f "$2"; die "write failed: $1"; }
+  # §2.5 mandates this in-place `cat`, which opens the target O_TRUNC. Stage a rollback copy first:
+  # any failure after that point — SIGINT, ENOSPC, a dropped sync mount (this graph usually lives on
+  # synced storage) — would otherwise leave the page truncated, with "write failed" reading as
+  # though nothing had happened. The cleanup trap restores the same copy if we are interrupted.
+  ROLLBACK=
+  if [ -f "$_t" ]; then
+    ROLLBACK="$STATE_DIR/rollback.$$"
+    cp "$_t" "$ROLLBACK" || { ROLLBACK=; rm -f "$2"; die "cannot stage a rollback copy of $1 — refusing to write"; }
+  fi
+  INFLIGHT=$1
+  if [ -n "${BRAIN_TEST_FAIL_COMMIT:-}" ]; then : > "$_t"; _wrc=1   # test-only hook: truncate, then fail
+  else cat "$2" > "$_t"; _wrc=$?; fi
+  INFLIGHT=
+  if [ "$_wrc" != 0 ]; then
+    rm -f "$2"
+    if [ -z "$ROLLBACK" ]; then
+      rm -f "$_t"
+      die "write failed: $1 — nothing existed there before, so the partial file was removed"
+    fi
+    if cat "$ROLLBACK" > "$_t" 2>/dev/null; then
+      _rbp=$ROLLBACK; ROLLBACK=; rm -f "$_rbp"
+      die "write failed: $1 — the original was restored, the page is unchanged"
+    fi
+    _rbp=$ROLLBACK; ROLLBACK=
+    die "write failed: $1 — the original could NOT be restored; recover it from $_rbp"
+  fi
+  if [ -n "$ROLLBACK" ]; then rm -f "$ROLLBACK"; ROLLBACK=; fi
   rm -f "$2"; COMMITTED=1
 }
 
