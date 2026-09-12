@@ -10,6 +10,10 @@ WORK="${TMPDIR:-/tmp}/brain-tests.$$"
 rm -rf "$WORK"; mkdir -p "$WORK" || exit 2
 trap 'rm -rf "$WORK"' EXIT
 pass=0; fail=0
+# Write safety, asserted for every case: only the file named in the case's `target` may change —
+# nothing at all when a case declares none. This is what pins a refusal case against a partial
+# write (exit code and stderr alone would not) and catches a stray write anywhere in the graph.
+snap() { (cd "$G" && find . -type f -exec cksum {} + 2>/dev/null | LC_ALL=C sort); }
 for case_dir in "$ROOT"/tests/cases/${1:-*}/; do
   [ -d "$case_dir" ] || continue
   case_dir=${case_dir%/}
@@ -28,6 +32,7 @@ for case_dir in "$ROOT"/tests/cases/${1:-*}/; do
       echo "FAIL $name (setup.sh)"; fail=$((fail + 1)); continue
     fi
   fi
+  snap > "$run/snap.pre"
   (
     if [ -f "$case_dir/env" ]; then
       while IFS= read -r l || [ -n "$l" ]; do [ -n "$l" ] && eval "export $l"; done < "$case_dir/env"
@@ -38,6 +43,15 @@ for case_dir in "$ROOT"/tests/cases/${1:-*}/; do
     echo $? > "$run/exit"
   )
   ok=1
+  snap > "$run/snap.post"
+  tgt=; [ -f "$case_dir/target" ] && tgt="./$(tr -d ' \r\n' < "$case_dir/target")"
+  diff "$run/snap.pre" "$run/snap.post" | sed -n 's/^[<>] //p' | sed 's/^[0-9]* [0-9]* //' \
+    | LC_ALL=C sort -u > "$run/changed"
+  while IFS= read -r p || [ -n "$p" ]; do
+    [ -z "$p" ] && continue
+    [ -n "$tgt" ] && [ "$p" = "$tgt" ] && continue
+    ok=0; echo "  wrote outside target: ${p#./}"
+  done < "$run/changed"
   want_exit=0; [ -f "$case_dir/expected.exit" ] && want_exit=$(tr -d ' \r\n' < "$case_dir/expected.exit")
   got_exit=$(cat "$run/exit")
   [ "$got_exit" = "$want_exit" ] || { ok=0; echo "  exit: want $want_exit, got $got_exit"; }
