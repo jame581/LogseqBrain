@@ -114,7 +114,9 @@ init_run() {
   valid_date "$TODAY" || exit 2
   STATE_DIR="${TMPDIR:-/tmp}/logseq-brain/$(printf '%s' "$GRAPH" | cksum | cut -d' ' -f1)"
   RUN_DIR="$STATE_DIR/run.$$"
-  mkdir -p "$STATE_DIR/base" "$RUN_DIR" || { RUN_DIR=; die "cannot create state dir $RUN_DIR"; }
+  # Capture the path before clearing RUN_DIR (which stops the cleanup trap touching a dir we never
+  # made): clearing it first left die printing "cannot create state dir" with nothing after it.
+  mkdir -p "$STATE_DIR/base" "$RUN_DIR" || { _rd=$RUN_DIR; RUN_DIR=; die "cannot create state dir $_rd"; }
 }
 
 nonl() {
