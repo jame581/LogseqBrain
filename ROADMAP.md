@@ -73,10 +73,18 @@
 - Save/load cycle against a Logseq graph
 - Initial graph layout (`pages/`, `journals/`, `Index.md`, `Meta.md`)
 
-## Current — v0.11.0 (TBD)
+## Current — v0.11.0: Deterministic helper
+
+- One POSIX `sh` + `awk` helper (`skills/_shared/bin/brain`) performs every mechanical step: section measurement, the digest Map (`digest --apply`), cap checks, scoped count-first search, Logseq-faithful lint (validated against Logseq's parse cache), and the activity line.
+- Target: saves drop from ~29 tool calls to ~10–13, loads from ~12 to ~3. Measured by `tools/measure/` two weeks after release.
+- First test suite (`tests/`, CI on three awks) and dev tools (`tools/oracle`, `tools/measure`).
+- See `docs/superpowers/specs/2026-09-11-v0.11.0-design.md`.
 
 ## Future — OG (markdown)
 
+- **Instruction diet, part 2** — trim the remaining prose now that the helper owns the mechanics.
+- **Graph policy** — task-first entry (stub task pages, loading by Jira ID), size-based Session Log rotation, a property vocabulary and the `:property-pages/enabled?` setting, re-checking stale `open::` items on save.
+- **Maintainer graph cleanup** — fix what `brain lint --all` reports, re-index in Logseq, backfill digests.
 - **Block refs for decisions.** Write a cross-project decision once with `id:: <uuid>` and reference it as `((uuid))` from `pages/Decisions.md`, ending the physical duplication between the project page and the decision log.
 - **`{{query}}` dashboards.** Live Logseq-rendered views (active projects, open blockers) that cost nothing to maintain. Human-facing only — no token effect for Claude.
 - **Retrieval rethink.** Drop project pre-loading entirely; grep purely on demand with `Index.md` as the only always-loaded surface. v0.10.0's escalation ladder is a bounded step in this direction.
