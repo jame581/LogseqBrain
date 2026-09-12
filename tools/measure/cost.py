@@ -85,16 +85,26 @@ def main():
     ap.add_argument('--csv', action='store_true')
     a = ap.parse_args()
     transcripts = glob.glob(os.path.join(a.projects, '*', '*.jsonl'))
-    ws = [w for f in transcripts
-          for w in windows(f, a.graph_marker) if w['ts'][:10] >= a.since]
+    ws, skipped = [], 0
+    for f in transcripts:
+        try:
+            for w in windows(f, a.graph_marker):
+                if w['ts'][:10] >= a.since:
+                    ws.append(w)
+        except OSError:
+            skipped += 1
     if a.csv:
         print('ts,skill,calls,graph_bytes,instruction_bytes,other_bytes,output_tokens,file')
         for w in sorted(ws, key=lambda w: w['ts']):
             b = w['bytes']
             print(f"{w['ts']},{w['skill']},{w['calls']},{b['graph']},{b['instructions']},{b['other']},{w['out']},{w['file']}")
+        if skipped:
+            print(f'# skipped {skipped} unreadable transcript file(s) of {len(transcripts)}')
         return
     if not ws:
         print(f'no brain-skill windows found ({len(transcripts)} transcripts under {a.projects}, --since {a.since or "(none)"})')
+        if skipped:
+            print(f'skipped {skipped} unreadable transcript file(s) of {len(transcripts)}')
         return
     by = collections.defaultdict(list)
     for w in ws:
@@ -104,6 +114,8 @@ def main():
         print(f"{skill}: n={len(lst)} · calls median {med(lambda w: w['calls']):.0f} (max {max(w['calls'] for w in lst)})"
               f" · graph {med(lambda w: w['bytes']['graph']) / 1024:.1f} KB · instructions "
               f"{med(lambda w: w['bytes']['instructions']) / 1024:.1f} KB · output {med(lambda w: w['out']):.0f} tok")
+    if skipped:
+        print(f'skipped {skipped} unreadable transcript file(s) of {len(transcripts)}')
 
 
 if __name__ == '__main__':

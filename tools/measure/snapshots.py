@@ -80,12 +80,14 @@ def main():
                 fails['n'] += 1
             return p.stdout
         maps = collections.Counter(); bad = []; errs = collections.Counter(); intervals = 0
+        processed = 0
         for key, vs in timelines(a.graph).items():
             target = os.path.join(tmp, key)
             first_digest = set()
             for i, (t, body) in enumerate(vs):
                 if t.isoformat()[:10] < a.since:
                     continue
+                processed += 1
                 text = body.decode('utf-8', 'replace')
                 m = DIGEST.search(text)
                 if key.startswith('pages/') and m and m.group(0) not in first_digest:
@@ -104,6 +106,10 @@ def main():
                     for l in out.splitlines():
                         if '\terror\t' in l and '(no baseline' not in l:
                             errs[l.split('\t')[1]] += 1
+        if processed == 0:
+            sys.exit(f'snapshots: no snapshot entries found under {a.graph} '
+                     f'(logseq/bak/, logseq/version-files/local/) with --since {a.since or "(none)"} '
+                     f'— nothing was measured; this is not the same as a clean run')
         print('Map at first appearance: ' + ', '.join(f'{k} {n}' for k, n in sorted(maps.items())))
         for b in bad:
             print('  ' + b)
@@ -111,6 +117,8 @@ def main():
               (', '.join(f'{k} {n}' for k, n in errs.most_common()) or 'none'))
         if fails['n']:
             print(f'helper failures: {fails["n"]}')
+            sys.exit(f'snapshots: {fails["n"]} helper invocation(s) returned an unexpected exit code '
+                     f'— treat the findings above as unreliable')
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
