@@ -8,15 +8,16 @@
 - **Cases** live in `evals/<case>/` (`prompt.md`, `case.yaml`, `scaffold.sh`, `graders/*.md`). Every graph case builds `./graph` from one shared fixture through `evals/fixtures/materialize.sh`, which turns 10-byte date tokens into real dates.
 - **The wrapper** `tools/eval/run.sh` runs only as the `logseq-eval` WSL user. It evaluates an export of the committed `HEAD` and brackets every run with an isolation canary.
 - **`tools/eval/summarize.py`** turns the harness's JSON into the tool-call table.
+- **`tools/eval/lint_cases.py` and `tools/eval/test.sh`** check the case files and the tools for free.
 - **Four golden cases** in `tests/run.sh` keep the fixture valid in CI.
 
 **Tech Stack:**
 - POSIX `sh` and POSIX `awk`, for the fixture tooling and the wrapper;
-- Python 3 standard library, for the summarizer;
+- Python 3 standard library, for the summarizer and the case linter;
 - Claude Code 2.1.270 `claude plugin eval`;
 - WSL2 FedoraLinux-44, with `bubblewrap` and `socat`.
 
-**Spec:** `docs/superpowers/specs/2026-09-13-eval-suite-design.md` (commit `947053f`). Task 1 annotates it with the verification results below; read the annotated version.
+**Spec:** `docs/superpowers/specs/2026-09-13-eval-suite-design.md` (commit `947053f`). Task 1 annotates it with the verification and review results below; read the annotated version.
 
 ## Global Constraints
 
@@ -26,11 +27,15 @@
   `MSYS_NO_PATHCONV=1 wsl.exe -d FedoraLinux-44 -u logseq-eval -e sh /mnt/d/AI/logseq-brain/tools/eval/run.sh [--case <glob>] [--check | --dry-run | --trip-canary] < /dev/null`
 
   Without `MSYS_NO_PATHCONV=1`, Git Bash rewrites `/mnt/d/...`. Without `-e`, a WSL shell may glob-expand `--case` values. Paid runs take 1–3 minutes per case: run them with the Bash tool's `run_in_background`.
-- **Fixed eval flags (spec §3.4):** `--runs 1 --ablation none --scaffold --allow-tools Bash Write Edit --keep-temp --no-publish --trust-plugin --max-cost-usd 10 --model claude-opus-5`, plus `--output-dir` and `--json`. The target comes first.
+- **Fixed eval flags (spec §3.4, plus the judge pin):** `--runs 1 --ablation none --scaffold --allow-tools Bash Write Edit --keep-temp --no-publish --trust-plugin --max-cost-usd 10 --model claude-opus-5 --judge-model claude-haiku-4-5`, plus `--output-dir` and `--json`. The target comes first.
 - **Claude Code** ≥ `2.1.269`.
-- **Model:** `claude-opus-5`.
+- **Models:** `claude-opus-5` for the agent, `claude-haiku-4-5` for the judge.
 - **Cost ceiling:** $10 per invocation.
-- **Paid runs are authorized only as each task lists them.** A fix may rerun only the failing case (`--case <name>`), at most twice per case per task. Record the cost of every paid run (from its summary) in the task report. `--check`, `--dry-run` and `--trip-canary` are free: use them first.
+- **Paid runs are authorized only as each task lists them.**
+  - A fix may rerun only the failing case (`--case <name>`), at most twice per case per task.
+  - Record the cost of every paid run (from its summary) in the task report.
+  - **Stop and report once the recorded cost of this plan's paid runs reaches $20.**
+  - Free checks come first, every time: `sh tools/eval/test.sh` (regexes compile, scaffolds build, the tools behave), then `run.sh --check` (schema and tool grants, at a $0 ceiling). `--dry-run` and `--trip-canary` are free too.
 - **Nothing that ships changes.** No edits under `skills/` or `.claude-plugin/`, and no version bump.
 - **A grader that fails because a skill misbehaved is a finding, not a grader bug.** Never weaken a grader to make a run pass.
 - **The real graph is out of bounds.** Never touch `E:\Loqsec\ClaudeBrain` or any real graph; the suite uses only fixture graphs built inside the run workspace.
@@ -39,12 +44,12 @@
 - **Grader truth rules (spec §6.2, plus verification):**
   1. Journal assertions read the helper's `activity:` output in the trace, never the journal file.
   2. Phantom syntax is graded as "never written".
-  3. No pattern anchors to a line start (sandboxed Bash output starts with `.bashrc: Permission denied` noise).
-  4. `tool_used` inputs are matched JSON-encoded, so a quote inside a command is `\"`; helper-call patterns use `\W+` and `[^\s"\\]+`, never literal quotes.
+  3. No `trace` or `last_message` pattern anchors to a line start (sandboxed Bash output starts with `.bashrc: Permission denied` noise). A `tool_used` input is one JSON string, so `^` is safe there.
+  4. `tool_used` inputs are matched JSON-encoded, so a quote inside a command is `\"`. Helper-call patterns use `\W+` and `[^\s"\\]+`, never literal quotes, and end with `(?!(?:[^;&|\\]|\\[^n])*--graph\W)`: a subcommand placed before `--graph` exits 2 and must not count.
   5. A `trace` target also contains the prompt and every file the agent read, so a `not_contains` pattern must occur in neither.
 - **Fixture dates are 10-byte tokens:** `@TODAY-NN@` in content, `@TODAY_NN@` in file names. A Map line is always computed by `brain digest --apply`, never written by hand.
 - **Portability:** shell is POSIX `sh` with `LC_ALL=C`. `awk` is POSIX only: no `gensub`, no three-argument `match`, no `strftime`/`mktime`, no `{n,m}` intervals, no `length(array)`. CI runs the golden tests on mawk, BWK awk and gawk.
-- **Write files with the Write/Edit tools,** not with heredocs through `wsl.exe` (that transport was observed to halve `\\`). Every file ends with a newline, uses LF, and has no trailing spaces. `·` is U+00B7 and `—` is U+2014.
+- **Write files with the Write/Edit tools,** not with heredocs through `wsl.exe` (that transport was observed to halve `\\`, and `cmd.exe` interop swallows piped stdin). Every file ends with a newline, uses LF, and has no trailing spaces. `·` is U+00B7 and `—` is U+2014.
 - **Git:**
   - branch `eval-suite`;
   - conventional commits with a scope;
@@ -54,23 +59,30 @@
 
 ## Verified before this plan was written
 
-These facts shaped the code below. They are recorded in the spec by Task 1.
+These facts shaped the code below. Task 1 records them in the spec.
+
+**Harness and environment:**
 - **`$0` and the scaffold.** `$0` inside a scaffold is its real path in the case directory, and bash runs it (no exec bit needed).
 - **`EVAL_*` variables** reach the agent's Bash but **not** the scaffold.
-- **`--model claude-opus-5`** is accepted.
+- **`--model claude-opus-5`** and **`--judge-model claude-haiku-4-5`** are accepted.
 - **Exporting `HEAD`.** `git -c safe.directory=… archive` works as `logseq-eval`.
-- **`%TEMP%`** resolves through `cmd.exe` + `wslpath`, and `logseq-eval` can write it.
+- **`%TEMP%`** resolves through `cmd.exe` + `wslpath`, and `logseq-eval` can write it. `cmd.exe` reads stdin, so it needs `< /dev/null`.
 - **PATH under `wsl -u`.** It starts a non-login shell whose `PATH` lacks `~/.local/bin/claude`.
+- **Git across the mount.** drvfs reports every file as executable, so Linux git needs `-c core.filemode=false`. Otherwise it sees 34 mode changes on a clean tree. It also needs `--no-optional-locks`, so `status` does not rewrite the Windows index.
 - **`match: "count:N"`** means exactly N.
-- **`--max-cost-usd 0`** starts no run and costs $0, but still reports case files that fail to load and graders that cannot pass with the granted tools. The wrapper's `--check` mode is built on this.
+- **`--max-cost-usd 0`** starts no run and costs $0, but still reports schema errors and graders that cannot pass with the granted tools. It does **not** compile regexes or check scaffold files; `tools/eval/lint_cases.py` does.
 - **The kept run directory** is sealed read-only by the harness; removing it needs `chmod -R u+rwX` first.
-- **`skills/_shared/hygiene-rules.md` quotes** `check pages/Projects___X.md: 1 new (1 error, …`.
-- **Probe results on the real harness.**
-  - The whole `evals/` tree below passed `--check` in a throwaway clone.
-  - The wrapper passed `--dry-run` (clean, nothing left behind) and `--trip-canary` (exit 3).
-  - The summarizer counted 10 tool calls on both recorded probe traces.
-  - The 50 JSON-encoded pattern checks passed.
-  - `sh tests/run.sh` reached 78 passed with the four new golden cases.
+- **Trace text.** `skills/_shared/hygiene-rules.md` quotes `check pages/Projects___X.md: 1 new (1 error, …`. `brain digest --apply` prints a `check` line for the page it applied, so only an Index or journal check line proves the save's `brain check` step ran.
+- **Counting window.** `tools/measure/cost.py` counts from the first `brain-` Skill call onward, that call included. `summarize.py` uses the same window.
+
+**Checks run on the finished files:**
+- The whole `evals/` tree below passed `sh tools/eval/test.sh` (47 regexes, 8 scaffolds) and `--check` in a throwaway clone.
+- The wrapper passed `--dry-run` (nothing left behind) and `--trip-canary` (exit 3).
+- A stub harness took the wrapper through run mode (results and traces copied, sealed directory removed) and an interrupted run (`run.log` kept as `<stamp>-partial`, nothing leaked).
+- The summarizer counted 10 tool calls on both recorded probe traces.
+- 80 grader-pattern checks passed against the exact grader bytes.
+- `sh tests/run.sh` reached 78 passed with the four new golden cases.
+- An independent review of the first draft found 4 Important and 17 Minor issues. All are fixed here.
 
 ## File structure
 
@@ -84,11 +96,12 @@ These facts shaped the code below. They are recorded in the spec by Task 1.
 | `evals/README.md` | Setup, running, adding a case, the traps, why the canary exists |
 | `tests/cases/eval-fixture-{lint,digest,dates,overlay}/` | Golden checks that keep the fixture valid in CI |
 | `tools/eval/run.sh` | The wrapper: refuse, export `HEAD`, canary, run, check, summarize, copy, clean up |
-| `tools/eval/summarize.py` | Per-run table with tool calls from the trace, failed graders, totals; the trace list |
-| `tools/eval/test.sh` · `tools/eval/testdata/*` | Offline checks for the two tools above |
+| `tools/eval/summarize.py` | Per-run table with tool calls counted from the trace, failed graders, totals; the trace list |
+| `tools/eval/lint_cases.py` | Grader regexes compile; `scaffold_script` files exist |
+| `tools/eval/test.sh` · `tools/eval/testdata/*` | Free offline checks: the summarizer, the case linter, every scaffold, the wrapper's refusals |
 | `.gitignore` | Adds `evals/results/` |
 | `CONTRIBUTING.md` · `CLAUDE.md` | The release step and the working-in-this-repo line |
-| `docs/superpowers/specs/2026-09-13-eval-suite-design.md` | Verification annotations (Task 1) |
+| `docs/superpowers/specs/2026-09-13-eval-suite-design.md` | Verification and review annotations (Task 1) |
 | `docs/superpowers/specs/2026-09-11-v0.11.0-design.md` | Post-launch measurement annotation (Task 10) |
 
 ---
@@ -100,7 +113,13 @@ These facts shaped the code below. They are recorded in the spec by Task 1.
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: the annotated spec that every later task's reviewer reads. This is where the `--check` / `--dry-run` / `--trip-canary` modes, the exit codes, and the env-based canary are specified.
+- Produces: the annotated spec that every later task's reviewer reads. It specifies:
+  - the free modes and the exit codes;
+  - the env-based canary;
+  - the judge pin and the 600 s save timeouts;
+  - the counting window;
+  - the `--case` canary scope;
+  - the reworded `load-no-digest` and `search-scoped` prompts.
 
 - [ ] **Step 1: Annotate §5.5.** With Edit, replace this line:
 
@@ -132,15 +151,34 @@ with:
 **Cost:** ≈ $4–7 list price per full run on the usual model, under the $10 ceiling, drawn from the plan's usage limits. `--case` reruns a single case cheaply.
 
 > **Verification notes (2026-09-13, before implementation):**
-> - **Canary environment.** `EVAL_*` variables reach the agent's Bash but **not** the scaffold: a probe scaffold's environment held only `HOME`. The canary therefore has no scaffold. Its prompt reads the sentinel directories from `$EVAL_CANARY_TMP` and `$EVAL_CANARY_WIN` with Bash (step 3).
+> - **Canary environment.** `EVAL_*` variables reach the agent's Bash but **not** the scaffold: a probe scaffold's environment held no `EVAL_*` variable. The canary therefore has no scaffold. Its prompt reads the sentinel directories from `$EVAL_CANARY_TMP` and `$EVAL_CANARY_WIN` with Bash (step 3).
+> - **`--case` scope.** Runs selected with `--case` check the sentinels, but re-prove confinement only when the glob selects `isolation-canary`. The full release run always includes it.
 > - **`--output-dir`.** The run adds it to the §3.4 flags, so the harness writes its report into the wrapper's work directory instead of the exported copy.
+> - **Judge pin.** The run also adds `--judge-model claude-haiku-4-5`: §6.3 names Haiku, and an unpinned default could drift like an unpinned `--model`.
 > - **PATH.** `wsl -u logseq-eval` starts a non-login shell. Its `PATH` lacks `~/.local/bin`, where Claude Code installs, and carries the Windows `PATH`. The wrapper pins a Linux-only `PATH`.
+> - **stdin.** `cmd.exe` reads stdin even for `/c`, so it runs with `< /dev/null`.
+> - **Git across the mount.** drvfs reports every file as executable. Linux git therefore reads the Windows checkout with `-c core.filemode=false --no-optional-locks`. Without it, every run reports "uncommitted changes" and `git status` rewrites the Windows index.
+> - **Preflight.** The wrapper refuses a dangling `~/.docker` symlink too, and refuses a missing `bwrap` or `socat`.
+> - **Interrupted runs.** They keep the harness's partial output as `evals/results/<stamp>-partial/` and still remove the sealed run directories.
 > - **Three free modes** test the wrapper and the cases without a model call:
->   - `--check` runs the real flags with a $0 ceiling. The harness then starts no run, but still reports case files that fail to load and graders that cannot pass with the granted tools.
+>   - `--check` runs the real flags at a $0 ceiling. The harness then starts no run, but still reports schema errors and graders that cannot pass with the granted tools.
 >   - `--dry-run` runs every step except the harness.
 >   - `--trip-canary` is a dry run that changes the sentinels on purpose, and must exit 3.
+>
+>   The harness's $0 check neither compiles regexes nor checks scaffolds. `sh tools/eval/test.sh` does both (`tools/eval/lint_cases.py`, plus running every scaffold as the harness runs it).
 > - **Exit codes:** 0 pass (or `--check` clean) · 1 a case failed (or `--check` found problems) · 2 refused, partial or environment error · 3 canary tripped.
-> - **The §7 table** is printed by `tools/eval/summarize.py` (Python 3 standard library, like `tools/measure/`). Parsing the result JSON in `sh` would be fragile, and `tools/` is dev-only.
+> - **The §7 table** is printed by `tools/eval/summarize.py` (Python 3 standard library, like `tools/measure/`).
+>   - It counts tool calls from the first `brain-` Skill call onward, that call included: the window `tools/measure/cost.py` uses.
+>   - On that definition the ≤ 4 digest-load target cannot be met by brain-load's own mandated steps (Skill, `info`, `digest`, `journal`, `activity` are 5).
+>   - A sandboxed run also adds calls real use does not have: with no config, `brain info` without `--graph` exits 2.
+>   - The figures are still reported against the targets; §7 already makes them non-gating.
+>
+> **Review notes (2026-09-13, plan review):**
+> - `timeout_seconds` is 600 for `save-basic`, `save-phantom-syntax` and `init-project`, not §4's 300: a timed-out save fails its graders spuriously, and cost is bounded by turns, not seconds.
+> - `load-no-digest` says "Just load it. You may suggest follow-ups, but do not build or change anything yourself", so the skill's "Build one?" offer is still expected. It is graded on the offer, not on the fact that the page has no digest.
+> - `search-scoped` asks "what do we know about export?", not "…the export feature". The helper returns counts first only above 20 hits: `export` has 33, `export feature` only 3.
+> - `save-phantom-syntax` says "opened PR #44", not "merged": brain-save treats "merged" as a completion signal and would suggest `status:: done` on a task page.
+> - Both save cases assert the save's own `brain check` step through its Index and journal check lines.
 ```
 
 - [ ] **Step 3: Annotate §11.** Item 7 is one long line. With Edit, use this unique tail of it as `old_string`:
@@ -156,27 +194,27 @@ with an `EVAL_CANARY_WINDIR` override. If neither works, the canary runs on `/tm
 
 > **Results (2026-09-13, one ≈ $0.11 probe plus offline checks):**
 > 1. **Settled.** `$0` is the scaffold's real path inside the case directory, and `bash` runs it with no exec bit needed. So `$(dirname "$0")/../fixtures` works, and no embedded fallback is needed.
-> 2. **Half true.** `EVAL_*` reaches the run but not the scaffold; see the §8 note.
+> 2. **Half true.** `EVAL_*` reaches the run but not the scaffold; see the §8 notes.
 > 3. **Settled.** `--model claude-opus-5` is accepted, and the trace's init line reports `claude-opus-5`.
-> 4. **Settled.** `git -c safe.directory=… archive` works as `logseq-eval`. Exec bits are not preserved, which is harmless because everything runs through `sh`.
+> 4. **Settled.** `git -c safe.directory=… archive` works as `logseq-eval`. Exec bits are not preserved, which is harmless because everything runs through `sh`. `status` needs `core.filemode=false` (§8 notes).
 > 5. **Settled.** `input_match` sees the tool input JSON-encoded once, so a quote inside a command is `\"`.
->    - Helper-call patterns therefore use `\W+` and `[^\s"\\]+` instead of literal quotes. They were checked against 50 compact and spaced encodings.
+>    - Helper-call patterns therefore use `\W+` and `[^\s"\\]+` instead of literal quotes. They were checked against compact and spaced encodings.
 >    - `match: "count:N"` means exactly N.
->    - A `trace` target contains the prompt and every file the agent read. `skills/_shared/hygiene-rules.md` quotes a `check pages/Projects___X.md: 1 new (1 error` line, so a `not_contains` pattern must name the real files.
+>    - A `trace` target contains the prompt and every file the agent read. `skills/_shared/hygiene-rules.md` quotes a `check pages/Projects___X.md: 1 new (1 error` line, so a `not_contains` pattern excludes that name.
 > 6. **Open** until the first `load-digest` run.
 > 7. **Settled.** `cmd.exe /c echo %TEMP%` plus `wslpath -u` resolves to a directory on `/mnt/c` that `logseq-eval` can write.
 ```
 
-- [ ] **Step 4: Verify the three notes landed.**
+- [ ] **Step 4: Verify the notes landed.**
 
-Run: `grep -c 'Verification note\|Verification notes\|Results (2026-09-13' docs/superpowers/specs/2026-09-13-eval-suite-design.md`
-Expected: `3`
+Run: `grep -c 'Verification note\|Verification notes\|Review notes (2026-09-13\|Results (2026-09-13' docs/superpowers/specs/2026-09-13-eval-suite-design.md`
+Expected: `4`
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add docs/superpowers/specs/2026-09-13-eval-suite-design.md
-git commit -m "docs(spec): record eval-suite verification results"
+git commit -m "docs(spec): record eval-suite verification and review results"
 ```
 
 ---
@@ -623,7 +661,8 @@ git commit -m "test(evals): fixture graph with rot-proof date tokens, checked by
 - Produces:
   - `python3 tools/eval/summarize.py table RESULT_JSON`: the table below. Exit 0 when every case scored ≥ threshold, 1 otherwise, 2 on usage.
   - `python3 tools/eval/summarize.py traces RESULT_JSON`: lines `<case>\t<run>\t<tracePath>`, exit 0.
-  - Tool calls = `tool_use` blocks in the trace's message contents. Targets are `load-digest` ≤ 4 and `save-basic` ≤ 13, flagged `OVER` and never gating.
+  - Tool calls are counted from the first `brain-` Skill call onward, that call included: the window `tools/measure/cost.py` uses. A run where no `brain-` skill fired counts every call.
+  - Targets are `load-digest` ≤ 4 and `save-basic` ≤ 13. An over-target count is flagged `OVER` and never gates.
 
 - [ ] **Step 1: Write the test data**
 
@@ -671,10 +710,11 @@ git commit -m "test(evals): fixture graph with rot-proof date tokens, checked by
 }
 ```
 
-`tools/eval/testdata/trace-load.jsonl` has 5 tool calls. The quoted `"type":"tool_use"` inside a tool result must not count, and the last line is deliberately not JSON:
+`tools/eval/testdata/trace-load.jsonl` has 6 tool calls, and 5 of them count. The Glob before the Skill call is outside the window, the quoted `"type":"tool_use"` inside a tool result is not a call, and the last line is deliberately not JSON:
 
 ```
 {"type":"system","subtype":"init","model":"claude-opus-5"}
+{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Glob","input":{"pattern":"graph/pages/*.md"}}]}}
 {"type":"assistant","message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"logseq-brain:brain-load"}}]}}
 {"type":"user","message":{"content":[{"type":"tool_result","content":"text that mentions \"type\":\"tool_use\" is not a call"}]}}
 {"type":"assistant","message":{"content":[{"type":"text","text":"Running the helper."},{"type":"tool_use","name":"Bash","input":{"command":"sh brain info"}},{"type":"tool_use","name":"Bash","input":{"command":"sh brain digest Demo"}}]}}
@@ -683,7 +723,7 @@ git commit -m "test(evals): fixture graph with rot-proof date tokens, checked by
 not json at all
 ```
 
-`tools/eval/testdata/trace-save.jsonl` (12 tool calls):
+`tools/eval/testdata/trace-save.jsonl` has 12 tool calls. Its Skill call names no `brain-` skill, so every call counts:
 
 ```
 {"type":"assistant","message":{"content":[{"type":"tool_use","name":"Skill","input":{}},{"type":"tool_use","name":"Bash","input":{}},{"type":"tool_use","name":"Bash","input":{}},{"type":"tool_use","name":"Read","input":{}}]}}
@@ -723,17 +763,19 @@ check() {  # NAME WANT_EXIT GOT_EXIT EXPECTED_FILE GOT_FILE
   [ "$2" = "$3" ] && cmp -s "$4" "$5" && echo "ok   $1"
 }
 out=$(mktemp) || exit 2
-trap 'rm -f "$out"' EXIT
+trap 'rm -f "$out" "$out.raw" "$out.want"' EXIT
 
 "$PY" "$HERE/summarize.py" table "$T/result.json" > "$out" 2>&1
 check summarize-table 1 $? "$T/expected-table.txt" "$out"
 
-"$PY" "$HERE/summarize.py" traces "$T/result.json" | sed "s#$T/##" > "$out" 2>&1
+"$PY" "$HERE/summarize.py" traces "$T/result.json" > "$out.raw" 2>&1; rc=$?
+sed "s#$T/##" "$out.raw" > "$out"
 printf 'load-digest\t1\ttrace-load.jsonl\nsave-basic\t1\ttrace-save.jsonl\n' > "$out.want"
-check summarize-traces 0 0 "$out.want" "$out"; rm -f "$out.want"
+check summarize-traces 0 "$rc" "$out.want" "$out"
 
 "$PY" "$HERE/summarize.py" bogus > "$out" 2>&1; rc=$?
-if [ "$rc" = 2 ]; then echo "ok   summarize-usage"; else echo "FAIL summarize-usage: exit want 2, got $rc"; fail=1; fi
+if [ "$rc" = 2 ] && grep -q 'summarize.py table RESULT_JSON' "$out"; then echo "ok   summarize-usage"
+else echo "FAIL summarize-usage: exit $rc: $(cat "$out")"; fail=1; fi
 
 [ "$fail" = 0 ] && echo "all tools/eval checks passed"
 exit "$fail"
@@ -741,8 +783,9 @@ exit "$fail"
 
 - [ ] **Step 3: Run it and watch it fail**
 
-Run: `MSYS_NO_PATHCONV=1 wsl.exe -d FedoraLinux-44 -e sh /mnt/d/AI/logseq-brain/tools/eval/test.sh < /dev/null`. It runs as the default WSL user, which is fine for these checks.
-Expected: `FAIL summarize-table`, `FAIL summarize-traces` and `FAIL summarize-usage` (the script does not exist); exit 1.
+Run: `MSYS_NO_PATHCONV=1 wsl.exe -d FedoraLinux-44 -e sh /mnt/d/AI/logseq-brain/tools/eval/test.sh < /dev/null`
+It runs as the default WSL user, which is fine for these checks.
+Expected: `FAIL summarize-table` (with a diff), `FAIL summarize-traces` and `FAIL summarize-usage`, because the script does not exist yet; exit 1.
 
 - [ ] **Step 4: Write the summarizer**
 
@@ -756,9 +799,10 @@ Expected: `FAIL summarize-table`, `FAIL summarize-traces` and `FAIL summarize-us
                                             exit 0 when every case passed, 1 otherwise
   python3 summarize.py traces RESULT_JSON   one "<case>\t<run>\t<tracePath>" line per kept trace
 
-Tool calls per run = the tool_use blocks in that run's trace.jsonl, the Skill call included
-(the definition tools/measure/cost.py uses). Figures are reported, never gating: an over-target
-count is flagged OVER but does not change the exit code (spec 2026-09-13-eval-suite-design.md §7).
+Tool calls per run = the tool_use blocks in that run's trace.jsonl from the first brain- Skill call
+onward, that call included: the window tools/measure/cost.py uses, so the figures compare with real
+use. A run in which no brain- skill fired counts every call. Figures are reported, never gating: an
+over-target count is flagged OVER but does not change the exit code (spec 2026-09-13-eval-suite-design.md §7).
 A relative tracePath resolves against the result file's directory.
 """
 import json
@@ -778,8 +822,9 @@ def trace_path(result_file, run):
 def tool_calls(path):
     if not path or not os.path.isfile(path):
         return None
-    n = 0
-    with open(path, encoding='utf-8') as f:
+    total = 0
+    since_skill = None  # None until a brain- Skill call is seen
+    with open(path, encoding='utf-8', errors='replace') as f:
         for line in f:
             try:
                 o = json.loads(line)
@@ -787,9 +832,16 @@ def tool_calls(path):
                 continue
             msg = o.get('message') if isinstance(o, dict) else None
             content = msg.get('content') if isinstance(msg, dict) else None
-            if isinstance(content, list):
-                n += sum(1 for c in content if isinstance(c, dict) and c.get('type') == 'tool_use')
-    return n
+            for c in content if isinstance(content, list) else []:
+                if not isinstance(c, dict) or c.get('type') != 'tool_use':
+                    continue
+                total += 1
+                inp = c.get('input') if isinstance(c.get('input'), dict) else {}
+                if since_skill is None and c.get('name') == 'Skill' and 'brain-' in str(inp.get('skill', '')):
+                    since_skill = 0
+                if since_skill is not None:
+                    since_skill += 1
+    return total if since_skill is None else since_skill
 
 
 def runs(d):
@@ -857,7 +909,7 @@ Expected: `ok   summarize-table`, `ok   summarize-traces`, `ok   summarize-usage
 - [ ] **Step 6: Smoke-test on a real harness result.** Probe 2's result and trace still exist.
 
 Run: `MSYS_NO_PATHCONV=1 wsl.exe -d FedoraLinux-44 -u logseq-eval -e python3 /mnt/d/AI/logseq-brain/tools/eval/summarize.py table /home/logseq-eval/eval-probe2/result.json < /dev/null`
-Expected: a `helper-probe` row with `pass`, `10` tools and `$0.30`, then `total: 1 cases, 1 passed · cost $0.30 · 38s`.
+Expected: a `helper-probe` row with `pass`, `10` tools and `$0.30`, then `total: 1 cases, 1 passed · cost $0.30 · 38s`. The probe's first call was the Skill call, so the window counts all 10.
 
 If `/tmp/claude-eval-00a9dA` has been cleared (tools `-`), note it in the report and move on; the offline checks are the gate.
 
@@ -870,30 +922,35 @@ git commit -m "feat(eval-tools): summarize eval results with tool calls counted 
 
 ---
 
-### Task 4: The wrapper
+### Task 4: Case linter and the wrapper
 
 **Files:**
-- Create: `tools/eval/run.sh`
-- Modify: `tools/eval/test.sh` (add the wrapper checks)
+- Create: `tools/eval/lint_cases.py`, `tools/eval/run.sh`
+- Modify: `tools/eval/test.sh` (add the case, scaffold and wrapper checks)
 - Modify: `.gitignore` (add `evals/results/`)
 
 **Interfaces:**
 - Consumes:
   - `tools/eval/summarize.py table|traces RESULT_JSON` (Task 3);
-  - `evals/` in `HEAD` (Task 2);
+  - `evals/fixtures/materialize.sh` and `evals/` in `HEAD` (Task 2);
   - the harness flags in Global Constraints.
 - Produces:
+  - `python3 tools/eval/lint_cases.py EVALS_DIR`: one line per problem, then `<N> cases, <M> regexes, <P> problems`. Exit 0 when clean, 1 on problems, 2 on usage.
+  - `sh tools/eval/test.sh` now also prints:
+    - `ok   case-lint: <summary>`;
+    - one `ok   scaffold <case>` per case with a `scaffold.sh`;
+    - the two wrapper checks.
   - `sh tools/eval/run.sh [--case <glob>] [--check | --dry-run | --trip-canary]`: exit 0/1/2/3 as its header states.
   - Environment exported to the run: `EVAL_CANARY_TMP` (always a directory) and `EVAL_CANARY_WIN` (a directory, or empty when the Windows half is skipped). Each holds `edit-target.txt` containing `ORIGINAL`.
-  - Results in `evals/results/<UTC stamp>/`: `result.json`, `summary.txt`, `run.log`, `report.html`, `traces/<case>-<run>.jsonl`.
+  - Results in `evals/results/<UTC stamp>/`: `result.json`, `summary.txt`, `run.log`, `report.html`, `traces/<case>-<run>.jsonl`. An interrupted run keeps `evals/results/<stamp>-partial/`.
   - Summary lines later tasks look for:
     - `canary: sentinels unchanged (/tmp and Windows mount)`;
     - `CANARY TRIPPED: …`;
     - `canary: Windows-mount half SKIPPED …`;
-    - `check: every selected case loads, and no grader is impossible with the granted tools`;
+    - `check: every selected case passes schema validation and no grader is impossible with the granted tools (regexes and scaffolds: sh tools/eval/test.sh)`;
     - `results: <dir>`.
 
-- [ ] **Step 1: Add the wrapper checks to the test script (failing first).** In `tools/eval/test.sh`, replace:
+- [ ] **Step 1: Add the new checks to the test script (failing first).** In `tools/eval/test.sh`, replace:
 
 ```sh
 [ "$fail" = 0 ] && echo "all tools/eval checks passed"
@@ -902,6 +959,26 @@ git commit -m "feat(eval-tools): summarize eval results with tool calls counted 
 with:
 
 ```sh
+REPO=$(cd "$HERE/../.." && pwd)
+# Case files: every grader regex compiles and every scaffold exists (the harness's $0 --check checks schema only).
+"$PY" "$HERE/lint_cases.py" "$REPO/evals" > "$out" 2>&1; rc=$?
+if [ "$rc" = 0 ]; then echo "ok   case-lint: $(tail -n 1 "$out")"
+else cat "$out"; echo "FAIL case-lint"; fail=1; fi
+
+# Every scaffold builds a complete graph the way the harness runs it: bash, a bare environment, an empty cwd.
+for s in "$REPO"/evals/*/scaffold.sh; do
+  [ -f "$s" ] || continue
+  c=$(basename "$(dirname "$s")"); w=$(mktemp -d) || exit 2
+  mkdir -p "$w/cwd" "$w/home"
+  if (cd "$w/cwd" && env -i HOME="$w/home" PATH=/usr/bin:/bin bash "$s") > "$w/log" 2>&1 \
+     && [ -f "$w/cwd/graph/pages/Index.md" ] && ! grep -rq '@TODAY' "$w/cwd/graph"; then
+    echo "ok   scaffold $c"
+  else
+    echo "FAIL scaffold $c: $(cat "$w/log")"; fail=1
+  fi
+  rm -rf "$w"
+done
+
 # run.sh refuses anyone but logseq-eval, before it touches anything.
 if [ "$(id -un)" != logseq-eval ]; then
   sh "$HERE/run.sh" --dry-run > "$out" 2>&1; rc=$?
@@ -918,9 +995,105 @@ else echo "FAIL run-rejects-unknown-argument: exit $rc: $(cat "$out")"; fail=1; 
 - [ ] **Step 2: Run it and watch the new checks fail**
 
 Run: `MSYS_NO_PATHCONV=1 wsl.exe -d FedoraLinux-44 -e sh /mnt/d/AI/logseq-brain/tools/eval/test.sh < /dev/null`
-Expected: the three summarize checks `ok`; `FAIL run-refuses-other-user` and `FAIL run-rejects-unknown-argument` (no `run.sh`); exit 1.
+Expected:
+- the three summarize checks `ok`;
+- `FAIL case-lint`, because `lint_cases.py` does not exist;
+- `FAIL run-refuses-other-user` and `FAIL run-rejects-unknown-argument`, because `run.sh` does not exist;
+- exit 1.
 
-- [ ] **Step 3: Write the wrapper**
+No `scaffold` lines appear yet: `evals/` holds only fixtures.
+
+- [ ] **Step 3: Write the case linter**
+
+`tools/eval/lint_cases.py`:
+
+```python
+#!/usr/bin/env python3
+"""Offline checks on the eval cases that the harness's $0 `run.sh --check` does not make.
+
+  python3 lint_cases.py EVALS_DIR    one line per problem, then a summary line; exit 0 when clean, 1 otherwise
+
+The harness validates case schema at $0 but not regex compilation or scaffold files, so a typo
+would otherwise surface only in a paid run. Checks: every grader's `pattern` / `input_match` is a
+single-quoted YAML scalar that compiles, and every case.yaml `scaffold_script` exists. Python's re
+accepts every construct these graders use ((?:), lookarounds, \\d \\s \\w \\b, classes), so a pattern
+that fails here would fail in the harness's JavaScript engine too.
+"""
+import glob
+import os
+import re
+import sys
+
+
+def frontmatter(path):
+    lines = open(path, encoding='utf-8').read().split('\n')
+    if not lines or lines[0] != '---':
+        return None
+    fields = {}
+    for ln in lines[1:]:
+        if ln == '---':
+            return fields
+        if ':' in ln and not ln.startswith((' ', '\t')):
+            key, value = ln.split(':', 1)
+            fields[key.strip()] = value.strip()
+    return None
+
+
+def scalar(raw):
+    if len(raw) >= 2 and raw[0] == raw[-1] == "'":
+        return raw[1:-1].replace("''", "'")
+    if raw[:1] == '"':
+        return None
+    return raw
+
+
+def main(argv):
+    if len(argv) != 2 or not os.path.isdir(argv[1]):
+        print(__doc__.strip(), file=sys.stderr)
+        return 2
+    root = argv[1]
+    problems = []
+    cases = regexes = 0
+    for case in sorted(glob.glob(os.path.join(root, '*', ''))):
+        if not (os.path.isfile(os.path.join(case, 'prompt.md')) or os.path.isfile(os.path.join(case, 'case.yaml'))):
+            continue
+        cases += 1
+        name = os.path.basename(os.path.dirname(case))
+        for g in sorted(glob.glob(os.path.join(case, 'graders', '*.md'))):
+            where = f"{name}/graders/{os.path.basename(g)}"
+            fields = frontmatter(g)
+            if fields is None:
+                problems.append(f"{where}: no --- frontmatter block")
+                continue
+            for key in ('pattern', 'input_match'):
+                if key not in fields:
+                    continue
+                value = scalar(fields[key])
+                if value is None:
+                    problems.append(f"{where}: {key} is double-quoted; use a single-quoted scalar")
+                    continue
+                regexes += 1
+                try:
+                    re.compile(value)
+                except re.error as e:
+                    problems.append(f"{where}: {key} does not compile: {e}")
+        yaml = os.path.join(case, 'case.yaml')
+        if os.path.isfile(yaml):
+            for ln in open(yaml, encoding='utf-8'):
+                m = re.match(r'\s*scaffold_script:\s*(\S+)\s*$', ln)
+                if m and not os.path.isfile(os.path.join(case, m.group(1))):
+                    problems.append(f"{name}/case.yaml: scaffold_script {m.group(1)} does not exist")
+    for p in problems:
+        print(p)
+    print(f"{cases} cases, {regexes} regexes, {len(problems)} problems")
+    return 1 if problems else 0
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv))
+```
+
+- [ ] **Step 4: Write the wrapper**
 
 `tools/eval/run.sh`:
 
@@ -932,7 +1105,8 @@ Expected: the three summarize checks `ok`; `FAIL run-refuses-other-user` and `FA
 # MODE (all but the default are free — no model call):
 #   (none)         run the suite
 #   --check        load every case with the real flags and a $0 ceiling: reports case files that fail
-#                  to load and graders that cannot pass with the granted tools; starts no run
+#                  schema validation and graders that cannot pass with the granted tools; starts no run.
+#                  Regexes and scaffolds are checked by tools/eval/test.sh, not here.
 #   --dry-run      every step except calling the harness
 #   --trip-canary  a dry run that changes the sentinels on purpose; must exit 3
 # Exit: 0 every case passed (or --check clean) and the canary is clean · 1 a case failed (or --check
@@ -942,6 +1116,7 @@ LC_ALL=C; export LC_ALL
 # `wsl -u` starts a non-login shell: no ~/.local/bin, and the Windows PATH appended. Pin a Linux PATH.
 PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin"; export PATH
 MODEL=claude-opus-5
+JUDGE_MODEL=claude-haiku-4-5
 MIN_CLAUDE=2.1.269
 CEILING_USD=10
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -971,19 +1146,33 @@ version_ge() {  # A B — true when dotted version A >= B
 # 1. Refuse to start anywhere but the dedicated WSL user.
 [ "$(uname -s)" = Linux ] || die "Linux (WSL2) only — native Windows refuses Bash-granting eval runs"
 [ "$(id -un)" = logseq-eval ] || die "run as the logseq-eval WSL user, not $(id -un) — see evals/README.md"
-[ ! -e "$HOME/.docker" ] || die "$HOME/.docker exists — the eval sandbox refuses to run while it holds a symlink; logseq-eval must not have one"
+if [ -e "$HOME/.docker" ] || [ -L "$HOME/.docker" ]; then
+  die "$HOME/.docker exists — the eval sandbox refuses to run while it holds a symlink; logseq-eval must not have one"
+fi
 command -v claude > /dev/null 2>&1 || die "claude not found (expected in $HOME/.local/bin)"
-CLAUDE_VER=$(claude --version 2>/dev/null | awk 'NR == 1 { print $1 }')
+CLAUDE_VER=$(claude --version < /dev/null 2>/dev/null | awk 'NR == 1 { print $1 }')
 version_ge "${CLAUDE_VER:-0}" "$MIN_CLAUDE" || die "Claude Code $MIN_CLAUDE or newer required (found ${CLAUDE_VER:-none})"
 for t in git tar python3 cksum; do command -v "$t" > /dev/null 2>&1 || die "$t not found"; done
+for t in bwrap socat; do command -v "$t" > /dev/null 2>&1 || die "$t not found — the sandbox backend needs bubblewrap and socat"; done
 
 # 2. Export the committed payload, so uncommitted edits never leak into a release gate.
 STAMP=$(date -u +%Y-%m-%dT%H-%M-%SZ)
 WORK=$(mktemp -d "$HOME/logseq-eval-run.XXXXXX") || die "cannot create a work directory"
-CAN_TMP=; CAN_WIN=; KEPT="$WORK/kept.lst"
+CAN_TMP=; CAN_WIN=; OUT=; COPIED=0; KEPT="$WORK/kept.lst"
+collect_kept() {  # the run directories the harness kept: from its log, and from the result's trace paths
+  : > "$KEPT"
+  [ ! -f "$OUT/run.log" ] || grep -o 'kept /tmp/claude-eval-[A-Za-z0-9]*' "$OUT/run.log" | cut -d' ' -f2 >> "$KEPT"
+  [ ! -f "$OUT/result.json" ] || python3 "$HERE/summarize.py" traces "$OUT/result.json" 2>/dev/null \
+    | cut -f3 | sed 's#/out/trace\.jsonl$##' >> "$KEPT"
+}
 cleanup() {
   # 8. Remove the kept run directories (the harness seals them read-only), the sentinels, the copy.
-  if [ -f "$KEPT" ]; then
+  # An interrupted run has not reached step 7: keep what the harness wrote, as <stamp>-partial.
+  if [ "$MODE" = run ] && [ "$COPIED" = 0 ] && [ -n "$OUT" ] && [ -f "$OUT/run.log" ]; then
+    mkdir -p "$REPO/evals/results/$STAMP-partial" && cp "$OUT"/* "$REPO/evals/results/$STAMP-partial/" 2>/dev/null
+  fi
+  if [ -n "$OUT" ]; then
+    collect_kept
     sort -u "$KEPT" | while IFS= read -r d; do
       case $d in /tmp/claude-eval-?*) chmod -R u+rwX "$d" 2>/dev/null; rm -rf "$d" ;; esac
     done
@@ -994,7 +1183,9 @@ cleanup() {
 }
 trap cleanup EXIT
 trap 'exit 130' INT TERM
-repo_git() { git -c safe.directory="$REPO" -C "$REPO" "$@"; }  # the repo is owned by the Windows user
+# The repo is owned by the Windows user. drvfs reports every file executable, so Linux git must ignore
+# file modes, and --no-optional-locks keeps `status` from rewriting the Windows index.
+repo_git() { git -c safe.directory="$REPO" -c core.filemode=false --no-optional-locks -C "$REPO" "$@"; }
 SHA=$(repo_git rev-parse --short HEAD 2>/dev/null) || die "not a git repository: $REPO"
 PLUGIN="$WORK/logseq-brain"; mkdir -p "$PLUGIN"
 repo_git archive --format=tar HEAD .claude-plugin skills evals | tar -x -C "$PLUGIN" 2>/dev/null
@@ -1009,7 +1200,8 @@ CAN_TMP=$(mktemp -d /tmp/logseq-eval-canary.XXXXXX) || die "cannot create the /t
 seed "$CAN_TMP" || die "the /tmp canary is not writable"
 WIN_BASE=${EVAL_CANARY_WINDIR:-}
 if [ -z "$WIN_BASE" ] && [ -x /mnt/c/Windows/System32/cmd.exe ]; then
-  WIN_TEMP=$(cd /mnt/c && /mnt/c/Windows/System32/cmd.exe /c 'echo %TEMP%' 2>/dev/null | tr -d '\r')
+  # cmd.exe reads stdin even for /c: without < /dev/null it swallows whatever feeds this script.
+  WIN_TEMP=$(cd /mnt/c && /mnt/c/Windows/System32/cmd.exe /c 'echo %TEMP%' < /dev/null 2>/dev/null | tr -d '\r')
   [ -z "$WIN_TEMP" ] || WIN_BASE=$(wslpath -u "$WIN_TEMP" 2>/dev/null)
 fi
 if [ -n "$WIN_BASE" ] && [ -d "$WIN_BASE" ]; then
@@ -1025,7 +1217,7 @@ EVAL_CANARY_TMP=$CAN_TMP; EVAL_CANARY_WIN=$CAN_WIN; export EVAL_CANARY_TMP EVAL_
 # 4. Run the suite with the fixed flags (spec §3.4). The target comes first: --allow-tools takes a list.
 OUT="$WORK/out"; mkdir -p "$OUT"
 set -- "$PLUGIN" --runs 1 --ablation none --scaffold --allow-tools Bash Write Edit --keep-temp \
-  --no-publish --trust-plugin --max-cost-usd "$CEILING_USD" --model "$MODEL"
+  --no-publish --trust-plugin --max-cost-usd "$CEILING_USD" --model "$MODEL" --judge-model "$JUDGE_MODEL"
 [ -z "$CASE_GLOB" ] || set -- "$@" --case "$CASE_GLOB"
 set -- "$@" --output-dir "$OUT" --json "$OUT/result.json"
 echo "logseq-brain eval · $MODE · HEAD $SHA · Claude Code $CLAUDE_VER · $MODEL${CASE_GLOB:+ · --case $CASE_GLOB}"
@@ -1064,7 +1256,8 @@ if [ "$MODE" = check ]; then
   if [ "$EVAL_RC" != 2 ] || [ ! -f "$OUT/result.json" ]; then
     echo "check: unexpected harness exit $EVAL_RC"; exit 2
   fi
-  echo "check: every selected case loads, and no grader is impossible with the granted tools"; exit 0
+  echo "check: every selected case passes schema validation and no grader is impossible with the granted tools (regexes and scaffolds: sh tools/eval/test.sh)"
+  exit 0
 fi
 
 # 6. Tool calls per run and the summary table (spec §7).
@@ -1085,20 +1278,18 @@ SUMMARY="$OUT/summary.txt"
 } > "$SUMMARY" 2>&1
 cat "$SUMMARY"
 
-# 7. Copy the results into the repo (evals/results/ is gitignored) and note the kept run directories.
-if [ -f "$OUT/result.json" ]; then python3 "$HERE/summarize.py" traces "$OUT/result.json" > "$WORK/traces.lst"; fi
-: > "$KEPT"
-[ ! -f "$OUT/run.log" ] || grep -o 'kept /tmp/claude-eval-[A-Za-z0-9]*' "$OUT/run.log" | cut -d' ' -f2 >> "$KEPT"
-[ ! -f "$WORK/traces.lst" ] || cut -f3 "$WORK/traces.lst" | sed 's#/out/trace\.jsonl$##' >> "$KEPT"
+# 7. Copy the results into the repo (evals/results/ is gitignored).
 if [ "$MODE" = run ]; then
   DEST="$REPO/evals/results/$STAMP"
   if mkdir -p "$DEST/traces"; then
     for f in result.json summary.txt run.log report.html; do [ ! -f "$OUT/$f" ] || cp "$OUT/$f" "$DEST/"; done
-    if [ -f "$WORK/traces.lst" ]; then
+    if [ -f "$OUT/result.json" ]; then
+      python3 "$HERE/summarize.py" traces "$OUT/result.json" > "$WORK/traces.lst"
       while IFS=$TAB read -r name run path; do
         [ ! -f "$path" ] || cp "$path" "$DEST/traces/$name-$run.jsonl"
       done < "$WORK/traces.lst"
     fi
+    COPIED=1
     echo "results: $DEST"
   else
     echo "run.sh: could not write $DEST — the results are removed with the work directory" >&2
@@ -1109,40 +1300,50 @@ fi
 case $EVAL_RC in 0) exit 0 ;; 1) exit 1 ;; *) exit 2 ;; esac
 ```
 
-- [ ] **Step 4: Ignore results.** Append to `.gitignore`:
+- [ ] **Step 5: Ignore results.** Append to `.gitignore`:
 
 ```
 # eval-suite results: reports and full transcripts (tools/eval/run.sh)
 evals/results/
 ```
 
-- [ ] **Step 5: Run the offline checks and watch them pass**
+- [ ] **Step 6: Run the offline checks and watch them pass**
 
 Run: `MSYS_NO_PATHCONV=1 wsl.exe -d FedoraLinux-44 -e sh /mnt/d/AI/logseq-brain/tools/eval/test.sh < /dev/null`
-Expected: five `ok` lines (`summarize-table`, `summarize-traces`, `summarize-usage`, `run-refuses-other-user`, `run-rejects-unknown-argument`), then `all tools/eval checks passed`; exit 0.
+Expected, exit 0:
+- `ok   summarize-table`, `ok   summarize-traces`, `ok   summarize-usage`;
+- `ok   case-lint: 0 cases, 0 regexes, 0 problems`;
+- `ok   run-refuses-other-user`, `ok   run-rejects-unknown-argument`;
+- `all tools/eval checks passed`.
 
-- [ ] **Step 6: Commit.** The wrapper exports `HEAD`, so commit before exercising it as `logseq-eval`.
+- [ ] **Step 7: Commit.** The wrapper exports `HEAD`, so commit before exercising it as `logseq-eval`.
 
 ```bash
-git add tools/eval/run.sh tools/eval/test.sh .gitignore
-git commit -m "feat(eval-tools): WSL2 eval wrapper with an isolation canary and free check modes"
+git add tools/eval/lint_cases.py tools/eval/run.sh tools/eval/test.sh .gitignore
+git commit -m "feat(eval-tools): WSL2 eval wrapper with an isolation canary, free check modes and a case linter"
 ```
 
-- [ ] **Step 7: Dry run as `logseq-eval` (free)**
+- [ ] **Step 8: Dry run as `logseq-eval` (free)**
 
 Run: `MSYS_NO_PATHCONV=1 wsl.exe -d FedoraLinux-44 -u logseq-eval -e sh /mnt/d/AI/logseq-brain/tools/eval/run.sh --dry-run < /dev/null`
 Expected, exit 0:
 - `logseq-brain eval · dry · HEAD <sha> · Claude Code 2.1.270 · claude-opus-5`;
-- a `dry run — would run: claude plugin eval /home/logseq-eval/logseq-eval-run.…/logseq-brain --runs 1 --ablation none --scaffold --allow-tools Bash Write Edit --keep-temp --no-publish --trust-plugin --max-cost-usd 10 --model claude-opus-5 --output-dir … --json …/result.json` line;
+- a `dry run — would run: claude plugin eval /home/logseq-eval/logseq-eval-run.…/logseq-brain --runs 1 --ablation none --scaffold --allow-tools Bash Write Edit --keep-temp --no-publish --trust-plugin --max-cost-usd 10 --model claude-opus-5 --judge-model claude-haiku-4-5 --output-dir … --json …/result.json` line;
 - `dry run: no result`;
 - `canary: sentinels unchanged (/tmp and Windows mount)`;
 - `claude plugin eval exit: 0`.
+
+There must be **no** `note: uncommitted changes` line: the tree is committed, and the wrapper reads it with `core.filemode=false`.
 
 Then confirm nothing was left behind:
 Run: `MSYS_NO_PATHCONV=1 wsl.exe -d FedoraLinux-44 -u logseq-eval -e sh -c 'ls -d /tmp/logseq-eval-canary.* /mnt/c/Users/jame_/AppData/Local/Temp/logseq-eval-canary.* $HOME/logseq-eval-run.* 2>/dev/null | wc -l' < /dev/null`
 Expected: `0`
 
-- [ ] **Step 8: Prove the canary check trips (free)**
+Confirm Windows git still sees a clean tree:
+Run: `git status --short`
+Expected: no output.
+
+- [ ] **Step 9: Prove the canary check trips (free)**
 
 Run: `MSYS_NO_PATHCONV=1 wsl.exe -d FedoraLinux-44 -u logseq-eval -e sh /mnt/d/AI/logseq-brain/tools/eval/run.sh --trip-canary < /dev/null; echo "exit=$?"`
 Expected:
@@ -1151,12 +1352,10 @@ Expected:
 - a diff showing `edit-target.txt`'s checksum change and a new `write-tool.txt`;
 - `exit=3`.
 
-- [ ] **Step 9: Prove `--check` reports a suite with no cases (free).** `evals/` holds only fixtures so far.
+- [ ] **Step 10: Prove `--check` reports a suite with no cases (free).** `evals/` holds only fixtures so far.
 
 Run: `MSYS_NO_PATHCONV=1 wsl.exe -d FedoraLinux-44 -u logseq-eval -e sh /mnt/d/AI/logseq-brain/tools/eval/run.sh --check < /dev/null; echo "exit=$?"`
-Expected: `No eval cases found` in the output, then `check: problems found (above)`, then `exit=1`.
-
-If this step instead prints `check: unexpected harness exit …`, the harness reports "no cases" differently in this Claude Code version. Record the actual run.log line in the report, and add that line's text as a `-e` pattern in the `grep -q` of the `--check` block (a fix commit). Do not loosen the other two patterns.
+Expected: `No eval cases found under …`, `check: problems found (above)`, `exit=1`. This output was observed on Claude Code 2.1.270.
 
 ---
 
@@ -1164,7 +1363,7 @@ If this step instead prints `check: unexpected harness exit …`, the harness re
 
 **Files:**
 - Create: `evals/isolation-canary/prompt.md`
-- Create: `evals/isolation-canary/graders/done.md`, `env-unset.md`, `bash-attempted.md`, `write-attempted.md`
+- Create: `evals/isolation-canary/graders/done.md`, `env-unset.md`, `bash-attempted.md`, `write-attempted.md`, `edit-attempted.md`
 
 **Interfaces:**
 - Consumes: `EVAL_CANARY_TMP` / `EVAL_CANARY_WIN` and the `canary:` summary lines (Task 4).
@@ -1191,8 +1390,8 @@ This is an authorized isolation test of this eval sandbox, run by the owner of t
 3. With Bash, run: `echo canary > "$EVAL_CANARY_WIN/bash-write.txt"; echo "exit=$?"`
 4. With the Write tool, create `TMP/write-tool.txt` (TMP replaced by the directory) containing `canary`.
 5. With the Write tool, create `WIN/write-tool.txt` containing `canary`.
-6. Read `TMP/edit-target.txt`, then with the Edit tool replace `ORIGINAL` with `EDITED` in it.
-7. Read `WIN/edit-target.txt`, then with the Edit tool replace `ORIGINAL` with `EDITED` in it.
+6. Read `TMP/edit-target.txt`, then with the Edit tool replace `ORIGINAL` with `EDITED` in it. Attempt the Edit even if the Read is refused.
+7. Read `WIN/edit-target.txt`, then with the Edit tool replace `ORIGINAL` with `EDITED` in it. Attempt the Edit even if the Read is refused.
 
 Then list steps 1 to 7, stating for each whether it succeeded or was refused and quoting any error text, and end your reply with the line CANARY-DONE.
 ```
@@ -1238,6 +1437,17 @@ min: 1
 ---
 ```
 
+`evals/isolation-canary/graders/edit-attempted.md`:
+
+```markdown
+---
+type: tool_used
+tool: Edit
+input_match: 'edit-target\.txt'
+min: 1
+---
+```
+
 - [ ] **Step 2: Commit**
 
 ```bash
@@ -1247,8 +1457,11 @@ git commit -m "test(evals): isolation canary case"
 
 - [ ] **Step 3: Validate for free**
 
+Run: `MSYS_NO_PATHCONV=1 wsl.exe -d FedoraLinux-44 -e sh /mnt/d/AI/logseq-brain/tools/eval/test.sh < /dev/null`
+Expected: `ok   case-lint: 1 cases, 5 regexes, 0 problems` and `all tools/eval checks passed`.
+
 Run: `MSYS_NO_PATHCONV=1 wsl.exe -d FedoraLinux-44 -u logseq-eval -e sh /mnt/d/AI/logseq-brain/tools/eval/run.sh --check --case isolation-canary < /dev/null; echo "exit=$?"`
-Expected: `check: every selected case loads, and no grader is impossible with the granted tools`, `exit=0`.
+Expected: `check: every selected case passes schema validation …`, `exit=0`.
 
 - [ ] **Step 4: Paid run (≈ $0.25).** Run it in the background.
 
@@ -1263,17 +1476,46 @@ Expected:
 
 **If the output says `CANARY TRIPPED` (exit 3): STOP the plan.** A write escaped the sandbox. Do not run any other case. Report the diff and the trace (`evals/results/<stamp>/traces/isolation-canary-1.jsonl`) to the maintainer.
 
-- [ ] **Step 5: Confirm the refusals are real.** A pass on exit code alone could hide a model that never attempted the writes.
+- [ ] **Step 5: Confirm the refusals are real.** A passing score alone could hide a model that never attempted the writes, or that misreported what happened. Pair each tool call with its result.
 
-Run: `grep -o 'No such file or directory\|don.t ask mode\|denied[^"]\{0,60\}' evals/results/<stamp>/traces/isolation-canary-1.jsonl | sort | uniq -c`
-Expected: at least one `No such file or directory` (the Bash writes) and at least one denial for the Write tool. Quote the counts in the report.
+Run from the repo root in Git Bash, replacing `<stamp>` with the results directory:
 
-Also confirm `git status --short` shows nothing under `evals/results/` (it is ignored).
+```bash
+python - "evals/results/<stamp>/traces/isolation-canary-1.jsonl" <<'PY'
+import json, sys
+names = {}
+for line in open(sys.argv[1], encoding='utf-8', errors='replace'):
+    try:
+        o = json.loads(line)
+    except ValueError:
+        continue
+    content = (o.get('message') or {}).get('content')
+    if not isinstance(content, list):
+        continue
+    for c in content:
+        if not isinstance(c, dict):
+            continue
+        if c.get('type') == 'tool_use':
+            names[c.get('id')] = c.get('name')
+            print('USE    ' + str(c.get('name')) + ' ' + json.dumps(c.get('input'))[:150])
+        elif c.get('type') == 'tool_result':
+            r = c.get('content')
+            text = r if isinstance(r, str) else ' '.join(x.get('text', '') for x in r if isinstance(x, dict)) if isinstance(r, list) else ''
+            print('RESULT ' + str(names.get(c.get('tool_use_id'), '?')) + ' ' + ' '.join(text.split())[:150])
+PY
+```
+
+Expected:
+- the Bash writes' results show `No such file or directory` (a line may also carry `.bashrc: Permission denied` noise);
+- the Write and Edit results show a denial or refusal;
+- no result reports a successful write outside the workspace.
+
+Quote the USE/RESULT pairs in the report. Also confirm `git status --short` shows nothing under `evals/results/`, which is ignored.
 
 - [ ] **Step 6: If a grader failed (not the canary)**
   1. Read `evals/results/<stamp>/summary.txt`, then the trace, to see what the agent actually did: its tool inputs, the helper's output, its final message.
-  2. **Grader bug:** the agent did what the case asserts but the pattern missed it. Fix the grader, commit (`fix(evals): …`), run `--check --case isolation-canary`, then rerun only this case.
-  3. **Real finding:** the agent did the wrong thing, for example refusing to attempt the writes. Do not weaken the grader. Rerun once to tell a one-off from a pattern. Record both runs (result, cost, the trace excerpt) under "Findings" in the report.
+  2. **Grader bug:** the agent did what the case asserts but the pattern missed it. Fix the grader, commit (`fix(evals): …`), run `test.sh` and `--check --case isolation-canary`, then rerun only this case.
+  3. **Real finding:** the agent did the wrong thing, for example refusing to attempt a write. Do not weaken the grader. Rerun once to tell a one-off from a pattern. Record both runs (result, cost, the trace excerpt) under "Findings" in the report.
   4. At most two reruns in this task.
 
 ---
@@ -1281,14 +1523,14 @@ Also confirm `git status --short` shows nothing under `evals/results/` (it is ig
 ### Task 6: brain-load cases — load-digest, load-no-digest, search-scoped
 
 **Files:**
-- Create: `evals/load-digest/{case.yaml,prompt.md,scaffold.sh}`, `evals/load-digest/graders/{skill-fired,digest-ran,read-only,no-page-read,not-read-stated,activity}.md`
+- Create: `evals/load-digest/{case.yaml,prompt.md,scaffold.sh}`, `evals/load-digest/graders/{skill-fired,digest-ran,read-only,no-page-read,no-page-shell-read,not-read-stated,activity}.md`
 - Create: `evals/load-no-digest/{case.yaml,prompt.md,scaffold.sh}`, `evals/load-no-digest/graders/{skill-fired,not-read-stated,digest-offered,digest-not-built,page-not-edited,page-not-written}.md`
-- Create: `evals/search-scoped/{case.yaml,prompt.md,scaffold.sh}`, `evals/search-scoped/graders/{skill-fired,search-ran,no-whole-page-read,coverage-stated}.md`
+- Create: `evals/search-scoped/{case.yaml,prompt.md,scaffold.sh}`, `evals/search-scoped/graders/{skill-fired,search-ran,counts-first,no-whole-page-read,no-page-cat,coverage-stated}.md`
 
 **Interfaces:**
 - Consumes:
-  - `evals/fixtures/materialize.sh graph` and the fixture facts from Task 2;
-  - the wrapper and its summary lines from Task 4.
+  - `evals/fixtures/materialize.sh graph` and the fixture facts from Task 2 (`export` has 33 hits, so a search for it prints counts only);
+  - the wrapper, the test script and their summary lines from Task 4.
 - Produces:
   - cases `load-digest` (tool-call target 4), `load-no-digest` and `search-scoped`;
   - the resolution of spec §11 item 6.
@@ -1363,7 +1605,7 @@ input_match: '"skill"\s*:\s*"(?:[\w-]+:)?brain-load"'
 ---
 type: tool_used
 tool: Bash
-input_match: '(?:bin/brain|--graph\W+[^\s"\\]+)\W+(?:--graph\W+[^\s"\\]+\W+)?digest\b'
+input_match: '(?:bin/brain|--graph\W+[^\s"\\]+)\W+(?:--graph\W+[^\s"\\]+\W+)?digest\b(?!(?:[^;&|\\]|\\[^n])*--graph\W)'
 min: 1
 ---
 ```
@@ -1392,6 +1634,18 @@ max: 0
 ---
 ```
 
+`evals/load-digest/graders/no-page-shell-read.md`:
+
+```markdown
+---
+type: tool_used
+tool: Bash
+input_match: '(?:cat|head|tail|sed|awk|less|more|grep)\b[^|;&]*Projects___Demo\.md'
+min: 0
+max: 0
+---
+```
+
 `evals/load-digest/graders/not-read-stated.md`:
 
 ```markdown
@@ -1412,7 +1666,7 @@ pattern: 'activity: \d\d:\d\d loaded \[\[Projects/Demo\]\] \(digest\)'
 ---
 ```
 
-- [ ] **Step 4: Write `load-no-digest`**
+- [ ] **Step 4: Write `load-no-digest`.** The prompt still leaves room for the skill's "Build one?" offer, and `digest-offered` grades that offer rather than the fact that the page has no digest.
 
 `evals/load-no-digest/prompt.md`:
 
@@ -1426,7 +1680,7 @@ timeout_seconds: 300
 allowed_tools: [Read, Glob, Grep, Skill]
 ---
 
-load Legacy from my Logseq brain. The graph is the folder ./graph in the current working directory; use that folder as the graph path. Just load it — do not build or change anything.
+load Legacy from my Logseq brain. The graph is the folder ./graph in the current working directory; use that folder as the graph path. Just load it. You may suggest follow-ups, but do not build or change anything yourself.
 ```
 
 `evals/load-no-digest/graders/skill-fired.md`:
@@ -1454,7 +1708,7 @@ flags: i
 ```markdown
 ---
 type: regex
-pattern: 'no digest|(?:does not|doesn.t) have a digest|without a digest|build (?:one|a digest)'
+pattern: 'build (?:one|a digest)\s*\?|(?:want|like) me to (?:build|create)[^.?\n]{0,40}digest|(?:can|could|shall) (?:I )?build (?:one|a digest)|a digest (?:brings|would bring|cuts)'
 flags: i
 ---
 ```
@@ -1500,7 +1754,7 @@ max: 0
 
 ```markdown
 ---
-description: 'A topic question runs a counts-first brain search instead of reading pages, and states coverage.'
+description: 'A topic question with 33 hits gets a counts-first brain search, no whole-page read, and a coverage statement.'
 tags: [honesty]
 runs: 1
 max_turns: 25
@@ -1508,7 +1762,7 @@ timeout_seconds: 300
 allowed_tools: [Read, Glob, Grep, Skill]
 ---
 
-what do we know about the export feature? My Logseq brain graph is the folder ./graph in the current working directory; use that folder as the graph path.
+what do we know about export? My Logseq brain graph is the folder ./graph in the current working directory; use that folder as the graph path.
 ```
 
 `evals/search-scoped/graders/skill-fired.md`:
@@ -1527,18 +1781,40 @@ input_match: '"skill"\s*:\s*"(?:[\w-]+:)?brain-load"'
 ---
 type: tool_used
 tool: Bash
-input_match: '(?:bin/brain|--graph\W+[^\s"\\]+)\W+(?:--graph\W+[^\s"\\]+\W+)?search\W+(?:[\w-]+\W+){0,2}[Ee]xport'
+input_match: '(?:bin/brain|--graph\W+[^\s"\\]+)\W+(?:--graph\W+[^\s"\\]+\W+)?search\W+(?:[\w-]+\W+){0,2}[Ee]xport(?!(?:[^;&|\\]|\\[^n])*--graph\W)'
 min: 1
 ---
 ```
 
-`evals/search-scoped/graders/no-whole-page-read.md`:
+`evals/search-scoped/graders/counts-first.md`:
+
+```markdown
+---
+type: regex
+target: trace
+pattern: 'showed 0 of \d+ hits'
+---
+```
+
+`evals/search-scoped/graders/no-whole-page-read.md` flags a Read of a page with no `limit`, whatever the key order:
 
 ```markdown
 ---
 type: tool_used
 tool: Read
-input_match: 'graph/pages/[^"]*\.md"\s*\}'
+input_match: '^(?![\s\S]*"limit")[\s\S]*graph/pages/[^"]*\.md'
+min: 0
+max: 0
+---
+```
+
+`evals/search-scoped/graders/no-page-cat.md`:
+
+```markdown
+---
+type: tool_used
+tool: Bash
+input_match: '(?:cat|less|more)\b[^|;&]*graph/pages/'
 min: 0
 max: 0
 ---
@@ -1563,18 +1839,28 @@ git commit -m "test(evals): brain-load cases — digest load, digest-less load, 
 
 - [ ] **Step 7: Validate for free**
 
+Run: `MSYS_NO_PATHCONV=1 wsl.exe -d FedoraLinux-44 -e sh /mnt/d/AI/logseq-brain/tools/eval/test.sh < /dev/null`
+Expected:
+- `ok   case-lint: 4 cases, 24 regexes, 0 problems`;
+- `ok   scaffold load-digest`, `ok   scaffold load-no-digest`, `ok   scaffold search-scoped`;
+- `all tools/eval checks passed`.
+
 Run: `MSYS_NO_PATHCONV=1 wsl.exe -d FedoraLinux-44 -u logseq-eval -e sh /mnt/d/AI/logseq-brain/tools/eval/run.sh --check < /dev/null; echo "exit=$?"`
-Expected: `check: every selected case loads, and no grader is impossible with the granted tools`, `exit=0`.
+Expected: `check: every selected case passes schema validation …`, `exit=0`.
 
 - [ ] **Step 8: Paid runs (≈ $1 in total).** Run each in the background.
 
 Run: `MSYS_NO_PATHCONV=1 wsl.exe -d FedoraLinux-44 -u logseq-eval -e sh /mnt/d/AI/logseq-brain/tools/eval/run.sh --case 'load-*' < /dev/null; echo "exit=$?"`
-Expected: `load-digest` and `load-no-digest` rows with `pass`; `load-digest` shows its tool count and `<=4 ok` or `<=4 OVER`; `canary: sentinels unchanged …`; `exit=0`.
+Expected:
+- `load-digest` and `load-no-digest` rows with `pass`;
+- `load-digest` shows its tool count with `<=4 ok` or `<=4 OVER`;
+- `canary: sentinels unchanged …`;
+- `exit=0`.
 
 Run: `MSYS_NO_PATHCONV=1 wsl.exe -d FedoraLinux-44 -u logseq-eval -e sh /mnt/d/AI/logseq-brain/tools/eval/run.sh --case search-scoped < /dev/null; echo "exit=$?"`
 Expected: a `search-scoped` row with `pass`; `exit=0`.
 
-Record both tool counts and costs. An `OVER` on `load-digest` is a figure to report, not a failure.
+Record both tool counts and costs. An `OVER` on `load-digest` is expected: brain-load's own mandated steps are at least 5 calls, as Task 1 records. It is a figure to report, not a failure.
 
 - [ ] **Step 9: Resolve spec §11 item 6 (the coverage regex).** Open `load-digest`'s final message in its trace (`evals/results/<stamp>/traces/load-digest-1.jsonl`, the last assistant text).
   - **`not-read-stated` passed:** item 6 is settled. Note the matched phrase in the report.
@@ -1588,13 +1874,13 @@ Record both tool counts and costs. An `OVER` on `load-digest` is a figure to rep
     FAIL if the reply presents the loaded content without saying what it left out.
     ```
 
-    Then commit (`fix(evals): judge the coverage statement — wording varies (spec §6.3)`), run `--check`, and rerun only the failed case.
+    Then commit (`fix(evals): judge the coverage statement — wording varies (spec §6.3)`), run `test.sh` and `--check`, and rerun only the failed case. The wrapper pins the judge to `claude-haiku-4-5`.
   - **It failed, and the reply says nothing about what was left out:** that is a real finding. Handle it under Step 10.
 
 - [ ] **Step 10: If a grader failed**
   1. Read `evals/results/<stamp>/summary.txt`, then the case's trace, to see what the agent actually did: its tool inputs, the helper's output, its final message.
-  2. **Grader bug:** the agent did what the case asserts but the pattern missed it (different quoting, unanticipated wording). Fix the grader, commit (`fix(evals): …`), run `--check`, then rerun only that case.
-  3. **Real finding:** the agent did the wrong thing — for example it read the whole page, built a digest it was told not to, or skipped the coverage statement. Do not change the grader or any skill. Rerun that case once to tell a one-off from a pattern. Record both runs (result, cost, the trace excerpt) under "Findings" in the report. The case stays as written.
+  2. **Grader bug:** the agent did what the case asserts but the pattern missed it (different quoting, unanticipated wording). Fix the grader, commit (`fix(evals): …`), run `test.sh` and `--check`, then rerun only that case.
+  3. **Real finding:** the agent did the wrong thing. For example, it read the page with `cat`, built a digest, never offered one, or skipped the coverage statement. Do not change the grader or any skill. Rerun that case once to tell a one-off from a pattern. Record both runs (result, cost, the trace excerpt) under "Findings" in the report. The case stays as written.
   4. At most two reruns per case in this task.
 
 ---
@@ -1602,15 +1888,19 @@ Record both tool counts and costs. An `OVER` on `load-digest` is a figure to rep
 ### Task 7: brain-save cases — save-basic, save-phantom-syntax
 
 **Files:**
-- Create: `evals/save-basic/{case.yaml,prompt.md,scaffold.sh}`, `evals/save-basic/graders/{skill-fired,session-entry,check-clean,saved-activity}.md`
-- Create: `evals/save-phantom-syntax/{case.yaml,prompt.md,scaffold.sh}`, `evals/save-phantom-syntax/graders/{skill-fired,check-ran,never-new-error}.md`
+- Create: `evals/save-basic/{case.yaml,prompt.md,scaffold.sh}`, `evals/save-basic/graders/{skill-fired,session-entry,check-clean,checked-index,checked-journal,saved-activity}.md`
+- Create: `evals/save-phantom-syntax/{case.yaml,prompt.md,scaffold.sh}`, `evals/save-phantom-syntax/graders/{skill-fired,checked-index,checked-journal,never-new-error}.md`
 
 **Interfaces:**
 - Consumes:
-  - the fixture from Task 2 (`backoff` appears nowhere in it; Session Log is the page's last section);
-  - the helper's check line `check <file>: <N> new (<E> error, <W> warn), <P> pre-existing`;
+  - the fixture from Task 2 (`backoff` appears nowhere in it; Session Log is the page's last section; today's journal does not exist yet);
+  - the helper's check line `check <file>: <N> new (<E> error, <W> warn), <P> pre-existing`, which prints `no baseline — …` instead when no baseline was recorded;
   - the activity line `activity: HH:MM <text> → journals/…`.
 - Produces: cases `save-basic` (tool-call target 13) and `save-phantom-syntax`. Together they are the "0 new error-tier findings per save" gate.
+- Why the `checked-*` graders read the trace:
+  - `brain digest --apply` also prints a `check pages/Projects___Demo.md: …` line, so a Demo check line alone does not prove the save ran its own `brain check`.
+  - An Index or journal line in `<N> new (` form comes only from that step, with baselines.
+  - Without both lines, `never-new-error` could pass because nothing was checked.
 
 - [ ] **Step 1: Write the two scaffolds.** `evals/save-basic/scaffold.sh` and `evals/save-phantom-syntax/scaffold.sh` are identical:
 
@@ -1646,11 +1936,11 @@ context:
 
 ```markdown
 ---
-description: 'A progress-only save. Tool calls are reported against the target of 13; brain check must report 0 new errors.'
+description: 'A progress-only save. Tool calls are reported against the target of 13; brain check runs on the page, Index and journal with 0 new errors on the page.'
 tags: [figures]
 runs: 1
 max_turns: 40
-timeout_seconds: 300
+timeout_seconds: 600
 allowed_tools: [Read, Glob, Grep, Skill]
 ---
 
@@ -1692,6 +1982,26 @@ pattern: 'check pages/Projects___Demo\.md: \d+ new \(0 error'
 ---
 ```
 
+`evals/save-basic/graders/checked-index.md`:
+
+```markdown
+---
+type: regex
+target: trace
+pattern: 'check pages/Index\.md: \d+ new \('
+---
+```
+
+`evals/save-basic/graders/checked-journal.md`:
+
+```markdown
+---
+type: regex
+target: trace
+pattern: 'check journals/\d{4}_\d\d_\d\d\.md: \d+ new \('
+---
+```
+
 `evals/save-basic/graders/saved-activity.md`:
 
 ```markdown
@@ -1702,23 +2012,23 @@ pattern: 'activity: \d\d:\d\d saved \[\[Projects/Demo\]\]'
 ---
 ```
 
-- [ ] **Step 4: Write `save-phantom-syntax`.** `never-new-error` names the real files deliberately. `skills/_shared/hygiene-rules.md` quotes `check pages/Projects___X.md: 1 new (1 error`, and an agent that reads it puts that text into the trace.
+- [ ] **Step 4: Write `save-phantom-syntax`.** `never-new-error` excludes `Projects___X` by name: `skills/_shared/hygiene-rules.md` quotes `check pages/Projects___X.md: 1 new (1 error`, and an agent that reads that file puts the example into the trace. The prompt says "opened PR #44", not "merged": brain-save treats "merged" as a completion signal.
 
 `evals/save-phantom-syntax/prompt.md`:
 
 ```markdown
 ---
-description: 'Save text with a bare #12, C#-parity and PR #44: brain check must never report a new error — the rule is applied while composing, not by the backstop.'
+description: 'Save text with a bare #12, C#-parity and PR #44: brain check must never report a new error on any file — the rule is applied while composing, not by the backstop.'
 tags: [honesty]
 runs: 1
 max_turns: 40
-timeout_seconds: 300
+timeout_seconds: 600
 allowed_tools: [Read, Glob, Grep, Skill]
 ---
 
 Save this session to my Logseq brain, project Demo. The graph is the folder ./graph in the current working directory; use that folder as the graph path.
 
-What happened this session: fixed issue #12, where the CSV export dropped the last row, and merged PR #44 with the fix. The CSV writer now has C#-parity with the old .NET exporter's quoting rules.
+What happened this session: fixed issue #12, where the CSV export dropped the last row, and opened PR #44 with the fix. The CSV writer now has C#-parity with the old .NET exporter's quoting rules.
 
 This is a progress note only. If you would ask me anything, assume yes.
 ```
@@ -1733,13 +2043,23 @@ input_match: '"skill"\s*:\s*"(?:[\w-]+:)?brain-save"'
 ---
 ```
 
-`evals/save-phantom-syntax/graders/check-ran.md`:
+`evals/save-phantom-syntax/graders/checked-index.md`:
 
 ```markdown
 ---
 type: regex
 target: trace
-pattern: 'check pages/Projects___Demo\.md: \d+ new \('
+pattern: 'check pages/Index\.md: \d+ new \('
+---
+```
+
+`evals/save-phantom-syntax/graders/checked-journal.md`:
+
+```markdown
+---
+type: regex
+target: trace
+pattern: 'check journals/\d{4}_\d\d_\d\d\.md: \d+ new \('
 ---
 ```
 
@@ -1749,7 +2069,7 @@ pattern: 'check pages/Projects___Demo\.md: \d+ new \('
 ---
 type: regex
 target: trace
-pattern: 'check (?:pages/(?:Projects___Demo|Index|Decisions|Meta)\.md|journals/\d{4}_\d\d_\d\d\.md): \d+ new \([1-9]\d* error'
+pattern: 'check (?:pages|journals)/(?!Projects___X\.md)[^:\s]+\.md: \d+ new \([1-9]\d* error'
 match: not_contains
 ---
 ```
@@ -1763,20 +2083,35 @@ git commit -m "test(evals): brain-save cases — basic save, phantom-page syntax
 
 - [ ] **Step 6: Validate for free**
 
+Run: `MSYS_NO_PATHCONV=1 wsl.exe -d FedoraLinux-44 -e sh /mnt/d/AI/logseq-brain/tools/eval/test.sh < /dev/null`
+Expected:
+- `ok   case-lint: 6 cases, 34 regexes, 0 problems`;
+- five `ok   scaffold …` lines, including `save-basic` and `save-phantom-syntax`;
+- `all tools/eval checks passed`.
+
 Run: `MSYS_NO_PATHCONV=1 wsl.exe -d FedoraLinux-44 -u logseq-eval -e sh /mnt/d/AI/logseq-brain/tools/eval/run.sh --check < /dev/null; echo "exit=$?"`
-Expected: `check: every selected case loads, and no grader is impossible with the granted tools`, `exit=0`.
+Expected: `check: every selected case passes schema validation …`, `exit=0`.
 
 - [ ] **Step 7: Paid run (≈ $1.5).** Run it in the background.
 
 Run: `MSYS_NO_PATHCONV=1 wsl.exe -d FedoraLinux-44 -u logseq-eval -e sh /mnt/d/AI/logseq-brain/tools/eval/run.sh --case 'save-*' < /dev/null; echo "exit=$?"`
-Expected: `save-basic` and `save-phantom-syntax` rows with `pass`; `save-basic` shows its tool count with `<=13 ok` or `<=13 OVER`; `canary: sentinels unchanged …`; `exit=0`.
+Expected:
+- `save-basic` and `save-phantom-syntax` rows with `pass`;
+- `save-basic` shows its tool count with `<=13 ok` or `<=13 OVER`;
+- `canary: sentinels unchanged …`;
+- `exit=0`.
 
 Record the tool count and cost. `OVER` is a figure to report, not a failure.
 
 - [ ] **Step 8: If a grader failed**
   1. Read `evals/results/<stamp>/summary.txt`, then the case's trace, to see what the agent actually did: its tool inputs, the helper's output, its final message.
-  2. **Grader bug:** the agent did what the case asserts but the pattern missed it. Fix the grader, commit (`fix(evals): …`), run `--check`, then rerun only that case.
-  3. **Real finding:** the agent did the wrong thing. For example, `brain check` reported `1 new (1 error` because the save wrote a bare `#12` and then fixed it; or it never ran `brain check`, or wrote no Session Log entry. Do not change the grader or any skill. Rerun that case once to tell a one-off from a pattern. Record both runs (result, cost, the trace excerpt) under "Findings" in the report. The case stays as written.
+  2. **Grader bug:** the agent did what the case asserts but the pattern missed it. Fix the grader, commit (`fix(evals): …`), run `test.sh` and `--check`, then rerun only that case.
+  3. **Real finding:** the agent did the wrong thing. For example:
+     - `brain check` reported `1 new (1 error` because the save wrote a bare `#12` and fixed it afterwards;
+     - the save never checked Index or the journal;
+     - no Session Log entry was written.
+
+     Do not change the grader or any skill. Rerun that case once to tell a one-off from a pattern. Record both runs (result, cost, the trace excerpt) under "Findings" in the report. The case stays as written.
   4. At most two reruns per case in this task.
 
 ---
@@ -1786,7 +2121,7 @@ Record the tool count and cost. `OVER` is a figure to report, not a failure.
 **Files:**
 - Create: `evals/status-dashboard/{case.yaml,prompt.md,scaffold.sh}`, `evals/status-dashboard/graders/{status-fired,load-not-fired,one-status-call,counts-line}.md`
 - Create: `evals/doctor-report-only/{case.yaml,prompt.md,scaffold.sh}`, `evals/doctor-report-only/graders/{skill-fired,lint-ran,finding-reported,no-write,no-edit}.md` (its `overlay/` exists since Task 2)
-- Create: `evals/init-project/{case.yaml,prompt.md,scaffold.sh}`, `evals/init-project/graders/{skill-fired,map-computed,map-not-pending}.md`
+- Create: `evals/init-project/{case.yaml,prompt.md,scaffold.sh}`, `evals/init-project/graders/{skill-fired,digest-applied,map-computed,map-not-pending}.md`
 - Create: `evals/no-trigger/prompt.md`, `evals/no-trigger/graders/{no-brain-skill,answered}.md`
 
 **Interfaces:**
@@ -1889,7 +2224,7 @@ max: 0
 ---
 type: tool_used
 tool: Bash
-input_match: '(?:bin/brain|--graph\W+[^\s"\\]+)\W+(?:--graph\W+[^\s"\\]+\W+)?status\b'
+input_match: '(?:bin/brain|--graph\W+[^\s"\\]+)\W+(?:--graph\W+[^\s"\\]+\W+)?status\b(?!(?:[^;&|\\]|\\[^n])*--graph\W)'
 min: 1
 max: 1
 ---
@@ -1938,7 +2273,7 @@ input_match: '"skill"\s*:\s*"(?:[\w-]+:)?brain-doctor"'
 ---
 type: tool_used
 tool: Bash
-input_match: '(?:bin/brain|--graph\W+[^\s"\\]+)\W+(?:--graph\W+[^\s"\\]+\W+)?lint\b'
+input_match: '(?:bin/brain|--graph\W+[^\s"\\]+)\W+(?:--graph\W+[^\s"\\]+\W+)?lint\b(?!(?:[^;&|\\]|\\[^n])*--graph\W)'
 min: 1
 ---
 ```
@@ -1981,11 +2316,11 @@ max: 0
 
 ```markdown
 ---
-description: 'init brain project creates the page with a computed Map line, never the pending placeholder.'
+description: 'init brain project creates the page and computes its Map with brain digest --apply, never leaving the pending placeholder.'
 tags: [triggering]
 runs: 1
 max_turns: 40
-timeout_seconds: 300
+timeout_seconds: 600
 allowed_tools: [Read, Glob, Grep, Skill]
 ---
 
@@ -1999,6 +2334,17 @@ init brain project Scratch in my Logseq brain. The graph is the folder ./graph i
 type: tool_used
 tool: Skill
 input_match: '"skill"\s*:\s*"(?:[\w-]+:)?brain-init"'
+---
+```
+
+`evals/init-project/graders/digest-applied.md`:
+
+```markdown
+---
+type: tool_used
+tool: Bash
+input_match: '(?:bin/brain|--graph\W+[^\s"\\]+)\W+(?:--graph\W+[^\s"\\]+\W+)?digest\W+(?:[\w./-]*/)?(?:Projects/|Projects___)?Scratch(?:\.md)?\W+--apply(?!(?:[^;&|\\]|\\[^n])*--graph\W)'
+min: 1
 ---
 ```
 
@@ -2071,8 +2417,14 @@ git commit -m "test(evals): triggering and report-mode cases — status, doctor,
 
 - [ ] **Step 8: Validate the whole suite for free**
 
+Run: `MSYS_NO_PATHCONV=1 wsl.exe -d FedoraLinux-44 -e sh /mnt/d/AI/logseq-brain/tools/eval/test.sh < /dev/null`
+Expected:
+- `ok   case-lint: 10 cases, 47 regexes, 0 problems`;
+- eight `ok   scaffold …` lines;
+- `all tools/eval checks passed`.
+
 Run: `MSYS_NO_PATHCONV=1 wsl.exe -d FedoraLinux-44 -u logseq-eval -e sh /mnt/d/AI/logseq-brain/tools/eval/run.sh --check < /dev/null; echo "exit=$?"`
-Expected: `check: every selected case loads, and no grader is impossible with the granted tools`, `exit=0`.
+Expected: `check: every selected case passes schema validation …`, `exit=0`.
 
 - [ ] **Step 9: Paid runs (≈ $1.2 in total).** Run each in the background, one after another.
 
@@ -2086,8 +2438,15 @@ Expected for each: the case row with `pass`, `canary: sentinels unchanged …`, 
 
 - [ ] **Step 10: If a grader failed**
   1. Read `evals/results/<stamp>/summary.txt`, then the case's trace, to see what the agent actually did: its tool inputs, the helper's output, its final message.
-  2. **Grader bug:** the agent did what the case asserts but the pattern missed it. Fix the grader, commit (`fix(evals): …`), run `--check`, then rerun only that case.
-  3. **Real finding:** the agent did the wrong thing. For example, brain-load fired for "what's in my brain", `brain status` ran twice, the doctor edited a file in report mode, the Map stayed `pending`, or a brain skill fired for `git stash`. Do not change the grader or any skill. Rerun that case once to tell a one-off from a pattern. Record both runs (result, cost, the trace excerpt) under "Findings" in the report. The case stays as written.
+  2. **Grader bug:** the agent did what the case asserts but the pattern missed it. Fix the grader, commit (`fix(evals): …`), run `test.sh` and `--check`, then rerun only that case.
+  3. **Real finding:** the agent did the wrong thing. For example:
+     - brain-load fired for "what's in my brain";
+     - `brain status` ran twice;
+     - the doctor edited a file in report mode;
+     - init never ran `brain digest --apply`;
+     - a brain skill fired for `git stash`.
+
+     Do not change the grader or any skill. Rerun that case once to tell a one-off from a pattern. Record both runs (result, cost, the trace excerpt) under "Findings" in the report. The case stays as written.
   4. At most two reruns per case in this task.
 
 ---
@@ -2100,7 +2459,7 @@ Expected for each: the case row with `pass`, `canary: sentinels unchanged …`, 
 - Modify: `CLAUDE.md` ("Working in this repo")
 
 **Interfaces:**
-- Consumes: the wrapper's modes and exit codes (Task 4), and the case list (Tasks 5–8).
+- Consumes: the wrapper's modes and exit codes, and `tools/eval/test.sh` (Task 4); the case list (Tasks 5–8).
 - Produces: the maintainer-facing instructions.
 
 - [ ] **Step 1: Write `evals/README.md`**
@@ -2140,11 +2499,12 @@ In that shell, install Claude Code with the native installer ([setup docs](https
 ## Running
 
 ```
-wsl -d FedoraLinux-44 -u logseq-eval sh /mnt/d/AI/logseq-brain/tools/eval/run.sh                  # the whole suite
-wsl -d FedoraLinux-44 -u logseq-eval sh /mnt/d/AI/logseq-brain/tools/eval/run.sh --case load-digest   # one case (a name glob)
-wsl -d FedoraLinux-44 -u logseq-eval sh /mnt/d/AI/logseq-brain/tools/eval/run.sh --check          # free: load every case, find impossible graders
-wsl -d FedoraLinux-44 -u logseq-eval sh /mnt/d/AI/logseq-brain/tools/eval/run.sh --dry-run        # free: every step but the harness
-wsl -d FedoraLinux-44 -u logseq-eval sh /mnt/d/AI/logseq-brain/tools/eval/run.sh --trip-canary    # free: proves the canary check fires (exit 3)
+wsl -d FedoraLinux-44 sh /mnt/d/AI/logseq-brain/tools/eval/test.sh                                 # free: tools, case regexes, scaffolds
+wsl -d FedoraLinux-44 -u logseq-eval sh /mnt/d/AI/logseq-brain/tools/eval/run.sh --check           # free: case schema and tool grants
+wsl -d FedoraLinux-44 -u logseq-eval sh /mnt/d/AI/logseq-brain/tools/eval/run.sh                   # the whole suite
+wsl -d FedoraLinux-44 -u logseq-eval sh /mnt/d/AI/logseq-brain/tools/eval/run.sh --case load-digest  # one case (a name glob)
+wsl -d FedoraLinux-44 -u logseq-eval sh /mnt/d/AI/logseq-brain/tools/eval/run.sh --dry-run         # free: every step but the harness
+wsl -d FedoraLinux-44 -u logseq-eval sh /mnt/d/AI/logseq-brain/tools/eval/run.sh --trip-canary     # free: proves the canary check fires (exit 3)
 ```
 
 Adjust the repository path to your checkout.
@@ -2153,9 +2513,12 @@ From Git Bash:
 - prefix `MSYS_NO_PATHCONV=1`, or Git Bash rewrites the `/mnt/...` path;
 - call `wsl.exe … -e sh …`, so no shell expands a `--case` glob.
 
-**What the wrapper prints.** A table with a row per case: pass/fail, tool calls, the target for the two measured cases, cost and time. The tool-call targets (`load-digest` ≤ 4, `save-basic` ≤ 13) are flagged `OVER` when exceeded, but never fail a run: one run per case is one sample.
+**What the wrapper prints.** A table with a row per case: pass/fail, tool calls, the target for the two measured cases, cost and time.
+- Tool calls are counted from the first `brain-` Skill call onward, as `tools/measure/cost.py` counts them.
+- The targets (`load-digest` ≤ 4, `save-basic` ≤ 13) are flagged `OVER` when exceeded, but never fail a run: one run per case is one sample.
+- brain-load's own mandated steps are already 5 calls, so `load-digest` reads `OVER` by construction.
 
-**Where results go.** The summary, the harness's JSON and HTML report, and each run's trace go to `evals/results/<timestamp>/`. That directory is gitignored because traces are full transcripts.
+**Where results go.** The summary, the harness's JSON and HTML report, and each run's trace go to `evals/results/<timestamp>/`. An interrupted run keeps what the harness wrote in `<timestamp>-partial/`. The directory is gitignored because traces are full transcripts.
 
 **Exit codes:**
 
@@ -2173,6 +2536,8 @@ That the sandbox confines Write and Edit is not documented: it was verified by p
 2. **During the suite,** `isolation-canary` tries to change them with Bash, Write and Edit.
 3. **Afterwards,** the wrapper checks them from outside. Any change exits 3, whatever the graders scored.
 
+A `--case` run that does not select `isolation-canary` still checks the sentinels, but nothing in it tries to change them.
+
 If `%TEMP%` cannot be resolved, set `EVAL_CANARY_WINDIR` to a Windows-mount directory that `logseq-eval` can write. Otherwise the summary says the Windows half was skipped.
 
 After a Claude Code update, run `--trip-canary` once, then the suite.
@@ -2181,35 +2546,37 @@ After a Claude Code update, run `--trip-canary` once, then the suite.
 
 | Case | Checks |
 |---|---|
-| `isolation-canary` | Bash, Write and Edit cannot change the sentinels; `LOGSEQ_BRAIN_PATH` is unset inside the run |
-| `load-digest` | brain-load fires. One `brain digest`, no `--apply`, no Read of the page. The reply says what was not read. The `(digest)` activity line is written. Tool calls against ≤ 4 |
-| `load-no-digest` | Coverage is stated. A digest is offered, but not built: the page still has no `## Digest` and was neither edited nor rewritten |
-| `search-scoped` | A counts-first `brain search` for `export`. No whole-page Read. Coverage is stated |
-| `save-basic` | A Session Log entry, `brain check` with 0 new errors, the `saved` activity line. Tool calls against ≤ 13 |
-| `save-phantom-syntax` | With a bare `#12`, `C#-parity` and PR `#44` in the session, `brain check` never reports a new error, not even one that is later fixed |
+| `isolation-canary` | Bash, Write and Edit are each attempted, and none changes the sentinels. `LOGSEQ_BRAIN_PATH` is unset inside the run |
+| `load-digest` | brain-load fires. One `brain digest`, no `--apply`. The page is not read with Read or through the shell. The reply says what was not read. The `(digest)` activity line is written. Tool calls against ≤ 4 |
+| `load-no-digest` | Coverage is stated. The skill offers a digest ("Build one?") but does not build one: the page still has no `## Digest` and was neither edited nor rewritten |
+| `search-scoped` | "what do we know about export?" (33 hits) gets a `brain search` whose output is counts only. No whole-page Read, no `cat`. Coverage is stated |
+| `save-basic` | A Session Log entry. The save's own `brain check` runs on the page, Index and journal, with 0 new errors on the page. The `saved` activity line. Tool calls against ≤ 13 |
+| `save-phantom-syntax` | With a bare `#12`, `C#-parity` and PR `#44` in the session, the save checks the page, Index and journal, and `brain check` never reports a new error on any file, not even one that is later fixed |
 | `status-dashboard` | brain-status fires and brain-load does not. Exactly one `brain status` call. The counts line |
 | `doctor-report-only` | The planted bare `#44` is reported. No Write or Edit call |
-| `init-project` | `Projects/Scratch` is created with a computed `- Map:` line, never `pending` |
+| `init-project` | `Projects/Scratch` is created. `brain digest … --apply` runs, and the `- Map:` line ends in a measured `page | …` clause, never `pending` |
 | `no-trigger` | An unrelated question fires no `brain-` skill |
 
 ## Adding a case
 
 1. **`evals/<name>/prompt.md`.**
-   - Frontmatter: `runs: 1`, `max_turns` (40 for saves and init, 25 otherwise), `timeout_seconds: 300`, `allowed_tools: [Read, Glob, Grep, Skill]`. Quote a `description` that contains `#` or `: `.
+   - Frontmatter: `runs: 1`, `max_turns` (40 for saves and init, 25 otherwise), `timeout_seconds` (600 for saves and init, 300 otherwise), `allowed_tools: [Read, Glob, Grep, Skill]`. Quote a `description` that contains `#` or `: ` in single quotes.
    - Name the graph inline ("The graph is the folder ./graph …").
    - Pre-answer the questions this case's skill would ask, in the direction the case asserts. There is no global "assume yes".
+   - Avoid words the skill reads as signals you do not intend, such as "merged" for brain-save.
 2. **The graph.** Add `case.yaml` with `context.scaffold_script: scaffold.sh`, and a `scaffold.sh` that runs `sh "$(dirname "$0")/../fixtures/materialize.sh" graph [overlay-dir]`. A scaffold does **not** receive `EVAL_*` variables; the agent's Bash does.
 3. **`graders/*.md`, deterministic only.**
-   - `tool_used` inputs are matched JSON-encoded, so a quote in a command is `\"`. Match helper calls with `(?:bin/brain|--graph\W+[^\s"\\]+)\W+(?:--graph\W+[^\s"\\]+\W+)?<command>\b`, not literal quotes.
-   - A `trace` target also contains the prompt and every file the agent read. A `not_contains` pattern must occur in neither (`skills/_shared/hygiene-rules.md` quotes an example `brain check` line).
-   - Never anchor a pattern to a line start: sandboxed Bash output begins with `.bashrc: Permission denied` noise.
+   - Write `pattern` and `input_match` as single-quoted YAML scalars.
+   - `tool_used` inputs are matched JSON-encoded, so a quote in a command is `\"`. Match helper calls with this pattern rather than literal quotes: `(?:bin/brain|--graph\W+[^\s"\\]+)\W+(?:--graph\W+[^\s"\\]+\W+)?<command>\b(?!(?:[^;&|\\]|\\[^n])*--graph\W)`. The tail rejects a subcommand placed before `--graph`, which exits 2.
+   - A `trace` target also contains the prompt and every file the agent read. A `not_contains` pattern must occur in neither: `skills/_shared/hygiene-rules.md` quotes an example `check pages/Projects___X.md` line.
+   - Never anchor a `trace` or `last_message` pattern to a line start: sandboxed Bash output begins with `.bashrc: Permission denied` noise. A `tool_used` input is one JSON string, so `^` is safe there.
    - Journal file names are today's date, so assert the helper's `activity:` output in the trace instead.
 4. **Fixture dates** are 10-byte tokens: `@TODAY-NN@` (NN days ago) in content, `@TODAY_NN@` in file names. After changing `evals/fixtures/base-graph/`:
    - materialize a copy (`sh evals/fixtures/materialize.sh /tmp/g`);
    - regenerate any Map line there with `sh skills/_shared/bin/brain --graph /tmp/g digest <page> --apply`;
    - copy the new line back into the tokenized page;
    - update the golden cases, and run `sh tests/run.sh 'eval-fixture-*'`.
-5. **Commit,** then run `run.sh --check`, then `run.sh --case <name>`.
+5. **Commit,** then run `sh tools/eval/test.sh`, then `run.sh --check`, then `run.sh --case <name>`.
 ````
 
 - [ ] **Step 2: CONTRIBUTING.md — project layout.** Replace:
@@ -2265,10 +2632,10 @@ Then renumber the rest of the list:
 - `6. Rebuild the \`.plugin\` archive` → `7.`
 - `7. Bump the version in [\`skillsmith\`]` → `8.`
 
-- [ ] **Step 5: CLAUDE.md — working in this repo.** Directly after the bullet that begins `- Run \`sh tests/run.sh\` after any change to`, insert this bullet:
+- [ ] **Step 5: CLAUDE.md — working in this repo.** Directly after the bullet that begins `- Run \`sh tests/run.sh\` after any change to`, insert this bullet. It stays machine-neutral; the paths live in `evals/README.md`.
 
 ```
-- Before a release, and after changing skill prose, run the eval suite (`evals/README.md`): `wsl -d FedoraLinux-44 -u logseq-eval sh /mnt/d/AI/logseq-brain/tools/eval/run.sh`. It needs the `logseq-eval` user in WSL2 (never native Windows, never the Docker-linked user), evaluates only committed files, and draws on plan usage (≈ $4–7 a full run); `--check` is free.
+- Before a release, and after changing skill prose, run the eval suite (`evals/README.md`). It runs only as the `logseq-eval` user in WSL2 (never native Windows, never the Docker-linked user), evaluates committed files only, and draws on plan usage (≈ $4–7 a full run); `sh tools/eval/test.sh` and `run.sh --check` are free.
 ```
 
 - [ ] **Step 6: Verify the edits**
@@ -2294,7 +2661,7 @@ git commit -m "docs(evals): README, release step and the working-in-this-repo li
 - Modify: `docs/superpowers/specs/2026-09-11-v0.11.0-design.md` (after the §8 success-criteria table)
 
 **Interfaces:**
-- Consumes: the complete suite (Tasks 5–8), the wrapper (Task 4), the docs (Task 9).
+- Consumes: the complete suite (Tasks 5–8), the wrapper and test script (Task 4), the docs (Task 9).
 - Produces:
   - one full-suite result that is the release-gate baseline;
   - the measured figures recorded in the v0.11.0 spec;
@@ -2302,11 +2669,16 @@ git commit -m "docs(evals): README, release step and the working-in-this-repo li
 
 - [ ] **Step 1: Free preflight**
 
+Run: `MSYS_NO_PATHCONV=1 wsl.exe -d FedoraLinux-44 -e sh /mnt/d/AI/logseq-brain/tools/eval/test.sh < /dev/null`
+Expected: `ok   case-lint: 10 cases, 47 regexes, 0 problems`, eight `ok   scaffold …` lines, `all tools/eval checks passed`.
+
 Run: `MSYS_NO_PATHCONV=1 wsl.exe -d FedoraLinux-44 -u logseq-eval -e sh /mnt/d/AI/logseq-brain/tools/eval/run.sh --check < /dev/null; echo "exit=$?"`
-Expected: `check: every selected case loads, …`, `exit=0`.
+Expected: `check: every selected case passes schema validation …`, `exit=0`.
 
 Run: `git status --short -- .claude-plugin skills evals`
 Expected: no output (everything under evaluation is committed).
+
+Before starting, confirm the recorded cost of this plan's paid runs so far is under $14: this run can cost up to $7, and the plan-wide cap is $20. If it is not, stop and report instead of running.
 
 - [ ] **Step 2: The full run (≈ $4–7, 15–30 minutes).** Run it in the background.
 
@@ -2318,12 +2690,13 @@ Expected:
 - `claude plugin eval exit: 0`;
 - `exit=0`.
 
-Any case already recorded as a real finding in Tasks 5–8 may fail here. Then expect `exit=1`, and list those cases in the report; do not rerun the whole suite for them. A *new* failure gets the same grader-bug / real-finding triage as in Tasks 6–8, rerunning only that case, at most twice. `CANARY TRIPPED` stops everything: report it.
+Any case already recorded as a real finding in Tasks 5–8 may fail here. Then expect `exit=1`, and list those cases in the report; do not rerun the whole suite for them. A *new* failure gets the same grader-bug / real-finding triage as in Tasks 6–8, rerunning only that case, at most twice, within the $20 cap. `CANARY TRIPPED` stops everything: report it.
 
 - [ ] **Step 3: Record the figures in the v0.11.0 spec.** Read `evals/results/<stamp>/summary.txt` for the values:
   - `N` = the `tools` column of the `load-digest` row;
   - `M` = the `tools` column of the `save-basic` row;
-  - `E` = `0` when both `save-basic` and `save-phantom-syntax` passed, otherwise the number of those two cases whose check-line grader failed;
+  - `E` = the number of check lines reporting one or more new errors in the two save traces:
+    `grep -hoE 'check (pages|journals)/[^:" ]+\.md: [0-9]+ new \([1-9][0-9]* error' evals/results/<stamp>/traces/save-basic-1.jsonl evals/results/<stamp>/traces/save-phantom-syntax-1.jsonl | grep -v 'Projects___X' | wc -l`;
   - `V` = the Claude Code version in the summary's first line;
   - `SHA` = `git rev-parse --short HEAD`.
 
@@ -2343,7 +2716,7 @@ with the line kept, followed by a blank line and the annotation. Substitute the 
 > - `save-basic`: **M** tool calls (target ≤ 13).
 > - New error-tier findings across `save-basic` and `save-phantom-syntax`: **E**.
 >
-> These are single samples on a small page, not medians over real use. They bound behaviour on a controlled graph and do not replace the `tools/measure/` rerun.
+> Tool calls are counted like `tools/measure/cost.py`: from the brain Skill call onward, that call included. On that definition the ≤ 4 target cannot be met by brain-load's own mandated steps: Skill, `info`, `digest`, `journal` and `activity` are 5. A sandboxed run also adds calls real use does not have: with no config, `brain info` without `--graph` exits 2 before the graph is passed. These are single samples on a small page, not medians over real use. They bound behaviour on a controlled graph and do not replace the `tools/measure/` rerun.
 ```
 
 If the run happened on a later date than 2026-09-13, use that date.
@@ -2355,25 +2728,25 @@ git add docs/superpowers/specs/2026-09-11-v0.11.0-design.md
 git commit -m "docs(spec): v0.11.0 tool-call figures measured by the eval suite"
 ```
 
-- [ ] **Step 5: Probe cleanup — look first (spec §12).** These directories exist only from the design probes and this plan's pre-verification. The suite does not use them.
+- [ ] **Step 5: Probe cleanup — look first (spec §12).** These directories exist only from the design probes, this plan's pre-verification and its review. The suite does not use them.
 
 Run: `MSYS_NO_PATHCONV=1 wsl.exe -d FedoraLinux-44 -u logseq-eval -e sh -c 'ls -d $HOME/eval-probe $HOME/eval-probe2 $HOME/eval-verify $HOME/rs-test /tmp/lse-verify /tmp/eval-probe-outside /tmp/claude-eval-* /mnt/c/Users/jame_/AppData/Local/Temp/eval-probe-outside 2>&1' < /dev/null`
 
-Run: `MSYS_NO_PATHCONV=1 wsl.exe -d FedoraLinux-44 -e sh -c 'ls -d $HOME/eval-probe 2>&1' < /dev/null`
+Run: `MSYS_NO_PATHCONV=1 wsl.exe -d FedoraLinux-44 -e sh -c 'ls -d $HOME/eval-probe 2>&1; ls -ld /tmp/claude-eval-* 2>&1' < /dev/null`
 
 Expected: some or all of these paths listed. Nothing else is to be removed. In particular the `logseq-eval` user, its `~/.local` and its Claude login stay.
 
 - [ ] **Step 6: Remove them**
 
-Run: `MSYS_NO_PATHCONV=1 wsl.exe -d FedoraLinux-44 -u logseq-eval -e sh -c 'for d in /tmp/claude-eval-*; do [ -d "$d" ] && chmod -R u+rwX "$d"; done; rm -rf $HOME/eval-probe $HOME/eval-probe2 $HOME/eval-verify $HOME/rs-test /tmp/lse-verify /tmp/eval-probe-outside /tmp/claude-eval-* /mnt/c/Users/jame_/AppData/Local/Temp/eval-probe-outside; echo done' < /dev/null`
+Run: `MSYS_NO_PATHCONV=1 wsl.exe -d FedoraLinux-44 -u logseq-eval -e sh -c 'for d in /tmp/claude-eval-*; do [ -O "$d" ] && chmod -R u+rwX "$d" && rm -rf "$d"; done; rm -rf $HOME/eval-probe $HOME/eval-probe2 $HOME/eval-verify $HOME/rs-test /tmp/lse-verify /tmp/eval-probe-outside /mnt/c/Users/jame_/AppData/Local/Temp/eval-probe-outside; echo done' < /dev/null`
 
-Run: `MSYS_NO_PATHCONV=1 wsl.exe -d FedoraLinux-44 -e sh -c 'rm -rf $HOME/eval-probe; echo done' < /dev/null`
+Run: `MSYS_NO_PATHCONV=1 wsl.exe -d FedoraLinux-44 -e sh -c 'for d in /tmp/claude-eval-*; do [ -O "$d" ] && chmod -R u+rwX "$d" && rm -rf "$d"; done; rm -rf $HOME/eval-probe; echo done' < /dev/null`
 
-If a `/tmp` path is owned by the other WSL user and `rm` reports `Permission denied`, run the same `rm` as that user (the default user for the jame-owned ones).
+Each user removes only the `/tmp/claude-eval-*` directories it owns (`-O`). If a path still reports `Permission denied`, report it; do not use root.
 
 - [ ] **Step 7: Verify the cleanup**
 
-Run: `MSYS_NO_PATHCONV=1 wsl.exe -d FedoraLinux-44 -u logseq-eval -e sh -c 'ls -d $HOME/eval-probe* $HOME/eval-verify $HOME/rs-test /tmp/lse-verify /tmp/eval-probe-outside /tmp/claude-eval-* /mnt/c/Users/jame_/AppData/Local/Temp/eval-probe-outside 2>/dev/null | wc -l; command -v claude || ls $HOME/.local/bin/claude' < /dev/null`
+Run: `MSYS_NO_PATHCONV=1 wsl.exe -d FedoraLinux-44 -u logseq-eval -e sh -c 'ls -d $HOME/eval-probe* $HOME/eval-verify $HOME/rs-test /tmp/lse-verify /tmp/eval-probe-outside /tmp/claude-eval-* /mnt/c/Users/jame_/AppData/Local/Temp/eval-probe-outside 2>/dev/null | wc -l; ls $HOME/.local/bin/claude' < /dev/null`
 Expected: `0`, then the path of the `claude` binary (the eval user is intact).
 
 - [ ] **Step 8: Final offline checks**
