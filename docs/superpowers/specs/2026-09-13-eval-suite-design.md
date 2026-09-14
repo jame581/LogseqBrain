@@ -314,3 +314,23 @@ Each item is cheap to settle, and each would otherwise surface as a confusing ca
 - all probe sentinels on `/tmp` and under the Windows `%TEMP%`.
 
 **Keep:** the `logseq-eval` user, which the suite needs, and the probe-1 trace copy until the tool-call counter is written.
+
+---
+
+> **Implementation annotation (final review, 2026-09-14):**
+> - **Status.** Implemented on branch `eval-suite`. The baseline, `evals/results/2026-09-14T20-58-51Z` at `82b24a0`, passed 10 of 10 cases for $4.98. A WSL VM restart had broken interop, so its Windows-mount canary half was skipped. `…T21-10-20Z` (`--case isolation-canary`, same commit) re-proved confinement on `/tmp` and the Windows mount.
+> - **§11 item 6 is settled.** The `not read` regex matched the coverage statement in every load run: `load-digest` twice, `load-no-digest` four times. The §6.3 judge fallback is not needed, and no grader calls a judge.
+> - **The final review changed three things.**
+>   1. **A full run can no longer pass with half a canary** (§3.5, §8, §11 item 7). The baseline exited 0 with the Windows half skipped.
+>      - `run.sh` now refuses a full run, or its dry run, without `--case` when `/mnt/c` exists but no Windows sentinel could be created. It exits 2 before the harness runs, so the refusal is free.
+>      - The message names the cause, `cmd.exe could not run (WSL interop unavailable)` or `no writable Windows directory`, and the remedies: `wsl --shutdown`, or `EVAL_CANARY_WINDIR`.
+>      - `EVAL_CANARY_SKIP_WIN=1` opts out. `--case` runs keep the SKIPPED note. §11 item 7's "the canary runs on `/tmp` alone" now applies only to those two.
+>      - HUP is trapped as well, and an interrupted run exits 2, not 130. Its cleanup compares the sentinels before deleting them, writes the verdict to `canary.txt` in the partial results, and exits 3 if one changed.
+>   2. **`load-no-digest` was grading an offer the fixture made untrue** (§4 case 2, §5.1).
+>      - `Projects/Legacy` was 539 B, so the fallback read 262–350 B. brain-load's mandated "a digest brings loads to about 2 KB. Build one?" was false on it.
+>      - Two of four runs declined on purpose ("a digest would add bytes"). A third offered in words the regex missed. The baseline passed only through the `a digest (?:brings|would bring|cuts)` alternative, which also matches a refusal that quotes the template.
+>      - So this was a skill-template and fixture interaction, not the model skipping a mandated step.
+>      - Legacy is now 5.9 KB, and the fallback reads about 4.8 KB. The page adds no `export`, property key or link, so the search, status and lint facts other cases rely on are unchanged.
+>      - `digest-offered` drops the template clause and recognises an explicit invitation instead: "Build a digest … (I'd need your go-ahead)", "say the word …".
+>   3. **`doctor-report-only` could not see a repair made through Bash** (§4 case 7). brain-doctor allows a scripted pass for mechanical classes, and `brain digest --apply`, so "no Write and no Edit" did not mean report-only. The case now also asserts that `PR #44` is still in `Notes.md` and that no Bash call passes `--apply`.
+> - **Smaller grader fixes.** The coverage regexes end in `read\b`, because `not\W+read` also matched "not ready". `save-phantom-syntax` requires `44` to reach the Session Log. `tools/eval/lint_cases.py` rejects a pattern that is not single-quoted.
