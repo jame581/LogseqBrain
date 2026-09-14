@@ -46,12 +46,20 @@ From Git Bash:
 - prefix `MSYS_NO_PATHCONV=1`, or Git Bash rewrites the `/mnt/...` path;
 - call `wsl.exe … -e sh …`, so no shell expands a `--case` glob.
 
+**Passing a variable.** `wsl` does not hand your shell's variables to the Linux side (unless they are listed in `WSLENV`), so set them inside with `env`:
+
+```
+wsl -d FedoraLinux-44 -u logseq-eval -e env EVAL_CANARY_WINDIR=/mnt/c/Users/<you>/AppData/Local/Temp sh /mnt/d/AI/logseq-brain/tools/eval/run.sh
+```
+
+**Run one invocation at a time.** Each invocation removes the harness's `/tmp/claude-eval-*` run directories created since it started, so two invocations running at once delete each other's run directories and traces. There is no lock.
+
 **What the wrapper prints.** A table with a row per case: pass/fail, tool calls, the target for the two measured cases, cost and time.
 - Tool calls are counted from the first `brain-` Skill call onward, as `tools/measure/cost.py` counts them.
 - The targets (`load-digest` ≤ 4, `save-basic` ≤ 13) are flagged `OVER` when exceeded, but never fail a run: one run per case is one sample.
 - brain-load's own mandated steps are already 5 calls, so `load-digest` reads `OVER` by construction.
 
-**Where results go.** The summary, the harness's JSON and HTML report, and each run's trace go to `evals/results/<timestamp>/`. An interrupted run keeps what the harness wrote in `<timestamp>-partial/`. The directory is gitignored because traces are full transcripts.
+**Where results go.** The summary, the harness's JSON and HTML report, and each run's trace go to `evals/results/<timestamp>/`. An interrupted run (HUP, INT or TERM) keeps what the harness wrote in `<timestamp>-partial/`, with a `canary.txt` that compares the sentinels before they are deleted. The directory is gitignored because traces are full transcripts.
 
 **Exit codes:**
 
@@ -59,8 +67,8 @@ From Git Bash:
 |---|---|
 | 0 | Every case passed (or `--check` clean), and the canary is clean |
 | 1 | A case failed (or `--check` found problems) |
-| 2 | Refused, a partial run, or an environment error |
-| 3 | The canary tripped |
+| 2 | Refused (a full run whose Windows canary half cannot run included), a partial or interrupted run, or an environment error |
+| 3 | The canary tripped. Outranks every other code, an interrupted run included |
 
 **When a case fails:**
 1. **Check the run errors in the summary first.** Hitting your plan's usage limit or a rate limit mid-suite makes every later run end with that error and score about 0, and the run is not marked partial. Rerun after the limit resets.
@@ -76,9 +84,24 @@ That the sandbox confines Write and Edit is not documented: it was verified by p
 
 A `--case` run that does not select `isolation-canary` still checks the sentinels, but nothing in it tries to change them, so its summary says `confinement NOT re-proven`. Only a run in which `isolation-canary` attempted the writes and passed prints `confinement re-proven`.
 
-If `%TEMP%` cannot be resolved, set `EVAL_CANARY_WINDIR` to a Windows-mount directory that `logseq-eval` can write. Otherwise the summary says the Windows half was skipped.
+**If the Windows half cannot run.** The wrapper finds `%TEMP%` by running `cmd.exe`, which needs WSL interop. After a WSL VM restart interop can break (`cmd.exe: cannot execute binary file: Exec format error`). A full run, or its `--dry-run`, then refuses with exit 2 before the harness starts, so the refusal costs nothing. The message names the cause, `cmd.exe could not run (WSL interop unavailable)` or `no writable Windows directory`, and the ways out:
+- run `wsl --shutdown` from Windows; interop works again at the next start;
+- or set `EVAL_CANARY_WINDIR` to a Windows-mount directory that `logseq-eval` can write, with `env` as shown under Running;
+- or set `EVAL_CANARY_SKIP_WIN=1` to run with the `/tmp` half only. The summary then says the Windows half was SKIPPED. For a release, such a run counts only together with a `--case isolation-canary` run that has `EVAL_CANARY_WINDIR` set.
+
+A `--case` run never refuses: its summary notes the skipped half, with the cause.
 
 After a Claude Code update, run `--trip-canary` once, then the suite.
+
+**If WSL died mid-run** (a VM restart, `wsl --shutdown`, a crash), the wrapper's cleanup never ran and the run left no verdict. `/tmp` is wiped with the VM, which takes the `/tmp` sentinel and the harness's `/tmp/claude-eval-*` run directories with it. Two things survive:
+- `~/logseq-eval-run.*` in the `logseq-eval` home: the exported plugin copy and the harness's output. Nothing was copied to `evals/results/`.
+- `logseq-eval-canary.*` under the Windows `%TEMP%` (or `EVAL_CANARY_WINDIR`). Before removing it, list it: only `edit-target.txt`, still containing `ORIGINAL`, means nothing changed it.
+
+When no other invocation is running, remove both as `logseq-eval`, then rerun what the dead run covered:
+
+```
+wsl -d FedoraLinux-44 -u logseq-eval -e sh -c 'rm -rf ~/logseq-eval-run.* /mnt/c/Users/<you>/AppData/Local/Temp/logseq-eval-canary.*'
+```
 
 ## Cases
 
@@ -86,12 +109,12 @@ After a Claude Code update, run `--trip-canary` once, then the suite.
 |---|---|
 | `isolation-canary` | Bash, Write and Edit are each attempted, and none changes the sentinels. `LOGSEQ_BRAIN_PATH` is unset inside the run |
 | `load-digest` | brain-load fires. One `brain digest`, no `--apply`. The page is not read with Read or through the shell. The reply says what was not read. The `(digest)` activity line is written. Tool calls against ≤ 4 |
-| `load-no-digest` | Coverage is stated. The skill offers a digest ("Build one?") but does not build one: the page still has no `## Digest` and was neither edited nor rewritten |
+| `load-no-digest` | Coverage is stated. The skill offers to build a digest (its "Build one?", or an invitation such as "say the word") but does not build one: the page still has no `## Digest` and was neither edited nor rewritten. `Projects/Legacy` is 5.9 KB, so the fallback reads about 4.8 KB and the skill's "a digest brings loads to about 2 KB" is true |
 | `search-scoped` | "what do we know about export?" (33 hits) gets a `brain search` whose output is counts only. No whole-page Read, no `cat`. Coverage is stated |
-| `save-basic` | A Session Log entry. The save's own `brain check` runs on the page, Index and journal, and never reports a new error on any file, digest findings included. The `saved` activity line. Tool calls against ≤ 13 |
-| `save-phantom-syntax` | With a bare `#12`, `C#-parity` and PR `#44` in the session, the save checks the page, Index and journal, and `brain check` never reports a new error on any file, digest findings included, not even one that is later fixed |
+| `save-basic` | A Session Log entry. The save's own `brain check` prints a line for Index and for the journal, and no `brain check` line reports a new error on any file, digest findings included. The `saved` activity line. Tool calls against ≤ 13 |
+| `save-phantom-syntax` | With a bare `#12`, `C#-parity` and PR `#44` in the session, the Session Log gets the `44`. The save's own `brain check` prints a line for Index and for the journal, and no `brain check` line ever reports a new error on any file, digest findings included, not even one that is later fixed |
 | `status-dashboard` | brain-status fires and brain-load does not. Exactly one `brain status` call. The counts line |
-| `doctor-report-only` | The planted bare `#44` is reported. No Write or Edit call |
+| `doctor-report-only` | The planted bare `#44` is reported. No Write or Edit call, no Bash call with `--apply`, and `PR #44` is still in `Notes.md` afterwards, so a scripted repair fails too |
 | `init-project` | `Projects/Scratch` is created. `brain digest … --apply` runs, and the `- Map:` line ends in a measured `page | …` clause, never `pending` |
 | `no-trigger` | An unrelated question fires no `brain-` skill |
 
@@ -104,7 +127,7 @@ After a Claude Code update, run `--trip-canary` once, then the suite.
    - Avoid words the skill reads as signals you do not intend, such as "merged" for brain-save.
 2. **The graph.** Add `case.yaml` with `context.scaffold_script: scaffold.sh`, and a `scaffold.sh` that runs `sh "$(dirname "$0")/../fixtures/materialize.sh" graph [overlay-dir]`. A scaffold does **not** receive `EVAL_*` variables; the agent's Bash does.
 3. **`graders/*.md`, deterministic only.**
-   - Write `pattern` and `input_match` as single-quoted YAML scalars.
+   - Write `pattern` and `input_match` as single-quoted YAML scalars; `tools/eval/lint_cases.py` reports any other form.
    - `tool_used` inputs are matched JSON-encoded, so a quote in a command is `\"`. Match helper calls with this pattern rather than literal quotes: `(?:bin/brain|--graph\W+[^\s"\\]+)\W+(?:--graph\W+[^\s"\\]+\W+)?<command>\b(?!(?:[^;&|"\\]|\\[^n])*--graph\W)`. The tail rejects a subcommand placed before `--graph`, which exits 2. It stops at a bare `"`, the end of the command string, so the Bash tool's `description` field cannot affect the match.
    - A must-not-fire `tool_used: Skill` grader (`min: 0`, `max: 0`) also sets `arm: both`. Otherwise a two-arm run reports it as an unscored indicator.
    - Grade "no new errors" with `match: not_contains` over the trace's check lines, including their ` · digest: <E> error` suffix, as `save-basic/graders/never-new-error.md` does. A `contains` pattern for a clean line passes as soon as any clean line exists.
