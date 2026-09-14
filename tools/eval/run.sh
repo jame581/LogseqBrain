@@ -15,8 +15,8 @@
 # `wsl … -e env EVAL_CANARY_WINDIR=<dir> sh run.sh`. EVAL_CANARY_SKIP_WIN=1 runs with the /tmp half only;
 # a --case run notes the skipped half and runs.
 # Exit: 0 every case passed (or --check clean) and the canary is clean · 1 a case failed (or --check
-# found problems) · 2 refused, partial, the harness failed before scoring, or another environment error
-# · 3 the canary tripped (outranks the rest).
+# found problems) · 2 refused, partial (interrupted by HUP, INT or TERM), the harness failed before scoring,
+# or another environment error · 3 the canary tripped (outranks the rest, an interrupted run included).
 set -u
 LC_ALL=C; export LC_ALL
 # `wsl -u` starts a non-login shell: no ~/.local/bin, and the Windows PATH appended. Pin a Linux PATH.
@@ -65,7 +65,7 @@ for t in bwrap socat; do command -v "$t" > /dev/null 2>&1 || die "$t not found �
 STAMP=$(date -u +%Y-%m-%dT%H-%M-%SZ)
 WORK=$(mktemp -d "$HOME/logseq-eval-run.XXXXXX") || die "cannot create a work directory"
 : > "$WORK/.start"   # never touched again: the age reference for run directories this invocation created
-CAN_TMP=; CAN_WIN=; OUT=; COPIED=0; KEPT="$WORK/kept.lst"
+CAN_TMP=; CAN_WIN=; WIN_NOTE=; CANARY_RC=0; OUT=; COPIED=0; KEPT="$WORK/kept.lst"
 collect_kept() {  # the run directories the harness kept: from its log, the result's trace paths, and /tmp
   : > "$KEPT"
   [ ! -f "$OUT/run.log" ] || grep -o 'kept /tmp/claude-eval-[A-Za-z0-9]*' "$OUT/run.log" | cut -d' ' -f2 >> "$KEPT"
@@ -75,11 +75,39 @@ collect_kept() {  # the run directories the harness kept: from its log, the resu
   # run directories created since this invocation started.
   find /tmp -maxdepth 1 -type d -name 'claude-eval-*' -user "$(id -un)" -newer "$WORK/.start" 2>/dev/null >> "$KEPT"
 }
+compare_sentinels() {  # step 5, and an interrupted run's cleanup: post snapshots, CANARY_RC 0 or 3
+  CANARY_RC=0
+  snapshot "$CAN_TMP" > "$WORK/canary-tmp.post"
+  cmp -s "$WORK/canary-tmp.pre" "$WORK/canary-tmp.post" || CANARY_RC=3
+  if [ -n "$CAN_WIN" ]; then
+    snapshot "$CAN_WIN" > "$WORK/canary-win.post"
+    cmp -s "$WORK/canary-win.pre" "$WORK/canary-win.post" || CANARY_RC=3
+  fi
+}
 cleanup() {
   # 8. Remove the kept run directories (the harness seals them read-only), the sentinels, the copy.
-  # An interrupted run has not reached step 7: keep what the harness wrote, as <stamp>-partial.
+  # An interrupted run has not reached step 7: keep what the harness wrote, as <stamp>-partial, and
+  # compare the sentinels before deleting them. The verdict goes to canary.txt there; a change exits 3.
+  _trip=
   if [ "$MODE" = run ] && [ "$COPIED" = 0 ] && [ -n "$OUT" ] && [ -f "$OUT/run.log" ]; then
-    mkdir -p "$REPO/evals/results/$STAMP-partial" && cp "$OUT"/* "$REPO/evals/results/$STAMP-partial/" 2>/dev/null
+    _part="$REPO/evals/results/$STAMP-partial"
+    mkdir -p "$_part" && cp "$OUT"/* "$_part/" 2>/dev/null
+    if [ -f "$WORK/canary-tmp.pre" ]; then
+      compare_sentinels
+      {
+        if [ "$CANARY_RC" = 0 ]; then
+          echo "canary (interrupted run): sentinels unchanged (/tmp${CAN_WIN:+ and Windows mount})"
+        else
+          _trip=1
+          echo "CANARY TRIPPED (interrupted run): a sentinel outside the workspace changed"
+          diff "$WORK/canary-tmp.pre" "$WORK/canary-tmp.post"
+          [ -z "$CAN_WIN" ] || diff "$WORK/canary-win.pre" "$WORK/canary-win.post"
+        fi
+        [ -z "$WIN_NOTE" ] || echo "$WIN_NOTE"
+      } > "$WORK/canary.txt" 2>&1
+      cat "$WORK/canary.txt" >&2
+      [ ! -d "$_part" ] || cp "$WORK/canary.txt" "$_part/canary.txt"
+    fi
   fi
   if [ -n "$OUT" ]; then
     collect_kept
@@ -90,9 +118,10 @@ cleanup() {
   [ -z "$CAN_TMP" ] || rm -rf "$CAN_TMP"
   [ -z "$CAN_WIN" ] || rm -rf "$CAN_WIN"
   rm -rf "$WORK"
+  [ -z "$_trip" ] || exit 3
 }
 trap cleanup EXIT
-trap 'exit 130' INT TERM
+trap 'exit 2' HUP INT TERM
 # The repo is owned by the Windows user. drvfs reports every file executable, so Linux git must ignore
 # file modes, and --no-optional-locks keeps `status` from rewriting the Windows index.
 repo_git() { git -c safe.directory="$REPO" -c core.filemode=false --no-optional-locks -C "$REPO" "$@"; }
@@ -130,7 +159,6 @@ if [ -n "$WIN_BASE" ] && [ -d "$WIN_BASE" ]; then
   CAN_WIN=$(mktemp -d "$WIN_BASE/logseq-eval-canary.XXXXXX" 2>/dev/null) || CAN_WIN=
   if [ -n "$CAN_WIN" ] && ! seed "$CAN_WIN"; then rm -rf "$CAN_WIN"; CAN_WIN=; fi
 fi
-WIN_NOTE=
 if [ -z "$CAN_WIN" ]; then
   WIN_NOTE="canary: Windows-mount half SKIPPED — $WIN_WHY"
   # A full run (or its dry run) is the release gate: it must not pass with half a canary. Refuse before
@@ -177,13 +205,7 @@ case $MODE in
 esac
 
 # 5. Check the sentinels from outside the sandbox.
-CANARY_RC=0
-snapshot "$CAN_TMP" > "$WORK/canary-tmp.post"
-cmp -s "$WORK/canary-tmp.pre" "$WORK/canary-tmp.post" || CANARY_RC=3
-if [ -n "$CAN_WIN" ]; then
-  snapshot "$CAN_WIN" > "$WORK/canary-win.post"
-  cmp -s "$WORK/canary-win.pre" "$WORK/canary-win.post" || CANARY_RC=3
-fi
+compare_sentinels
 
 if [ "$MODE" = check ]; then
   # A $0 ceiling starts no run, so the harness exits 2 (partial) even when every case loads. It exits 1
