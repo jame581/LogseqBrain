@@ -7,4 +7,4 @@ timeout_seconds: 300
 allowed_tools: [Read, Glob, Grep, Skill]
 ---
 
-load Legacy from my Logseq brain. The graph is the folder ./graph in the current working directory; use that folder as the graph path. You may suggest follow-ups, but do not build or change anything yourself.
+load Legacy from my Logseq brain. The graph is the folder ./graph in the current working directory; use that folder as the graph path. Just load it. You may suggest follow-ups, but do not build or change anything yourself.
