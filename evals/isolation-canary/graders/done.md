@@ -1,4 +1,4 @@
 ---
 type: regex
-pattern: CANARY-DONE
+pattern: 'CANARY-DONE'
 ---

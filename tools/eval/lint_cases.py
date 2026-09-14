@@ -5,9 +5,15 @@
 
 The harness validates case schema at $0 but not regex compilation or scaffold files, so a typo
 would otherwise surface only in a paid run. Checks: every grader's `pattern` / `input_match` is a
-single-quoted YAML scalar that compiles, and every case.yaml `scaffold_script` exists. Python's re
-accepts every construct these graders use ((?:), lookarounds, \\d \\s \\w \\b, classes), so a pattern
-that fails here would fail in the harness's JavaScript engine too.
+single-quoted YAML scalar (evals/README.md requires it; a double-quoted or plain scalar is a
+problem) that compiles, and every case.yaml `scaffold_script` exists.
+
+The compile step is a best-effort check, not a guarantee. The harness matches with JavaScript's
+RegExp, and Python's re is a different engine: the risk is a construct Python accepts that
+JavaScript rejects or reads differently (possessive quantifiers, atomic groups, `\\A` and `\\Z`,
+`(?P<name>)`, a leading `(?i)`; `\\d`, `\\w` and `\\b` are Unicode-aware in Python, ASCII-only in
+JavaScript). The graders keep to the common subset ((?:), lookarounds, \\d \\s \\w \\b, classes,
+bounded repeats), where the two agree on ASCII text.
 """
 import glob
 import os
@@ -30,11 +36,10 @@ def frontmatter(path):
 
 
 def scalar(raw):
+    """The value of a single-quoted YAML scalar, or None for any other form."""
     if len(raw) >= 2 and raw[0] == raw[-1] == "'":
         return raw[1:-1].replace("''", "'")
-    if raw[:1] == '"':
-        return None
-    return raw
+    return None
 
 
 def main(argv):
@@ -60,7 +65,8 @@ def main(argv):
                     continue
                 value = scalar(fields[key])
                 if value is None:
-                    problems.append(f"{where}: {key} is double-quoted; use a single-quoted scalar")
+                    form = 'double-quoted' if fields[key][:1] == '"' else 'not quoted'
+                    problems.append(f"{where}: {key} is {form}; use a single-quoted scalar")
                     continue
                 regexes += 1
                 try:

@@ -1,5 +1,5 @@
 ---
 type: regex
-pattern: 'not\W+read'
+pattern: 'not\W+read\b'
 flags: i
 ---

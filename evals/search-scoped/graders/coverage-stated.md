@@ -1,5 +1,5 @@
 ---
 type: regex
-pattern: 'coverage|not\W+read|showed \d+ of \d+'
+pattern: 'coverage|not\W+read\b|showed \d+ of \d+'
 flags: i
 ---
