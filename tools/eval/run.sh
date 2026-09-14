@@ -9,6 +9,11 @@
 #                  Regexes and scaffolds are checked by tools/eval/test.sh, not here.
 #   --dry-run      every step except calling the harness
 #   --trip-canary  a dry run that changes the sentinels on purpose; must exit 3
+# Canary: sentinels on /tmp and on the Windows mount (%TEMP% via cmd.exe, or EVAL_CANARY_WINDIR). A full
+# run or dry run without --case refuses (exit 2, before the harness) when /mnt/c exists but the Windows
+# sentinel cannot be created — `wsl --shutdown` restores interop, or pass EVAL_CANARY_WINDIR through
+# `wsl … -e env EVAL_CANARY_WINDIR=<dir> sh run.sh`. EVAL_CANARY_SKIP_WIN=1 runs with the /tmp half only;
+# a --case run notes the skipped half and runs.
 # Exit: 0 every case passed (or --check clean) and the canary is clean · 1 a case failed (or --check
 # found problems) · 2 refused, partial, the harness failed before scoring, or another environment error
 # · 3 the canary tripped (outranks the rest).
@@ -103,18 +108,47 @@ seed() { printf 'ORIGINAL\n' > "$1/edit-target.txt" && touch "$1/.writable" && r
 snapshot() { (cd "$1" && ls -A && find . -type f -exec cksum {} + | sort) 2>&1; }
 CAN_TMP=$(mktemp -d /tmp/logseq-eval-canary.XXXXXX) || die "cannot create the /tmp canary"
 seed "$CAN_TMP" || die "the /tmp canary is not writable"
-WIN_BASE=${EVAL_CANARY_WINDIR:-}
-if [ -z "$WIN_BASE" ] && [ -x /mnt/c/Windows/System32/cmd.exe ]; then
+WIN_BASE=${EVAL_CANARY_WINDIR:-}; WIN_WHY=
+if [ -n "$WIN_BASE" ]; then
+  WIN_WHY="no writable Windows directory (EVAL_CANARY_WINDIR=$WIN_BASE)"
+elif [ ! -d /mnt/c ]; then
+  WIN_WHY="no Windows mount at /mnt/c"
+elif [ ! -x /mnt/c/Windows/System32/cmd.exe ]; then
+  WIN_WHY="no writable Windows directory (/mnt/c/Windows/System32/cmd.exe not found, so %TEMP% is unknown)"
+else
   # cmd.exe reads stdin even for /c: without < /dev/null it swallows whatever feeds this script.
-  WIN_TEMP=$(cd /mnt/c && /mnt/c/Windows/System32/cmd.exe /c 'echo %TEMP%' < /dev/null 2>/dev/null | tr -d '\r')
-  [ -z "$WIN_TEMP" ] || WIN_BASE=$(wslpath -u "$WIN_TEMP" 2>/dev/null)
+  WIN_TEMP=$(cd /mnt/c && /mnt/c/Windows/System32/cmd.exe /c 'echo %TEMP%' < /dev/null 2>/dev/null)
+  if [ $? != 0 ]; then
+    WIN_WHY="cmd.exe could not run (WSL interop unavailable), so %TEMP% is unknown"
+  else
+    WIN_TEMP=$(printf '%s' "$WIN_TEMP" | tr -d '\r')
+    [ -z "$WIN_TEMP" ] || WIN_BASE=$(wslpath -u "$WIN_TEMP" 2>/dev/null)
+    WIN_WHY="no writable Windows directory (%TEMP% is ${WIN_TEMP:-empty})"
+  fi
 fi
 if [ -n "$WIN_BASE" ] && [ -d "$WIN_BASE" ]; then
   CAN_WIN=$(mktemp -d "$WIN_BASE/logseq-eval-canary.XXXXXX" 2>/dev/null) || CAN_WIN=
   if [ -n "$CAN_WIN" ] && ! seed "$CAN_WIN"; then rm -rf "$CAN_WIN"; CAN_WIN=; fi
 fi
 WIN_NOTE=
-[ -n "$CAN_WIN" ] || WIN_NOTE="canary: Windows-mount half SKIPPED — no writable Windows directory (set EVAL_CANARY_WINDIR)"
+if [ -z "$CAN_WIN" ]; then
+  WIN_NOTE="canary: Windows-mount half SKIPPED — $WIN_WHY"
+  # A full run (or its dry run) is the release gate: it must not pass with half a canary. Refuse before
+  # the harness runs, so the refusal costs nothing. A --case run keeps the note and runs.
+  if [ -z "$CASE_GLOB" ] && { [ "$MODE" = run ] || [ "$MODE" = dry ]; } && [ "${EVAL_CANARY_SKIP_WIN:-}" != 1 ] \
+     && { [ -d /mnt/c ] || [ -n "${EVAL_CANARY_WINDIR:-}" ]; }; then
+    {
+      echo "run.sh: refused — the Windows-mount half of the canary cannot run: $WIN_WHY."
+      echo "  Restore WSL interop with 'wsl --shutdown' (from Windows), then rerun;"
+      echo "  or set EVAL_CANARY_WINDIR to a Windows-mount directory logseq-eval can write:"
+      echo "    wsl -d <distro> -u logseq-eval -e env EVAL_CANARY_WINDIR=/mnt/c/Users/<you>/AppData/Local/Temp sh …/tools/eval/run.sh"
+      echo "  or set EVAL_CANARY_SKIP_WIN=1 to run with the /tmp half only (confinement on the Windows mount is then not re-proven)."
+    } >&2
+    exit 2
+  fi
+  if [ "${EVAL_CANARY_SKIP_WIN:-}" = 1 ]; then WIN_NOTE="$WIN_NOTE (EVAL_CANARY_SKIP_WIN=1)"
+  elif [ -d /mnt/c ]; then WIN_NOTE="$WIN_NOTE (wsl --shutdown restores interop, or set EVAL_CANARY_WINDIR)"; fi
+fi
 snapshot "$CAN_TMP" > "$WORK/canary-tmp.pre"
 [ -z "$CAN_WIN" ] || snapshot "$CAN_WIN" > "$WORK/canary-win.pre"
 EVAL_CANARY_TMP=$CAN_TMP; EVAL_CANARY_WIN=$CAN_WIN; export EVAL_CANARY_TMP EVAL_CANARY_WIN
