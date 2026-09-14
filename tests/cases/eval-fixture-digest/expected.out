@@ -1,0 +1,19 @@
+type:: project
+status:: active
+created:: 2026-08-02
+last-updated:: 2026-09-09
+focus:: Polish the CSV export feature for the v1.2 release
+next:: Add column selection to the export dialog
+digest-updated:: 2026-09-09
+
+- ## Digest
+  - Demo is a small web app for tracking reading lists; v1.2 adds a CSV export feature.
+  - Now: export works end to end; column selection is the remaining piece.
+  - Hazard: exports over 10 MB time out when built in the browser, so rows stream from the server.
+  - Map: Session Log | 1 KB (5 entries) · +4 smaller sections, 684 B · page | 2 KB
+--
+map: ok
+digest: 347 B of 800 B cap
+drift: 0 days (digest-updated 2026-09-09, last-updated 2026-09-09)
+staleness: fresh (2 days)
+coverage: read properties + ## Digest (574 B of 2.4 KB)
