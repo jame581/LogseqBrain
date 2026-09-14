@@ -33,5 +33,35 @@ for c in load-digest:0 save-basic:1 isolation-canary:1; do
   else echo "FAIL summarize-passed ${c%%:*}: exit want ${c#*:}, got $rc: $(cat "$out")"; fail=1; fi
 done
 
+REPO=$(cd "$HERE/../.." && pwd)
+# Case files: every grader regex compiles and every scaffold exists (the harness's $0 --check checks schema only).
+"$PY" "$HERE/lint_cases.py" "$REPO/evals" > "$out" 2>&1; rc=$?
+if [ "$rc" = 0 ]; then echo "ok   case-lint: $(tail -n 1 "$out")"
+else cat "$out"; echo "FAIL case-lint"; fail=1; fi
+
+# Every scaffold builds a complete graph the way the harness runs it: bash, a bare environment, an empty cwd.
+for s in "$REPO"/evals/*/scaffold.sh; do
+  [ -f "$s" ] || continue
+  c=$(basename "$(dirname "$s")"); w=$(mktemp -d) || exit 2
+  mkdir -p "$w/cwd" "$w/home"
+  if (cd "$w/cwd" && env -i HOME="$w/home" PATH=/usr/bin:/bin bash "$s") > "$w/log" 2>&1 \
+     && [ -f "$w/cwd/graph/pages/Index.md" ] && ! grep -rq '@TODAY' "$w/cwd/graph"; then
+    echo "ok   scaffold $c"
+  else
+    echo "FAIL scaffold $c: $(cat "$w/log")"; fail=1
+  fi
+  rm -rf "$w"
+done
+
+# run.sh refuses anyone but logseq-eval, before it touches anything.
+if [ "$(id -un)" != logseq-eval ]; then
+  sh "$HERE/run.sh" --dry-run > "$out" 2>&1; rc=$?
+  if [ "$rc" = 2 ] && grep -q 'logseq-eval' "$out"; then echo "ok   run-refuses-other-user"
+  else echo "FAIL run-refuses-other-user: exit $rc: $(cat "$out")"; fail=1; fi
+fi
+sh "$HERE/run.sh" --bogus > "$out" 2>&1; rc=$?
+if [ "$rc" = 2 ] && grep -q 'unknown argument' "$out"; then echo "ok   run-rejects-unknown-argument"
+else echo "FAIL run-rejects-unknown-argument: exit $rc: $(cat "$out")"; fail=1; fi
+
 [ "$fail" = 0 ] && echo "all tools/eval checks passed"
 exit "$fail"
