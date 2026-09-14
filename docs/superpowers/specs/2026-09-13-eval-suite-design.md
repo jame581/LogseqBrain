@@ -151,6 +151,12 @@ Fixture dates are written as **10-byte tokens** `@TODAY-NN@` (e.g. `@TODAY-03@` 
 
 A helper change that invalidates the fixture then fails in CI on five awk builds, instead of silently spoiling a paid eval run.
 
+> **Verification note (2026-09-13, before implementation):** "clean" cannot hold literally. `Projects/Legacy` has no digest by design, so `brain lint --all` reports exactly one finding (`missing-digest`, warn) and exits 1. The golden cases therefore:
+> - assert that exact summary;
+> - pin `brain digest Projects/Demo` byte for byte, which includes `map: ok`;
+> - check the date arithmetic and the journal rename;
+> - check that the `doctor-report-only` overlay adds exactly one `bare-hash-tag` error.
+
 ---
 
 ## 6. Graders
@@ -211,6 +217,42 @@ Steps, in order:
 
 **Cost:** ≈ $4–7 list price per full run on the usual model, under the $10 ceiling, drawn from the plan's usage limits. `--case` reruns a single case cheaply.
 
+> **Verification notes (2026-09-13, before implementation):**
+> - **Canary environment.** `EVAL_*` variables reach the agent's Bash but **not** the scaffold: a probe scaffold's environment held no `EVAL_*` variable. The canary therefore has no scaffold. Its prompt reads the sentinel directories from `$EVAL_CANARY_TMP` and `$EVAL_CANARY_WIN` with Bash (step 3).
+> - **`--case` scope.** Runs selected with `--case` check the sentinels, but re-prove confinement only when the glob selects `isolation-canary`. The full release run always includes it.
+> - **`--output-dir`.** The run adds it to the §3.4 flags, so the harness writes its report into the wrapper's work directory instead of the exported copy.
+> - **Judge pin.** The run also adds `--judge-model claude-haiku-4-5`: §6.3 names Haiku, and an unpinned default could drift like an unpinned `--model`.
+> - **PATH.** `wsl -u logseq-eval` starts a non-login shell. Its `PATH` lacks `~/.local/bin`, where Claude Code installs, and carries the Windows `PATH`. The wrapper pins a Linux-only `PATH`.
+> - **stdin.** `cmd.exe` reads stdin even for `/c`, so it runs with `< /dev/null`.
+> - **Git across the mount.** drvfs reports every file as executable. Linux git therefore reads the Windows checkout with `-c core.filemode=false --no-optional-locks`. Without it, every run reports "uncommitted changes" and `git status` rewrites the Windows index.
+> - **Preflight.** The wrapper refuses a dangling `~/.docker` symlink too, and refuses a missing `bwrap` or `socat`.
+> - **Interrupted runs.** They keep the harness's partial output as `evals/results/<stamp>-partial/` and still remove the sealed run directories.
+> - **Three free modes** test the wrapper and the cases without a model call:
+>   - `--check` runs the real flags at a $0 ceiling. The harness then starts no run, but still reports schema errors and graders that cannot pass with the granted tools.
+>   - `--dry-run` runs every step except the harness.
+>   - `--trip-canary` is a dry run that changes the sentinels on purpose, and must exit 3.
+>
+>   The harness's $0 check neither compiles regexes nor checks scaffolds. `sh tools/eval/test.sh` does both (`tools/eval/lint_cases.py`, plus running every scaffold as the harness runs it).
+> - **Exit codes:** 0 pass (or `--check` clean) · 1 a case failed (or `--check` found problems) · 2 refused, partial or environment error · 3 canary tripped.
+> - **The §7 table** is printed by `tools/eval/summarize.py` (Python 3 standard library, like `tools/measure/`).
+>   - It counts tool calls from the first `brain-` Skill call onward, that call included: the window `tools/measure/cost.py` uses.
+>   - On that definition the ≤ 4 digest-load target cannot be met by brain-load's own mandated steps (Skill, `info`, `digest`, `journal`, `activity` are 5).
+>   - A sandboxed run also adds calls real use does not have: with no config, `brain info` without `--graph` exits 2.
+>   - The figures are still reported against the targets; §7 already makes them non-gating.
+>
+> **Review notes (2026-09-13, plan review):**
+> - `timeout_seconds` is 600 for `save-basic`, `save-phantom-syntax` and `init-project`, not §4's 300: a timed-out save fails its graders spuriously, and cost is bounded by turns, not seconds.
+> - `load-no-digest` says "Just load it. You may suggest follow-ups, but do not build or change anything yourself", so the skill's "Build one?" offer is still expected. It is graded on the offer, not on the fact that the page has no digest.
+> - `search-scoped` asks "what do we know about export?", not "…the export feature". The helper returns counts first only above 20 hits: `export` has 33, `export feature` only 3.
+> - `save-phantom-syntax` says "opened PR #44", not "merged": brain-save treats "merged" as a completion signal and would suggest `status:: done` on a task page.
+> - Both save cases assert the save's own `brain check` step through its Index and journal check lines.
+> - **Second review (2026-09-14):**
+>   - Both save cases gate "0 new error-tier findings" with `not_contains`, including the ` · digest: <E> error` suffix. `save-basic`'s original `check-clean` passed whenever any page check line read `(0 error`. `brain digest --apply` prints such a line, and so does the re-run after a fix.
+>   - Must-not-fire `Skill` graders set `arm: both`, so a two-arm run still scores them.
+>   - `--check` treats harness exit 1 (a case file failed to load) as "problems found".
+>   - The summary says whether confinement was actually re-proven in this run.
+>   - The release step allows one `--case` rerun of a failed case, recorded as a flake. A usage-limit error is not a failure.
+
 ---
 
 ## 9. Repository integration
@@ -249,6 +291,18 @@ Each item is cheap to settle, and each would otherwise surface as a confusing ca
 5. **The exact `input_match` escaping** for a `brain` subcommand inside JSON-encoded Bash input.
 6. **The §6.3 regex** matches the coverage statement brain-load actually produces.
 7. **The Windows-drive sentinel location.** The canary needs a directory on a Windows mount that the eval user can write outside the sandbox. The Windows username is machine-specific, so derive the location rather than hard-code it: resolve `%TEMP%` through WSL interop (`cmd.exe /c echo %TEMP%`, then `wslpath`), with an `EVAL_CANARY_WINDIR` override. If neither works, the canary runs on `/tmp` alone and the summary states that the Windows-mount half was skipped — never silently.
+
+> **Results (2026-09-13, one ≈ $0.11 probe plus offline checks):**
+> 1. **Settled.** `$0` is the scaffold's real path inside the case directory, and `bash` runs it with no exec bit needed. So `$(dirname "$0")/../fixtures` works, and no embedded fallback is needed.
+> 2. **Half true.** `EVAL_*` reaches the run but not the scaffold; see the §8 notes.
+> 3. **Settled.** `--model claude-opus-5` is accepted, and the trace's init line reports `claude-opus-5`.
+> 4. **Settled.** `git -c safe.directory=… archive` works as `logseq-eval`. Exec bits are not preserved, which is harmless because everything runs through `sh`. `status` needs `core.filemode=false` (§8 notes).
+> 5. **Settled.** `input_match` sees the tool input JSON-encoded once, so a quote inside a command is `\"`.
+>    - Helper-call patterns therefore use `\W+` and `[^\s"\\]+` instead of literal quotes. They were checked against compact and spaced encodings.
+>    - `match: "count:N"` means exactly N.
+>    - A `trace` target contains the prompt and every file the agent read. `skills/_shared/hygiene-rules.md` quotes a `check pages/Projects___X.md: 1 new (1 error` line, so a `not_contains` pattern excludes that name.
+> 6. **Open** until the first `load-digest` run.
+> 7. **Settled.** `cmd.exe /c echo %TEMP%` plus `wslpath -u` resolves to a directory on `/mnt/c` that `logseq-eval` can write.
 
 ---
 
