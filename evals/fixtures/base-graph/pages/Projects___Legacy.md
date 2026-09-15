@@ -1,0 +1,66 @@
+type:: project
+status:: paused
+created:: @TODAY-90@
+last-updated:: @TODAY-20@
+
+- ## Overview
+  - Legacy is an older reporting tool that emailed weekly summaries as attachments.
+  - Kept for reference while [[Projects/Demo]] replaces it.
+  - Stack: a Python script, an email template and a PDF renderer, run from cron on one reporting host.
+  - About forty people still receive the Monday summary; most of them only read the totals table.
+- ## Current Plan
+  - Retire the mailer in three steps once [[Projects/Demo]] covers every report people still open.
+    - Step 1, inventory: list every recipient, every report variant and the day each one is sent, from the crontab and the recipient file on the reporting host.
+    - Step 2, parallel run: keep sending the Monday summary for four more weeks while readers compare it with the reading-list view in Demo, and collect the questions they ask.
+    - Step 3, shutdown: remove the mailer's cron line, keep the script and templates in the archive repository, and retire the SMTP relay account the job uses.
+  - People to contact before step 3:
+    - The finance team, who paste the totals table into a monthly spreadsheet and need the same column order in Demo.
+    - Two regional leads who forward the attachment to partners outside the company; they need a link they can share instead of a file.
+    - The owner of the on-call runbook, which still tells people to rerun the mailer by hand when a Monday send fails.
+    - The support desk, which answers the Monday questions about missing attachments and needs a short note on where the numbers live now.
+  - Data to keep:
+    - The last twelve months of generated PDFs, moved to the shared archive drive with read-only permissions.
+    - The recipient list, so the Demo team can invite the same people once shared views arrive.
+    - The template that computes the totals row, because its rounding differs from Demo's and someone will ask why the numbers moved.
+    - The cron log of the final run, as the record of the last send date.
+  - Risks:
+    - The reporting host's crontab also runs a disk cleanup job, so the shutdown removes one line, not the whole file.
+    - The SMTP relay account also sends a monitoring alert; the infrastructure team moves that alert before the account goes.
+    - Readers who never open Demo will stop seeing the numbers at all; the parallel run is meant to find them.
+    - Some readers file the summary into a folder by its subject line, so they may not notice when the attachments stop.
+  - Nothing is scheduled while the project is paused. Resume from step 1 when the Demo v1.2 release ships.
+- ## Implementation
+  - Reports were rendered by a nightly cron job and sent over SMTP.
+  - The job queried a read replica of the reporting database, built one PDF per team and attached it to a plain-text email.
+  - A failed send was retried once, at the next run; the only alerting was the relay's bounce messages.
+- ## Decisions
+  - _Project-specific decisions._
+- ## Session Log
+  - @TODAY-70@: Mapped the mailer before changing anything
+    - Found the cron entry on the reporting host: it runs at 05:30 every Monday and writes a log file that nobody rotates.
+    - The recipient list is a plain text file next to the script, edited by hand; three of its addresses bounce.
+  - @TODAY-55@: Compared the Monday summary with Demo
+    - Opened last week's PDF next to the reading-list view in Demo and matched the columns one by one.
+    - Demo shows every column the summary has except the per-team totals row.
+    - The summary rounds totals half up and Demo rounds half to even, so two teams see a difference of one.
+  - @TODAY-41@: Talked to the finance team about their monthly spreadsheet
+    - They paste the totals table into a spreadsheet on the first working day of each month and check it against invoices.
+    - They are happy to take the numbers from Demo if the column order stays the same and the totals row is present.
+    - They asked for one month of overlap in which both the attachment and Demo are available, so they can reconcile the two.
+    - Agreed to keep the Monday summary running until that month is over, and to send a reminder a week before the last attachment.
+    - Their spreadsheet reads the totals from the last row of the pasted table, so Demo has to keep the totals in that position.
+    - Still undecided: whether the regional leads can give partners a shared link, or still need a file they can forward.
+  - @TODAY-30@: Planned the shutdown
+    - Wrote the three-step retirement plan now in Current Plan: inventory, parallel run, shutdown.
+    - Checked the crontab on the reporting host: the mailer shares it with a disk cleanup job, so only the mailer's line comes out.
+    - Asked the infrastructure team about the SMTP relay account; it also sends a monitoring alert, so it stays until that alert moves.
+    - Estimated the inventory at half a day and the parallel run at four calendar weeks with almost no hands-on work.
+    - Left the recipient list untouched for now; the three bouncing addresses come out during the inventory, so the count is right.
+    - Drafted the note for readers: what changes, the date of the last attachment, and where to find the same table in Demo.
+  - @TODAY-20@: Paused the project
+    - The CSV export in Demo now covers the weekly summary use case.
+    - The totals row is still missing from Demo, so the parallel run cannot start yet; the Monday summary keeps going out unchanged.
+    - Nothing was switched off: the cron entry, the template and the relay account are all as they were.
+    - Two things block a restart: the totals row in Demo, and the infrastructure team's answer about the monitoring alert.
+    - Told the finance team that the overlap month has not started, so their spreadsheet keeps using the attachment for now.
+    - Resume when the Demo v1.2 release ships, starting with the inventory step.

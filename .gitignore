@@ -10,3 +10,6 @@
 
 # marketing images — kept local, not part of the plugin
 assets/
+
+# eval-suite results: reports and full transcripts (tools/eval/run.sh)
+evals/results/

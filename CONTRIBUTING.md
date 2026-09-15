@@ -18,7 +18,8 @@ skills/
   _shared/bin/brain     # The helper: a POSIX sh dispatcher
   _shared/lib/*.awk     # The helper's awk programs
 tests/                  # Golden-file suite for the helper: `sh tests/run.sh`
-tools/                  # Dev-only oracle and measurement scripts, not shipped
+evals/                  # claude plugin eval suite, run locally in WSL2: see evals/README.md
+tools/                  # Dev-only oracle, measurement and eval-wrapper scripts, not shipped
 ROADMAP.md              # Shipped / Current / Future phases (verify shipped status by reading skills)
 CLAUDE.md               # Guidance for agents working in this repo
 ```
@@ -58,7 +59,7 @@ See [`CLAUDE.md`](./CLAUDE.md) for the full set of architectural constraints.
 
 ## Validating changes
 
-Two layers. **Automated:** `sh tests/run.sh`, the golden-file tests for the helper; CI runs them on mawk, BWK awk and gawk on every push. **Manual:** the round-trip below against a scratch graph, before tagging a release.
+Three layers. **Automated:** `sh tests/run.sh`, the golden-file tests for the helper; CI runs them on mawk, BWK awk and gawk on every push. **Eval suite:** `evals/`, which tests the model following the skill prose against a fixture graph; it runs locally in WSL2 and draws on plan usage — see [`evals/README.md`](./evals/README.md). **Manual:** the round-trip below against a scratch graph, before tagging a release.
 
 ### Setup
 
@@ -78,7 +79,7 @@ export LOGSEQ_BRAIN_PATH=/tmp/scratch-brain
 5. `load ScratchProject full` — verify full-mode load. Verify `## Activity` gains `loaded [[Projects/ScratchProject]] (full)`.
 6. `brain status` — verify dashboard. Verify `## Activity` gains `viewed dashboard`.
 7. `what do we know about X` — verify search. Verify `## Activity` gains `searched "X" · N hits`.
-8. **Token check.** Add ~200 lines of fake Session Log entries, then load and save. Count tool calls per operation (`python tools/measure/cost.py --since <today>`): a digest load ≤ 4, a save ≤ 13. No full-file Reads.
+8. **Token check.** Add ~200 lines of fake Session Log entries, then load and save. Count tool calls per operation (`python tools/measure/cost.py --since <today>`): a digest load ≤ 4, a save ≤ 13. `cost.py` counts from the brain Skill call onward, and brain-load's own mandated steps are already 5 calls, so a load reads over 4: record the figure rather than fail on it. No full-file Reads.
 9. **Surgical edits.** For `brain-save`, confirm the Edit was anchored to a section (no whole-page rewrite).
 10. **Config toggle.** Set `"journeyLog": false` in the user config file (`%APPDATA%\logseq-brain\config.json` on Windows; on macOS/Linux `$XDG_CONFIG_HOME/logseq-brain/config.json` if `XDG_CONFIG_HOME` is set, else `~/.config/logseq-brain/config.json`). Re-run any of the above. Verify `## Activity` does NOT gain a new bullet. Restore to `journeyLog: true` and verify activity logging resumes.
 11. **Durable config.** Resolve a path by answering the prompt; confirm it persists to the user config file. Simulate `/reload-plugins` (or delete the plugin cache) and re-run — confirm no re-prompt. Set `LOGSEQ_BRAIN_PATH` to a different graph and confirm it overrides the file.
@@ -103,22 +104,23 @@ export LOGSEQ_BRAIN_PATH=/tmp/scratch-brain
 Releases follow semver and are cut from `main`.
 
 0. The `tests` workflow is green on the release commit.
-1. Update `.claude-plugin/plugin.json` → `"version": "X.Y.Z"`.
-2. Update `ROADMAP.md` if phase status changed.
-3. Commit with a `chore: prepare vX.Y.Z release` message.
-4. Tag and push:
+1. The eval suite passes on the release commit: `sh tools/eval/run.sh`, run as the `logseq-eval` WSL user, exits 0 — every case passes, and the summary shows both `canary: sentinels unchanged (/tmp and Windows mount)` and `canary: confinement re-proven` ([`evals/README.md`](./evals/README.md)). If the Windows half cannot run, the wrapper refuses: restore WSL interop with `wsl --shutdown` and rerun; or, after a run with `EVAL_CANARY_SKIP_WIN=1`, rerun `--case isolation-canary` with `EVAL_CANARY_WINDIR` set, and record both results in the release notes. A failed case may be rerun once with `--case <name>`: a pass on the rerun goes in the release notes as a flake, and a second failure blocks the release. A usage-limit error in the summary is not a failure; rerun after the limit resets. Put the `load-digest` and `save-basic` tool-call figures from its summary in the release notes. It runs locally only; CI keeps running the golden tests.
+2. Update `.claude-plugin/plugin.json` → `"version": "X.Y.Z"`.
+3. Update `ROADMAP.md` if phase status changed.
+4. Commit with a `chore: prepare vX.Y.Z release` message.
+5. Tag and push:
    ```bash
    git tag -a vX.Y.Z -m "vX.Y.Z — <title>"
    git push origin vX.Y.Z
    ```
-5. Create a GitHub release with notes summarizing changes.
-6. Rebuild the `.plugin` archive from committed content and verify it before shipping — nothing else keeps it current, and a stale one silently ships old skills to Cowork:
+6. Create a GitHub release with notes summarizing changes.
+7. Rebuild the `.plugin` archive from committed content and verify it before shipping — nothing else keeps it current, and a stale one silently ships old skills to Cowork:
    ```bash
    git archive --format=zip -o logseq-brain.plugin HEAD .claude-plugin skills README.md
    python -m zipfile -l logseq-brain.plugin
    ```
    Confirm the listing contains `skills/_shared/bin/brain` and `skills/_shared/lib/core.awk`, and contains **no** `tests/` or `tools/` entries.
-7. Bump the version in [`skillsmith`](https://github.com/jame581/skillsmith) `.claude-plugin/marketplace.json` so new installs pick up the release.
+8. Bump the version in [`skillsmith`](https://github.com/jame581/skillsmith) `.claude-plugin/marketplace.json` so new installs pick up the release.
 
 ## Pull request checklist
 

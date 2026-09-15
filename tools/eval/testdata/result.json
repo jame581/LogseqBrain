@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "claudeVersion": "2.1.270",
+  "durationSeconds": 95,
+  "costUsd": 0.91,
+  "partial": false,
+  "suite": { "ablation": "none", "threshold": 1 },
+  "cases": [
+    {
+      "name": "load-digest",
+      "arms": { "with": [
+        { "score": 1, "passed": true, "costUsd": 0.21, "durationSeconds": 30, "error": null,
+          "tracePath": "trace-load.jsonl",
+          "graders": [ { "name": "not-read", "passed": true, "explanation": "matched not read", "scored": true } ] }
+      ] },
+      "aggregates": { "score": 1, "passRate": 1 }
+    },
+    {
+      "name": "save-basic",
+      "arms": { "with": [
+        { "score": 0.5, "passed": false, "costUsd": 0.6, "durationSeconds": 60, "error": null,
+          "tracePath": "trace-save.jsonl",
+          "graders": [
+            { "name": "session-entry", "passed": true, "explanation": "matched", "scored": true },
+            { "name": "check-clean", "passed": false, "explanation": "no match for check pages/Projects___Demo", "scored": true }
+          ] }
+      ] },
+      "aggregates": { "score": 0.5, "passRate": 0 }
+    },
+    {
+      "name": "no-trigger",
+      "arms": { "with": [
+        { "score": 0, "passed": false, "costUsd": 0.1, "durationSeconds": 5, "error": "max turns reached",
+          "tracePath": null, "graders": [] }
+      ] },
+      "aggregates": { "score": 0, "passRate": 0 }
+    }
+  ]
+}
