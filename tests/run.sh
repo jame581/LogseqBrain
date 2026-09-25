@@ -1,6 +1,13 @@
 #!/bin/sh
 # Golden-file tests for skills/_shared/bin/brain.
 # Usage: sh tests/run.sh [case-name-glob]      BRAIN_AWK=mawk sh tests/run.sh
+#
+# Case files (tests/cases/<name>/): cmd (required); graph/, setup.sh, env, no-graph-flag;
+# expected.exit, expected.out | expected.sh, expected.contains;
+# target — the graph-relative paths the case may write, one per line (none: it may write nothing);
+# expected.file | expected.file.sh — compared with the FIRST target;
+# expected.files/<path> — each compared with $G/<path>; every such path must be listed in target;
+# post.sh — sourced after the run (CASE, G, RUN set); a nonzero exit fails the case.
 set -u
 LC_ALL=C; export LC_ALL
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -44,12 +51,14 @@ for case_dir in "$ROOT"/tests/cases/${1:-*}/; do
   )
   ok=1
   snap > "$run/snap.post"
-  tgt=; [ -f "$case_dir/target" ] && tgt="./$(tr -d ' \r\n' < "$case_dir/target")"
+  : > "$run/targets"
+  [ -f "$case_dir/target" ] && tr -d '\r' < "$case_dir/target" \
+    | sed 's/^[[:space:]]*//; s/[[:space:]]*$//; /^$/d; s#^#./#' > "$run/targets"
   diff "$run/snap.pre" "$run/snap.post" | sed -n 's/^[<>] //p' | sed 's/^[0-9]* [0-9]* //' \
     | LC_ALL=C sort -u > "$run/changed"
   while IFS= read -r p || [ -n "$p" ]; do
     [ -z "$p" ] && continue
-    [ -n "$tgt" ] && [ "$p" = "$tgt" ] && continue
+    grep -F -x -q -- "$p" "$run/targets" && continue
     ok=0; echo "  wrote outside target: ${p#./}"
   done < "$run/changed"
   want_exit=0; [ -f "$case_dir/expected.exit" ] && want_exit=$(tr -d ' \r\n' < "$case_dir/expected.exit")
@@ -75,9 +84,26 @@ for case_dir in "$ROOT"/tests/cases/${1:-*}/; do
     (CASE=$case_dir G=$G . "$case_dir/expected.file.sh") > "$run/expected.file"; expf="$run/expected.file"
   fi
   if [ -n "$expf" ]; then
-    t=$(tr -d '\r\n' < "$case_dir/target")
+    t=$(sed -n 's#^\./##p' "$run/targets" | head -n 1)
     if ! cmp -s "$expf" "$G/$t"; then
       ok=0; echo "  file differs: $t"; diff "$expf" "$G/$t" | sed 's/^/  /'
+    fi
+  fi
+  if [ -d "$case_dir/expected.files" ]; then
+    (cd "$case_dir/expected.files" && find . -type f) | LC_ALL=C sort > "$run/expfiles"
+    while IFS= read -r p || [ -n "$p" ]; do
+      [ -z "$p" ] && continue
+      if ! grep -F -x -q -- "$p" "$run/targets"; then
+        ok=0; echo "  expected.files names a path not in target: ${p#./}"; continue
+      fi
+      if ! cmp -s "$case_dir/expected.files/$p" "$G/$p"; then
+        ok=0; echo "  file differs: ${p#./}"; diff "$case_dir/expected.files/$p" "$G/$p" | sed 's/^/  /'
+      fi
+    done < "$run/expfiles"
+  fi
+  if [ -f "$case_dir/post.sh" ]; then
+    if ! (CASE=$case_dir G=$G RUN=$run; . "$case_dir/post.sh") > "$run/post.out" 2>&1; then
+      ok=0; echo "  post.sh failed"; sed 's/^/  /' "$run/post.out"
     fi
   fi
   if [ "$ok" = 1 ]; then pass=$((pass + 1)); echo "ok   $name"
