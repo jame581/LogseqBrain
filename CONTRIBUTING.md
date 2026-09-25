@@ -105,7 +105,7 @@ Releases follow semver and are cut from `main`.
 
 0. The `tests` workflow is green on the release commit.
 1. The eval suite passes on the release commit: `sh tools/eval/run.sh`, run as the `logseq-eval` WSL user, exits 0 — every case passes, and the summary shows both `canary: sentinels unchanged (/tmp and Windows mount)` and `canary: confinement re-proven` ([`evals/README.md`](./evals/README.md)). If the Windows half cannot run, the wrapper refuses: restore WSL interop with `wsl --shutdown` and rerun; or, after a run with `EVAL_CANARY_SKIP_WIN=1`, rerun `--case isolation-canary` with `EVAL_CANARY_WINDIR` set, and record both results in the release notes. A failed case may be rerun once with `--case <name>`: a pass on the rerun goes in the release notes as a flake, and a second failure blocks the release. A usage-limit error in the summary is not a failure; rerun after the limit resets. Put the `load-digest` and `save-basic` tool-call figures from its summary in the release notes. It runs locally only; CI keeps running the golden tests.
-2. Update `.claude-plugin/plugin.json` → `"version": "X.Y.Z"`.
+2. Update `.claude-plugin/plugin.json` → `"version": "X.Y.Z"`, and `BRAIN_VERSION` in `skills/_shared/bin/brain` to match (the `version-matches-plugin` golden case fails until both agree).
 3. Update `ROADMAP.md` if phase status changed.
 4. Commit with a `chore: prepare vX.Y.Z release` message.
 5. Tag and push:
