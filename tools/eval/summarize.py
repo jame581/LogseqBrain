@@ -113,9 +113,14 @@ def passed(result_file, name):
 
 def brain_call(cmd):
     """(subcommand, graph_flag_after) for a brain helper call in a shell command, else None."""
-    toks = cmd.replace('"', ' ').replace("'", ' ').split()
+    toks = cmd.replace('"', ' ').replace("'", ' ').replace(';', ' ; ').split()
     for k, t in enumerate(toks):
-        if t.endswith('/brain') or t == 'brain':
+        # Run, not merely named (a grep of the helper's source is a shell call): the first word
+        # of a command, or the script operand of sh/bash.
+        prev = toks[k - 1] if k else ';'
+        run = prev in (';', '&&', '||', '|', '&') or prev.split('/')[-1] in (
+            'sh', 'bash', 'dash', 'bash.exe')
+        if (t.endswith('/brain') or t == 'brain') and run:
             rest = toks[k + 1:]
             i = 0
             while i < len(rest) and rest[i].startswith('--graph'):

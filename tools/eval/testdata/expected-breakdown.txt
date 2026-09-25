@@ -5,4 +5,6 @@
   5 read-for-edit Read   pages/Projects___Demo.md offset=1 limit=20
   6 edit          Edit   pages/Projects___Demo.md
   7 page-read     Read   pages/Index.md
-totals: edit 1 · helper 1 · instructions 1 · mandated 1 · page-read 1 · read-for-edit 1 · retry 1 · all 7 · instruction bytes read 10
+  8 shell         Bash   grep -n "graph" "/p/skills/_shared/bin/brain" | head -40
+  9 helper        Bash   brain digest
+totals: edit 1 · helper 2 · instructions 1 · mandated 1 · page-read 1 · read-for-edit 1 · retry 1 · shell 1 · all 9 · instruction bytes read 10

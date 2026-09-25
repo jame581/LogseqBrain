@@ -9,3 +9,5 @@
 {"type":"assistant","message":{"content":[{"type":"tool_use","id":"t5","name":"Read","input":{"file_path":"/w/graph/pages/Projects___Demo.md","offset":1,"limit":20}}]}}
 {"type":"assistant","message":{"content":[{"type":"tool_use","id":"t6","name":"Edit","input":{"file_path":"/w/graph/pages/Projects___Demo.md"}}]}}
 {"type":"assistant","message":{"content":[{"type":"tool_use","id":"t7","name":"Read","input":{"file_path":"/w/graph/pages/Index.md"}}]}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t8","name":"Bash","input":{"command":"grep -n \"graph\" \"/p/skills/_shared/bin/brain\" | head -40"}}]}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t9","name":"Bash","input":{"command":"sh /p/skills/_shared/bin/brain --graph ./graph digest; echo \"EXIT=$?\""}}]}}
