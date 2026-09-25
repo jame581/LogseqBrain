@@ -81,12 +81,18 @@
 - Save/load cycle against a Logseq graph
 - Initial graph layout (`pages/`, `journals/`, `Index.md`, `Meta.md`)
 
-## Current — v0.12.0 (TBD)
+## Current — v0.12.0: Fewer round trips, for real (in design)
+
+- Design: `docs/superpowers/specs/2026-09-25-v0.12.0-design.md` (draft; maintainer decisions open)
+- Fix the trailing `--graph` flag, which can silently use the configured graph instead of the named one
+- Composite helper commands `brain load`, `brain save-begin` and `brain save-finish`, so a digest load is 2 calls and a save 7–11 (measured on v0.11.0: 11 and 27)
+- Instruction diet, part 2: the routine load and save read nothing but their SKILL.md
+- Post-v0.11.0 fixes: the archive-page Remap instruction, `BRAIN_VERSION` drift, README / CLAUDE.md drift
+- The eval suite's call targets become pass criteria
 
 ## Future — OG (markdown)
 
-- **Instruction diet, part 2** — trim the remaining prose now that the helper owns the mechanics.
-- **Graph policy** — task-first entry (stub task pages, loading by Jira ID), size-based Session Log rotation, a property vocabulary and the `:property-pages/enabled?` setting, re-checking stale `open::` items on save.
+- **Graph policy** (planned for v0.13.0) — task-first entry (stub task pages, loading by Jira ID), size-based Session Log rotation, a property vocabulary and the `:property-pages/enabled?` setting, re-checking stale `open::` items on save.
 - **Maintainer graph cleanup** — fix what `brain lint --all` reports, re-index in Logseq, backfill digests.
 - **Block refs for decisions.** Write a cross-project decision once with `id:: <uuid>` and reference it as `((uuid))` from `pages/Decisions.md`, ending the physical duplication between the project page and the decision log.
 - **`{{query}}` dashboards.** Live Logseq-rendered views (active projects, open blockers) that cost nothing to maintain. Human-facing only — no token effect for Claude.
