@@ -81,7 +81,9 @@ resolve_graph() {
     esac
     [ -n "$g" ] || continue
     g=$(to_posix "$g")
-    if [ -d "$g" ]; then GRAPH=${g%/}; GRAPH_SRC=$src; return 0; fi
+    # Canonical and absolute: `info` prints it for the skills' own Read/Edit, and the state
+    # directory is keyed on it (./graph and its absolute form once got different baselines).
+    if [ -d "$g" ]; then GRAPH=$(cd "$g" && pwd) || die "cannot enter the graph: $g"; GRAPH_SRC=$src; return 0; fi
     [ "$src" = flag ] && die "graph not found: $g"
   done
   die "graph not resolved — pass --graph DIR, set LOGSEQ_BRAIN_PATH, or set graphPath in $(config_file)"
