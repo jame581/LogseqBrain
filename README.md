@@ -61,6 +61,7 @@ Then say **"init brain"** to set up the graph structure, and **"init brain proje
 **brain-load** — Load project context into the current session.
 - "load MyProject" — loads the project's **digest** in one helper call: ~1.5 KB no matter how big the page is, plus today's journal entry for that project if there is one (targeting ~2 KB). It tells you exactly what it *didn't* read
 - Anything it didn't read is one question away — ask and it greps for just that, announcing each step
+- Since v0.12.0 a digest load is 2 tool calls and a save about 6, down from 11 and 27 (measured with the eval suite in `evals/`)
 - "load MyProject full" — loads everything including decisions, implementation, linked tasks
 - "load brain" — loads a high-level overview of all projects
 - "what do we know about strategy pattern" — searches across the graph
