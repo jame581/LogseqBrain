@@ -18,7 +18,7 @@ Persist session context to the Claude Brain Logseq graph, for continuity across 
 - Neither works: stop and say *"logseq-brain needs Git for Windows (Git Bash) — https://git-scm.com/download/win"*.
 - In Cowork, always pass `--graph <connected folder>`. Elsewhere pass `--graph` only when the graph is not configured. It may go anywhere on the line. On exit 2 with `graph not resolved`, follow `skills/_shared/path-resolution.md`, then pass `--graph`.
 - Put text arguments in single quotes; a `'` inside becomes `'\''`. In double quotes the shell runs backticks and expands `$`.
-- Exit 0 clean, 1 findings (act on them), 2 error (act on its reason; don't retry blindly). Quote every `coverage:` line. Never recompute a figure it printed. Its `graph:` line is the folder for your own Reads and Edits.
+- Exit 0 clean, 1 findings (act on them), 2 error (act on its reason; don't retry blindly). Quote every `coverage:` line. Never recompute a figure it printed. Its `graph:` line is the folder for your own Read, Edit and Write calls.
 
 ## Save process
 

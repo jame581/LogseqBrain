@@ -12,7 +12,16 @@ description: >
 
 # Brain Doctor
 
-Scan the whole graph for the format mistakes that silently corrupt a Logseq graph. Report them and, on confirmation and after a backup, repair them. This is a maintenance tool: run it on demand, not in the save/load cycle. Detection runs through the helper (`skills/_shared/run-brain.md`). The catalog of meaning, tiers and remediation is `skills/_shared/hygiene-rules.md`.
+Scan the whole graph for the format mistakes that silently corrupt a Logseq graph. Report them and, on confirmation and after a backup, repair them. This is a maintenance tool: run it on demand, not in the save/load cycle. Detection runs through the helper (below). The catalog of meaning, tiers and remediation is `skills/_shared/hygiene-rules.md`.
+
+## Running the helper
+
+- Bash: `sh "<this skill's base directory>/../_shared/bin/brain" <command> …`
+- PowerShell-only Windows: `& "$(Split-Path (Split-Path (Get-Command git).Source))\bin\bash.exe" "<base>/../_shared/bin/brain" <command> …`
+- Neither works: stop and say *"logseq-brain needs Git for Windows (Git Bash) — https://git-scm.com/download/win"*.
+- In Cowork, always pass `--graph <connected folder>`. Elsewhere pass `--graph` only when the graph is not configured. It may go anywhere on the line. On exit 2 with `graph not resolved`, follow `skills/_shared/path-resolution.md`, then pass `--graph`.
+- Put text arguments in single quotes; a `'` inside becomes `'\''`. In double quotes the shell runs backticks and expands `$`.
+- Exit 0 clean, 1 findings (act on them), 2 error (act on its reason; don't retry blindly). Quote every `coverage:` line. Never recompute a figure it printed. Its `graph:` line is the folder for your own Read, Edit and Write calls.
 
 ## Prerequisites
 

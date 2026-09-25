@@ -13,7 +13,16 @@ Initialize the Claude Brain Logseq graph or add a new project page to an existin
 
 ## Prerequisites
 
-Resolve the graph path per `skills/_shared/path-resolution.md`. If the resolved folder is empty or missing core files, this skill performs first-time setup (below). Otherwise it adds a new project to the existing graph. The helper (`skills/_shared/run-brain.md`) is required from step 4 on.
+Resolve the graph path per `skills/_shared/path-resolution.md`. If the resolved folder is empty or missing core files, this skill performs first-time setup (below). Otherwise it adds a new project to the existing graph. The helper (below) is required from step 4 on.
+
+## Running the helper
+
+- Bash: `sh "<this skill's base directory>/../_shared/bin/brain" <command> …`
+- PowerShell-only Windows: `& "$(Split-Path (Split-Path (Get-Command git).Source))\bin\bash.exe" "<base>/../_shared/bin/brain" <command> …`
+- Neither works: stop and say *"logseq-brain needs Git for Windows (Git Bash) — https://git-scm.com/download/win"*.
+- In Cowork, always pass `--graph <connected folder>`. Elsewhere pass `--graph` only when the graph is not configured. It may go anywhere on the line. On exit 2 with `graph not resolved`, follow `skills/_shared/path-resolution.md`, then pass `--graph`.
+- Put text arguments in single quotes; a `'` inside becomes `'\''`. In double quotes the shell runs backticks and expands `$`.
+- Exit 0 clean, 1 findings (act on them), 2 error (act on its reason; don't retry blindly). Quote every `coverage:` line. Never recompute a figure it printed. Its `graph:` line is the folder for your own Read, Edit and Write calls.
 
 ## First-Time Graph Setup
 

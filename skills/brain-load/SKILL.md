@@ -18,13 +18,13 @@ description: >
 - Neither works: stop and say *"logseq-brain needs Git for Windows (Git Bash) — https://git-scm.com/download/win"*.
 - In Cowork, always pass `--graph <connected folder>`. Elsewhere pass `--graph` only when the graph is not configured. It may go anywhere on the line. On exit 2 with `graph not resolved`, follow `skills/_shared/path-resolution.md`, then pass `--graph`.
 - Put text arguments in single quotes; a `'` inside becomes `'\''`. In double quotes the shell runs backticks and expands `$`.
-- Exit 0 clean, 1 findings (act on them), 2 error (act on its reason; don't retry blindly). Quote every `coverage:` line. Never recompute a figure it printed. Its `graph:` line is the folder for your own Reads.
+- Exit 0 clean, 1 findings (act on them), 2 error (act on its reason; don't retry blindly). Quote every `coverage:` line. Never recompute a figure it printed. Its `graph:` line is the folder for your own Read, Edit and Write calls.
 
 ## Loading a project
 
-1. **One call: `brain load <name>`.** Pass the user's words as they are. The helper accepts `X`, `Projects/X` or `Tasks/X`. Don't list the graph first. On `page not found`, offer its `did you mean:` lines. Only when there are none, follow `references/matching.md`.
+1. **One call: `brain load <name>`.** Pass the user's words as-is. The helper accepts `X`, `Projects/X` or `Tasks/X`. Don't list the graph first. On `page not found`, offer its `did you mean:` lines. Only when there are none, follow `references/matching.md`.
 2. **Read its blocks:**
-   - `map: stale` or `missing`: say so, and state coverage from `computed:`. Loading is read-only: suggest a save, never write.
+   - `map: stale` or `missing`: say so, and state coverage from `computed:`. Read-only: suggest a save, never write.
    - `drift:` over 30 days: suggest a rebuild (`skills/_shared/digest.md`), never unprompted.
    - `staleness:` `aging`: "Note: last updated N days ago." `stale`: "⚠ This project hasn't been updated in N days. Context may be outdated — verify before acting on it." `abandoned`: "This project is marked active but hasn't been touched in N days. Want to update it or mark it paused?" `(no valid last-updated)`: suggest a brain-save to set one. `fresh` and `exempt`: say nothing.
    - `== journal`: today's notes on the page. Quote its coverage line.
