@@ -8,6 +8,8 @@ BRAIN_VERSION=0.11.0
 BIN_DIR=$(cd "$(dirname "$0")" && pwd)
 LIB=$(cd "$BIN_DIR/../lib" && pwd)
 AWK=${BRAIN_AWK:-awk}
+NL='
+'; CR=$(printf '\r')
 
 die() { printf 'brain: %s\n' "$1" >&2; exit "${2:-2}"; }
 
@@ -492,26 +494,113 @@ cmd_journal() {
   [ "$_rc" = 0 ] || die "journal failed on $_rel (awk exit $_rc)"
 }
 
-# flag_text_guard WHAT TEXT — refuse text whose first or last word is a --graph flag: a quoting
-# slip that would otherwise write the flag (and a path) into the journal.
+# flag_text_guard WHAT TEXT — refuse (message on stderr, return 1) text whose first or last word is a
+# --graph flag: a quoting slip that would otherwise write the flag (and a path) into the journal.
 flag_text_guard() {
   _fg_what=$1; _fg_text=$2
   set -f; set -- $_fg_text; set +f        # split on whitespace, never expand globs
   [ $# -gt 0 ] || return 0
   _fg_first=$1; eval "_fg_last=\${$#}"
   for _fg_w in "$_fg_first" "$_fg_last"; do
-    case $_fg_w in --graph|--graph=*) die "$_fg_what text contains a --graph flag — pass it outside the text" ;; esac
+    case $_fg_w in
+      --graph|--graph=*)
+        printf 'brain: %s text contains a --graph flag — pass it outside the text\n' "$_fg_what" >&2; return 1 ;;
+    esac
   done
   return 0
 }
 
+# validate_text KIND NAME TEXT — Claude-composed text the helper is about to write (KIND summary or
+# index), checked before anything is written: one line, the --graph guard, balanced parentheses for
+# --index, and no error-tier lint finding. Only the new text is linted (as the bullet it becomes),
+# so an old error elsewhere in the file never blocks a save. Warn-tier findings print and pass.
+# Returns 1 with the reason printed; never exits.
+validate_text() {
+  _vt_k=$1; _vt_n=$2; _vt_t=$3
+  case $_vt_t in
+    *"$NL"*|*"$CR"*) printf 'refusing to write --%s text: it contains a line break\n' "$_vt_k"; return 1 ;;
+  esac
+  flag_text_guard "$_vt_k" "$_vt_t" || return 1
+  if [ "$_vt_k" = index ] && ! printf '%s\n' "$_vt_t" | $AWK -v BINMODE=3 '
+      { for (i = 1; i <= length($0); i++) { c = substr($0, i, 1)
+          if (c == "(") d++; else if (c == ")" && --d < 0) exit 1 } }
+      END { exit (d != 0) }'; then
+    printf 'refusing to write --%s text: unbalanced parentheses\n' "$_vt_k"; return 1
+  fi
+  graph_lists
+  _vt_d="$RUN_DIR/prelint"; mkdir -p "$_vt_d/pages" || die "cannot create $_vt_d"
+  if [ "$_vt_k" = summary ]; then printf -- '- [[%s]]: %s\n' "$_vt_n" "$_vt_t"
+  else printf -- '- %s\n' "$_vt_t"; fi > "$_vt_d/pages/Prelint.md"
+  printf 'pages/Prelint.md\n' > "$_vt_d/list"; : > "$_vt_d/cnt"
+  (cd "$_vt_d" && run_awk lint -v listfile=list -v pagesfile="$PAGES_LST" -v keysfile="$KEYS_LST" -v countfile=cnt) \
+    > "$_vt_d/out" || die "lint failed on the --$_vt_k text"
+  [ "$(cut -f1 "$_vt_d/cnt")" = 1 ] || die "lint failed on the --$_vt_k text — the engine did not lint it"
+  sed "s#^pages/Prelint\.md:[0-9]*#--$_vt_k text#" "$_vt_d/out"
+  if [ "$(cut -f2 "$_vt_d/cnt")" != 0 ]; then
+    printf 'refusing to write --%s text: fix it and rerun\n' "$_vt_k"; return 1
+  fi
+  return 0
+}
+
+# write_sessions NAME TEXT — "- [[NAME]]: TEXT" under today's ## Sessions (heading or journal created
+# when missing), through the verified single-change commit. An identical bullet is not written twice.
+# The guard regexes go through awk -v, so their backslashes are doubled (Global Constraints).
+write_sessions() {
+  _ws_rel=$(today_file); _ws_t="$GRAPH/$_ws_rel"; _ws_tmp="$RUN_DIR/sessions"
+  _ws_bullet="[[$1]]: $2"; _ws_want='^[ \t]*- \\[\\[(Projects|Tasks)/'
+  BRAIN_BULLET=$_ws_bullet; export BRAIN_BULLET
+  if [ -f "$_ws_t" ]; then
+    _ws_sum=$(cksum < "$_ws_t")
+    run_awk activity -v section=Sessions -v nonl="$(nonl "$_ws_t")" -v new=0 "$_ws_t" > "$_ws_tmp" \
+      || { rm -f "$_ws_tmp"; die "sessions failed on $_ws_rel"; }
+    unset BRAIN_BULLET
+    if run_awk anchors -v mode=sessions "$_ws_t" | grep -q '^sessions: absent'; then
+      commit_write "$_ws_rel" "$_ws_tmp" 0 2 "$_ws_sum" '^(- )?## Sessions|'"$_ws_want"
+    else
+      commit_write "$_ws_rel" "$_ws_tmp" 0 1 "$_ws_sum" "$_ws_want"
+    fi
+  else
+    mkdir -p "$GRAPH/journals" || die "cannot create journals/"
+    run_awk activity -v section=Sessions -v new=1 /dev/null > "$_ws_tmp" \
+      || { rm -f "$_ws_tmp"; die "sessions failed on $_ws_rel"; }
+    unset BRAIN_BULLET
+    commit_write "$_ws_rel" "$_ws_tmp" 0 2 absent '^(- )?## Sessions|'"$_ws_want"
+  fi
+  if [ "$COMMITTED" = 1 ]; then printf 'sessions: %s → %s\n' "$_ws_bullet" "$_ws_rel"
+  else echo "sessions: unchanged"; fi
+}
+
+# write_index NAME TEXT — the parenthetical of NAME's one-liner in pages/Index.md becomes "(TEXT)".
+# Missing, ambiguous or no Index: nothing is written, the message says what to do, and it returns 0.
+write_index() {
+  _wi_rel=pages/Index.md; _wi_f="$GRAPH/$_wi_rel"; _wi_tmp="$RUN_DIR/index"
+  [ -f "$_wi_f" ] || { echo "index: no pages/Index.md — nothing written"; return 0; }
+  _wi_sum=$(cksum < "$_wi_f")
+  BRAIN_NAME=$1; BRAIN_PAREN=$2; export BRAIN_NAME BRAIN_PAREN
+  run_awk index -v nonl="$(nonl "$_wi_f")" "$_wi_f" > "$_wi_tmp"; _wi_rc=$?
+  unset BRAIN_PAREN
+  case $_wi_rc in
+    0) ;;
+    3) rm -f "$_wi_tmp"; unset BRAIN_NAME
+       echo "index: missing — add the one-liner under ## Projects with Edit"; return 0 ;;
+    4) printf 'index: %s — edit it by hand\n' "$(cat "$_wi_tmp")"; rm -f "$_wi_tmp"; unset BRAIN_NAME; return 0 ;;
+    *) rm -f "$_wi_tmp"; die "index failed on $_wi_rel (awk exit $_wi_rc)" ;;
+  esac
+  # The guard's regex: the name with every ERE metacharacter escaped, backslashes doubled for -v.
+  _wi_esc=$(printf '%s' "$1" | sed 's/[][\.*^$+?(){}|/]/\\\\&/g')
+  commit_write "$_wi_rel" "$_wi_tmp" 1 1 "$_wi_sum" '\\[\\['"$_wi_esc"'\\]\\]'
+  if [ "$COMMITTED" = 1 ]; then
+    run_awk anchors -v mode=index "$_wi_f" | sed 's#^index: \([0-9]*\) #index: pages/Index.md line \1: #'
+  else echo "index: unchanged"; fi
+  unset BRAIN_NAME
+}
+
 # today_file — today's journal, graph-relative.
-today_file() { printf 'journals/%s.md
-' "$(printf '%s' "$TODAY" | tr '-' '_')"; }
+today_file() { printf 'journals/%s.md\n' "$(printf '%s' "$TODAY" | tr '-' '_')"; }
 
 cmd_activity() {
   [ $# -ge 1 ] || die "usage: brain activity <text>"
-  flag_text_guard activity "$*"
+  flag_text_guard activity "$*" || exit 2
   if [ "$(json_get journeyLog "$(config_file)")" = false ]; then echo "journey log disabled (journeyLog: false)"; return 0; fi
   _rel=$(today_file); _t="$GRAPH/$_rel"
   _line="$(now_hm) $*"
@@ -684,6 +773,15 @@ case $cmd in
   status)            resolve_graph; init_run; cmd_status ;;
   load)              resolve_graph; init_run; cmd_load "$@" ;;
   save-begin)        resolve_graph; init_run; cmd_save_begin "$@" ;;
+  # Test-only arms: each new writer and the validator alone (tests/cases/sessions-*, index-*, validate-*).
+  _write-sessions|_write-index|_validate)
+    [ "${BRAIN_TEST_INTERNAL:-}" = 1 ] || die "unknown command: $cmd (try: brain help)"
+    resolve_graph; init_run
+    case $cmd in
+      _write-sessions) write_sessions "$1" "$2" ;;
+      _write-index)    write_index "$1" "$2" ;;
+      _validate)       validate_text "$1" "$2" "$3" || exit 1 ;;
+    esac ;;
   # --- dispatch end ---
   *) die "unknown command: $cmd (try: brain help)" ;;
 esac

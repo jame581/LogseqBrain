@@ -1,0 +1,1 @@
+_validate index Projects/X "$(printf 'a\rb')"
