@@ -43,3 +43,17 @@ digest_page() {
     printf '%s\n' '- ## Decisions' '  - _Project-specific decisions._'
   }
 }
+
+# save_fixture — Projects/Dig (digest-ok's page), a pages/Index.md whose ## Projects lists it at line 4
+# (Quick Links mentions it too, and line 5 mentions it only as a second link), and today's journal with
+# ## Sessions (last line 2) and ## Activity. Run from the graph root.
+save_fixture() {
+  digest_page 'Session Log | 4 KB (2 entries) · Current Plan | 1 KB · +2 smaller sections, 334 B · page | 5 KB' > pages/Projects___Dig.md
+  printf '%s\n' '- ## Quick Links' '  - [[Projects/Dig]] quick' '- ## Projects' \
+    '  - [[Projects/Dig]] — test page (v1 — digest)' '  - [[Projects/Other]] — other, see [[Projects/Dig]]' > pages/Index.md
+  printf '%s\n' '- ## Sessions' '  - [[Projects/Other]]: x' '- ## Activity' '  - 09:00 y' > journals/2026_09_11.md
+}
+# sb_block NAME — the lines of block "== NAME" in $RUN/out, without its header (for post.sh).
+sb_block() { awk -v b="== $1" '$0 == b { on = 1; next } /^== / { on = 0 } on' "$RUN/out"; }
+# sb_manifest — the one save manifest under this case's TMPDIR, or nothing.
+sb_manifest() { find "$TMPDIR/logseq-brain" -name 'save.*.lst' -type f 2>/dev/null; }

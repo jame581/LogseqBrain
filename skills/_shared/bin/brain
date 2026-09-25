@@ -27,6 +27,7 @@ usage: brain <command> [args] [--graph DIR]
   status                                one TSV row per project and task page
   activity <line>                       append "HH:MM <line>" under today's ## Activity
   load <page> [--mode digest|full]      info, digest, journal, then the (digest) activity line
+  save-begin <page> [--also FILE…]      baselines, digest, Session Log tail, Current Plan, Edit anchors
 EOF
 }
 
@@ -504,11 +505,15 @@ flag_text_guard() {
   return 0
 }
 
+# today_file — today's journal, graph-relative.
+today_file() { printf 'journals/%s.md
+' "$(printf '%s' "$TODAY" | tr '-' '_')"; }
+
 cmd_activity() {
   [ $# -ge 1 ] || die "usage: brain activity <text>"
   flag_text_guard activity "$*"
   if [ "$(json_get journeyLog "$(config_file)")" = false ]; then echo "journey log disabled (journeyLog: false)"; return 0; fi
-  _d=$TODAY; _rel="journals/$(printf '%s' "$_d" | tr '-' '_').md"; _t="$GRAPH/$_rel"
+  _rel=$(today_file); _t="$GRAPH/$_rel"
   _line="$(now_hm) $*"
   _tmp="$RUN_DIR/activity"
   if [ -f "$_t" ]; then
@@ -564,6 +569,74 @@ cmd_load() {
   return $_ld_rc
 }
 
+# worst RC… — the composite exit code: 2 over 1 over 0.
+worst() { _wr=0; for _wx in "$@"; do [ "$_wx" -gt "$_wr" ] && _wr=$_wx; done; return $_wr; }
+
+# table_bytes TABLE HEADING — that section's bytes from a section table (first match), or nothing.
+table_bytes() { $AWK -v BINMODE=3 -F '\t' -v h="$2" '$5 == h && $1 ~ /^[0-9]+$/ { print $3; exit }' "$1"; }
+
+# save_manifest_path REL — one manifest per page: the files a save baselined, for save-finish.
+save_manifest_path() { printf '%s/save.%s.lst\n' "$STATE_DIR" "$(printf '%s' "$1" | sed 's#/#%#g')"; }
+
+# cmd_save_begin PAGE [--also FILE…] — everything a save needs before its first Edit: baselines for
+# the page, Index, today's journal and every --also file; the digest; the newest Session Log entry;
+# Current Plan; the Index and ## Sessions anchors; and the manifest save-finish checks against.
+cmd_save_begin() {
+  [ $# -ge 1 ] || die "usage: brain save-begin <page> [--also FILE…]"
+  _sb_pg=$1; shift
+  if [ $# -gt 0 ]; then
+    [ "$1" = --also ] || die "unknown option: $1"
+    shift; [ $# -ge 1 ] || die "--also needs at least one file"
+  fi
+  resolve_page "$_sb_pg"
+  _sb_rel=$PAGE_REL; _sb_name=$PAGE_NAME; _sb_journal=$(today_file)
+  for _sb_a in "$@"; do guard_rel "${_sb_a#"$GRAPH"/}"; done
+  echo "== info"; cmd_info
+  echo "== sections"; _sb_tab="$RUN_DIR/save-begin-sections.out"
+  cmd_sections "$_sb_rel" --baseline pages/Index.md "$_sb_journal" "$@" > "$_sb_tab"; cat "$_sb_tab"
+  PAGE_REL=$_sb_rel; PAGE_NAME=$_sb_name; archive_of
+  echo "== digest"; digest_report "$GRAPH/$_sb_rel"; _sb_r1=$?
+  echo "== session-log"; _sb_r2=0
+  if [ -z "$(table_bytes "$_sb_tab" 'Session Log')" ]; then echo "session-log: none"
+  else cmd_read_tail tail "$_sb_rel" "Session Log" --entries 1 --max 4096; _sb_r2=$?; fi
+  echo "== current-plan"; _sb_r3=0; _sb_cp=$(table_bytes "$_sb_tab" 'Current Plan')
+  if [ -z "$_sb_cp" ]; then echo "current-plan: none"
+  elif [ "$_sb_cp" -gt 8192 ]; then cmd_read_tail tail "$_sb_rel" "Current Plan" --max 8192; _sb_r3=$?
+  else cmd_read_tail read "$_sb_rel" "Current Plan"; _sb_r3=$?; fi
+  echo "== anchors"
+  case $_sb_rel in
+    pages/Tasks___*) echo "index: not applicable (task page)" ;;
+    *) if [ -f "$GRAPH/pages/Index.md" ]; then
+         BRAIN_NAME=$_sb_name; export BRAIN_NAME
+         run_awk anchors -v mode=index "$GRAPH/pages/Index.md" || die "anchors failed on pages/Index.md"
+         unset BRAIN_NAME
+       else echo "index: no Index.md"; fi ;;
+  esac
+  if [ -f "$GRAPH/$_sb_journal" ]; then
+    run_awk anchors -v mode=sessions -v nonl="$(nonl "$GRAPH/$_sb_journal")" "$GRAPH/$_sb_journal" \
+      || die "anchors failed on $_sb_journal"
+  else echo "sessions: no journal"; fi
+  # The manifest: this run's files, plus those of a fresh earlier save-begin for the same page (a
+  # rerun that adds --also keeps what the first run baselined). Written whole, then renamed.
+  _sb_m=$(save_manifest_path "$_sb_rel")
+  {
+    printf 'file %s\n' "$_sb_rel" pages/Index.md "$_sb_journal"
+    for _sb_a in "$@"; do printf 'file %s\n' "${_sb_a#"$GRAPH"/}"; done
+    if [ -f "$_sb_m" ] && manifest_fresh "$_sb_m"; then grep '^file ' "$_sb_m"; fi
+  } | $AWK '!seen[$0]++' > "$_sb_m.$$.files" || die "cannot write the save manifest"
+  { printf 'page %s\n' "$_sb_rel"; cat "$_sb_m.$$.files"; printf 'ts %s\n' "$(date +%s)"; } > "$_sb_m.$$" \
+    && mv "$_sb_m.$$" "$_sb_m" || die "cannot write the save manifest"
+  rm -f "$_sb_m.$$.files"
+  worst "$_sb_r1" "$_sb_r2" "$_sb_r3"
+}
+
+# manifest_fresh FILE — its ts line is within the 12 h baseline expiry.
+manifest_fresh() {
+  _mf=$(sed -n 's/^ts //p' "$1")
+  case $_mf in ''|*[!0-9]*) return 1 ;; esac
+  [ $(( $(date +%s) - _mf )) -le 43200 ]
+}
+
 cmd_status() {
   _list="$RUN_DIR/status.lst"
   (cd "$GRAPH" && ls pages/Projects___*.md pages/Tasks___*.md 2>/dev/null) | grep -v '___SessionArchive\.md$' > "$_list"
@@ -610,6 +683,7 @@ case $cmd in
   activity)          resolve_graph; init_run; cmd_activity "$@" ;;
   status)            resolve_graph; init_run; cmd_status ;;
   load)              resolve_graph; init_run; cmd_load "$@" ;;
+  save-begin)        resolve_graph; init_run; cmd_save_begin "$@" ;;
   # --- dispatch end ---
   *) die "unknown command: $cmd (try: brain help)" ;;
 esac

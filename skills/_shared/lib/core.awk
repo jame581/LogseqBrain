@@ -147,3 +147,20 @@ function bearing(rel) {
   if (rel ~ /^pages\/Projects___/ && PROP["type"] == "project") return 1
   return 0
 }
+
+# index_lines(name) — the pages/Index.md lines (after scan()) inside ## Projects, outside fences, whose
+# FIRST [[…]] link is exactly [[name]]. Sets IDXN and IDX[1..IDXN] (line numbers). The one-liner
+# lookup of save-begin's anchor and save-finish's --index write.
+function index_lines(name,   k, i, t, p, q) {
+  IDXN = 0
+  for (k = 1; k <= NS; k++) {
+    if (SH[k] != "Projects") continue
+    for (i = SL[k] + 1; i <= SE[k]; i++) {
+      if (FENCE[i]) continue
+      t = cr(L[i]); p = index(t, "[[")
+      if (!p) continue
+      t = substr(t, p + 2); q = index(t, "]]")
+      if (q && substr(t, 1, q - 1) == name) IDX[++IDXN] = i
+    }
+  }
+}
