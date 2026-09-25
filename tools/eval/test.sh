@@ -16,6 +16,11 @@ trap 'rm -f "$out" "$out.raw" "$out.want"' EXIT
 
 "$PY" "$HERE/summarize.py" table "$T/result.json" > "$out" 2>&1
 check summarize-table 1 $? "$T/expected-table.txt" "$out"
+# The call targets gate (v0.12.0 spec §5): every grader passed, but load-digest took 5 calls > 4.
+"$PY" "$HERE/summarize.py" table "$T/result-over.json" > "$out" 2>&1
+check summarize-table-over-target 1 $? "$T/expected-table-over.txt" "$out"
+"$PY" "$HERE/summarize.py" table "$T/result-ok.json" > "$out" 2>&1
+check summarize-table-within-target 0 $? "$T/expected-table-ok.txt" "$out"
 
 "$PY" "$HERE/summarize.py" traces "$T/result.json" > "$out.raw" 2>&1; rc=$?
 sed "s#$T/##" "$out.raw" > "$out"

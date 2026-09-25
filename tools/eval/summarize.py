@@ -13,8 +13,10 @@
 
 Tool calls per run = the tool_use blocks in that run's trace.jsonl from the first brain- Skill call
 onward, that call included: the window tools/measure/cost.py uses, so the figures compare with real
-use. A run in which no brain- skill fired counts every call. Figures are reported, never gating: an
-over-target count is flagged OVER but does not change the exit code (spec 2026-09-13-eval-suite-design.md §7).
+use. A run in which no brain- skill fired counts every call. The TARGETS are pass criteria (v0.12.0 spec
+§5, superseding eval spec §7's "reported, never gating"): an over-target run is flagged OVER, listed with
+the failures, and its case does not count as passed, so `table` exits 1. `claude plugin eval` has no
+grader that counts every tool call, which is why the gate lives here. `passed` stays grader-only.
 A relative tracePath resolves against the result file's directory.
 """
 import json
@@ -67,13 +69,16 @@ def table(result_file):
         d = json.load(f)
     threshold = d.get('suite', {}).get('threshold', 1)
     print(f"{'case':<22} {'run':>3} {'result':<6} {'score':>5} {'tools':>5} {'target':<9} {'cost':>7} {'time':>5}")
-    failures = []
+    failures, over = [], set()
     for c, i, r in runs(d):
         name = c.get('name', '?')
         n = tool_calls(trace_path(result_file, r))
         target = '-'
         if name in TARGETS and n is not None:
             target = f"<={TARGETS[name]} " + ('ok' if n <= TARGETS[name] else 'OVER')
+            if n > TARGETS[name]:
+                over.add(name)
+                failures.append(f"  {name} #{i}: {n} tool calls, over the target of {TARGETS[name]}")
         result = 'pass' if r.get('passed') else 'FAIL'
         print(f"{name:<22} {i:>3} {result:<6} {r.get('score', 0):>5.2f} {'-' if n is None else n:>5} "
               f"{target:<9} {'$%.2f' % (r.get('costUsd') or 0):>7} {'%ds' % (r.get('durationSeconds') or 0):>5}")
@@ -83,7 +88,8 @@ def table(result_file):
             if g.get('scored', True) and not g.get('passed'):
                 failures.append(f"  {name} #{i} / {g.get('name')}: {g.get('explanation')}")
     cases = d.get('cases', [])
-    passed = sum(1 for c in cases if c.get('aggregates', {}).get('score', 0) >= threshold)
+    passed = sum(1 for c in cases if c.get('aggregates', {}).get('score', 0) >= threshold
+                 and c.get('name') not in over)
     print(f"total: {len(cases)} cases, {passed} passed · cost ${d.get('costUsd') or 0:.2f} · "
           f"{d.get('durationSeconds') or 0}s" + (' · PARTIAL' if d.get('partial') else ''))
     if failures:
