@@ -14,8 +14,8 @@
 # sentinel cannot be created — `wsl --shutdown` restores interop, or pass EVAL_CANARY_WINDIR through
 # `wsl … -e env EVAL_CANARY_WINDIR=<dir> sh run.sh`. EVAL_CANARY_SKIP_WIN=1 runs with the /tmp half only;
 # a --case run notes the skipped half and runs.
-# Exit: 0 every case passed (or --check clean) and the canary is clean · 1 a case failed (or --check
-# found problems) · 2 refused, partial (interrupted by HUP, INT or TERM), the harness failed before scoring,
+# Exit: 0 every case passed (or --check clean) and the canary is clean · 1 a case failed a grader or
+# went over its call target (or --check found problems) · 2 refused, partial (interrupted by HUP, INT or TERM), the harness failed before scoring,
 # or another environment error · 3 the canary tripped (outranks the rest, an interrupted run included).
 set -u
 LC_ALL=C; export LC_ALL
@@ -224,9 +224,10 @@ fi
 
 # 6. Tool calls per run and the summary table (spec §7).
 SUMMARY="$OUT/summary.txt"
+TABLE_RC=0   # summarize.py table: 1 when a case failed a grader or went over its call target (spec v0.12.0 §5)
 {
   echo "logseq-brain eval · $STAMP · HEAD $SHA · Claude Code $CLAUDE_VER · $MODEL${CASE_GLOB:+ · --case $CASE_GLOB}"
-  if [ -f "$OUT/result.json" ]; then python3 "$HERE/summarize.py" table "$OUT/result.json"
+  if [ -f "$OUT/result.json" ]; then python3 "$HERE/summarize.py" table "$OUT/result.json"; TABLE_RC=$?
   elif [ "$MODE" != run ]; then echo "dry run: no result"
   else echo "no result.json — the harness failed before scoring; run.log follows"; cat "$OUT/run.log"; fi
   if [ "$CANARY_RC" = 0 ]; then
@@ -269,4 +270,5 @@ fi
 
 [ "$CANARY_RC" = 0 ] || exit 3
 # Harness exit 1 without a result means the run never started (bad option, untrusted directory).
-case $EVAL_RC in 0) exit 0 ;; 1) [ -f "$OUT/result.json" ] && exit 1; exit 2 ;; *) exit 2 ;; esac
+# The harness scores graders only; the call targets are gated by summarize.py, so its table decides too.
+case $EVAL_RC in 0) [ "$TABLE_RC" = 0 ] && exit 0; exit 1 ;; 1) [ -f "$OUT/result.json" ] && exit 1; exit 2 ;; *) exit 2 ;; esac
