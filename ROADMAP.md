@@ -7,7 +7,7 @@
 - Write safety: path guard, no-op detection, region-and-kind guard, final-newline and checksum race checks, and a staged rollback — a refusal leaves the file byte-identical
 - Lint validated against Logseq's own parse cache (`tools/oracle/`): `bare-hash-tag` redefined — `.`, `;` and `*` start a tag, a `*` closing an open `**` span does not; new rules `relative-link`, `new-property-key`, `nonconvergent-map`, `duplicate-map`
 - First test suite: 74 golden cases (`tests/run.sh`) with a write-safety assertion; CI on mawk, BWK awk and gawk across Linux, macOS and Windows
-- Instruction diet — skills delegate mechanics to the helper: `brain-load` 17.7 → 6.1 KB, `section-locator` 18.6 → 2.2 KB, `hygiene-rules` 40 → 22 KB
+- Instruction diet — skills delegate mechanics to the helper: `brain-load` 17.2 → 5.9 KB, `section-locator` 18.1 → 2.1 KB, `hygiene-rules` 38.6 → 21.3 KB (KiB, as the helper counts)
 - Target: saves from ~29 tool calls to ≤ 13, loads from ~12 to ≤ 4 — measured by `tools/measure/` two weeks after release
 
 ### v0.10.0 — Digest layer: cheap recall, honest coverage
@@ -94,6 +94,10 @@
 
 - **Graph policy** (planned for v0.13.0) — task-first entry (stub task pages, loading by Jira ID), size-based Session Log rotation, a property vocabulary and the `:property-pages/enabled?` setting, re-checking stale `open::` items on save.
 - **Maintainer graph cleanup** — fix what `brain lint --all` reports, re-index in Logseq, backfill digests.
+- **Hygiene at a glance** (deferred from the v0.8.0 hygiene spec) — a one-line health figure in brain-status, and scheduled scans instead of on-demand only.
+- **Rotation, widened** (deferred from the v0.10.0 spec) — rotation for task pages, and rotation that runs without a prompt once the thresholds are crossed.
+- **Unbounded sections as child pages** (deferred from the v0.10.0 spec) — a section that only grows (Session Log, Active Tasks) moves to its own namespaced page, so the parent stays small.
+- **Retro-mining decisions** (deferred from the v0.9.0 spec) — decision detection is forward-only; mining old Session Logs for decisions that were never recorded is still open.
 - **Block refs for decisions.** Write a cross-project decision once with `id:: <uuid>` and reference it as `((uuid))` from `pages/Decisions.md`, ending the physical duplication between the project page and the decision log.
 - **`{{query}}` dashboards.** Live Logseq-rendered views (active projects, open blockers) that cost nothing to maintain. Human-facing only — no token effect for Claude.
 - **Retrieval rethink.** Drop project pre-loading entirely; grep purely on demand with `Index.md` as the only always-loaded surface. v0.10.0's escalation ladder is a bounded step in this direction.
