@@ -302,21 +302,40 @@ commit_write() {
   rm -f "$2"; COMMITTED=1
 }
 
+# The --apply steps are separate so a composite can validate every Map before writing any file
+# (compute), write them later (commit), and run one check over a whole save (report is apply's own).
+# apply_compute FILE OUT — the would-be page in OUT. Returns 0, or 2 when map.awk refused and
+# already named the reason, or 3 when the engine failed (reason printed here). Never exits.
+apply_compute() {
+  map_awk apply "$1" > "$2"; _ac=$?
+  [ "$_ac" = 2 ] && { rm -f "$2"; return 2; }
+  if [ "$_ac" != 0 ]; then rm -f "$2"; printf 'brain: digest failed on %s (awk exit %s)\n' "$PAGE_REL" "$_ac" >&2; return 3; fi
+  [ -s "$2" ] || { rm -f "$2"; printf 'brain: digest failed on %s — the apply engine produced no output\n' "$PAGE_REL" >&2; return 3; }
+  return 0
+}
+
+# apply_commit REL OUT SUM — write the Map line from OUT; SUM is the page's cksum when OUT was computed.
+apply_commit() {
+  commit_write "$1" "$2" 1 1 "$3" '^[ \t]*- Map: '
+  if [ "$COMMITTED" = 1 ]; then printf 'applied: Map line written to %s\n' "$1"
+  else printf 'unchanged: Map line already current in %s\n' "$1"; fi
+}
+
+# apply_report — digest --apply's own tail: the report, then a check of the page's added lines.
+apply_report() {
+  digest_report "$GRAPH/$PAGE_REL"; _r1=$?
+  echo "--"
+  SKIP_DIGEST_LINT=1; cmd_check "$PAGE_REL"; _r2=$?; SKIP_DIGEST_LINT=
+  [ "$_r1" = 0 ] && [ "$_r2" = 0 ]
+}
+
 cmd_digest_apply() {
   _f="$GRAPH/$PAGE_REL"
   _sum=$(cksum < "$_f")
   _tmp="$RUN_DIR/apply"
-  map_awk apply "$_f" > "$_tmp"; _rc=$?
-  if [ "$_rc" = 2 ]; then rm -f "$_tmp"; exit 2; fi      # map.awk already named the reason
-  if [ "$_rc" != 0 ]; then rm -f "$_tmp"; die "digest failed on $PAGE_REL (awk exit $_rc)"; fi
-  [ -s "$_tmp" ] || { rm -f "$_tmp"; die "digest failed on $PAGE_REL — the apply engine produced no output"; }
-  commit_write "$PAGE_REL" "$_tmp" 1 1 "$_sum" '^[ \t]*- Map: '
-  if [ "$COMMITTED" = 1 ]; then printf 'applied: Map line written to %s\n' "$PAGE_REL"
-  else printf 'unchanged: Map line already current in %s\n' "$PAGE_REL"; fi
-  digest_report "$_f"; _r1=$?
-  echo "--"
-  SKIP_DIGEST_LINT=1 cmd_check "$PAGE_REL"; _r2=$?
-  [ "$_r1" = 0 ] && [ "$_r2" = 0 ]
+  apply_compute "$_f" "$_tmp" || exit 2
+  apply_commit "$PAGE_REL" "$_tmp" "$_sum"
+  apply_report
 }
 
 graph_lists() {
