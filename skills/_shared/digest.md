@@ -1,13 +1,13 @@
 # Digest — the cheap-recall surface
 
-Every project and task page carries a small, always-current summary that Claude reads *instead of* the page. A brief load is one helper call, `brain digest <page>`: it prints the property block and the whole `## Digest` section, then stops — on the maintainer's largest project page, `Projects___Unicorn-Globus.md` (109,760 B), that call reads about 1.4 KB rather than the whole page. The Map bullet it prints states exactly what was **not** read, which is what stops the model reasoning from a fragment as though it held the whole history.
+Every project and task page carries a small, always-current summary that Claude reads *instead of* the page. A load reads the property block and the whole `## Digest` (about 1.4 KB even on a 107 KB page) and stops. The Map bullet states exactly what was **not** read, so the model never reasons from a fragment as though it held the whole history.
 
 Read this file whenever you build, refresh, rebuild, or lint a digest.
 
 ## Scope
 
 - **In scope:** `pages/Projects___*.md` **with `type:: project`**, and `pages/Tasks___*.md`.
-- **Out of scope:** pages with `type:: session-archive` (filenames ending `___SessionArchive.md`); the singletons `Index.md`, `Meta.md`, `Decisions.md`; and — same reasoning as the archive exclusion — auxiliary pages that merely live under the `Projects___` namespace without being a project page themselves, e.g. `type:: task-index` (a project's task inventory, like `Projects___Unicorn-Globus___Tasks.md`) or `type:: project-note` (a standalone note, like `Projects___Unicorn-Globus___ClaudeCodeAutomation.md`). These match the `pages/Projects___*.md` glob but are not projects, so every rule that iterates that glob (`missing-digest`, `stale-digest`, `stale-map`, `oversized-digest`, and `brain-status`'s census) must check `type:: project` before counting a hit — a filename match alone is not enough, exactly as `___SessionArchive.md` alone is not enough without the `type::` check.
+- **Out of scope:** session archives (`type:: session-archive`, filenames ending `___SessionArchive.md`); the singletons `Index.md`, `Meta.md`, `Decisions.md`; and auxiliary pages under the `Projects___` namespace that are not projects (`type:: task-index`, `type:: project-note`). A filename match alone is never enough: every digest rule and `brain-status`'s census check `type:: project`.
 
 ## Surface 1 — page-top properties
 
@@ -32,8 +32,6 @@ digest-updated:: 2026-07-25
 ```
 
 Property values are ordinary content and obey **every** compose invariant in `skills/_shared/logseq-format.md` — backticks for code (never `{{ }}`), escaped `#` before numbers and hex colors, namespaced `[[Tasks/…]]` and `[[Projects/…]]` links, markdown links rather than `[[file://]]`.
-
-Two Logseq OG behaviours worth knowing, so they are not rediscovered: with `:property-pages/enabled? true` (the default) the keys `focus` / `next` / `open` become Logseq property pages — cosmetic and accepted; and unless `:property/separated-by-commas` names a key, commas inside a value are **not** parsed as page references.
 
 ## Surface 2 — the `## Digest` section
 
@@ -65,15 +63,9 @@ Task-page digests run thinner — typically Identity + Now + Map — because tas
 
 ## The Map bullet is computed by the helper, never written by hand
 
-`brain digest <page> --apply` derives the Map from the page's actual sections, and replaces only the Map line (or inserts it as the Digest's last bullet). **Never hand-edit the Map line, and never compute a figure yourself.** Hand arithmetic is how Maps went wrong: rounded figures, paraphrased labels and over-cap digests were all measured on the live graph on 2026-09-11 (`docs/superpowers/specs/2026-09-11-v0.11.0-design.md`).
+`brain digest <page> --apply` derives the Map from the page's actual sections, and replaces only the Map line (or inserts it as the Digest's last bullet). **Never hand-edit the Map line, and never compute a figure yourself.** Hand arithmetic produced rounded figures, paraphrased labels and over-cap digests.
 
-What the helper implements, so you can *read* a Map:
-
-- **Candidates:** every `## ` section except `## Digest`, measured as the bytes after its heading up to the next heading. Sections ≥ 1 KiB are candidates, largest first. The rest are summarized in one `+N smaller sections, X` clause, so the Map accounts for the whole page.
-- **Figures** are KiB, **truncated**: `N KB` asserts N·1024 … N·1024+1023 bytes. Below 1 KiB, exact bytes. `Session Log` and `Decisions` carry their dated-entry count (`(N entries)` / `(N)`) only when it passes a cross-check against the section's top-level bullets; otherwise the count is omitted.
-- **Labels** are the heading, or its first 40 bytes (cut at a UTF-8 character boundary) plus `…`. Two labels that would collide are widened until they differ.
-- **Order:** clauses are `label | figure`, joined by ` · `. Kept candidates come first, then `+N more` (when the 800 B cap forced drops), the smaller-sections residual, `Archive | [[Projects/<Name>/SessionArchive]]` (when that page exists), and finally `page | <total>`. The page total is computed for the file as it will be after the write.
-- Example: `- Map: Session Log | 87 KB (47 entries) · Active Tasks | 10 KB · Current Plan | 3 KB · Decisions | 2 KB (2) · +6 smaller sections, 2 KB · page | 107 KB`
+Reading a Map: each clause is `label | figure`, joined by ` · `. Figures are KiB **truncated** (`3 KB` means 3,072–4,095 bytes), exact bytes below 1 KiB. `Session Log` and `Decisions` may carry a dated-entry count. `+N smaller sections, X` sums every section under 1 KiB, `+N more` counts candidates the 800 B cap dropped, and `page | …` is the whole file. So the Map accounts for every byte of the page. The full derivation lives in `docs/reference/digest-map.md` in the plugin's repository; skills never compute it.
 
 `brain digest <page>` (without `--apply`) reports `map: ok`, `map: stale · <clause> → <measured>`, or `map: missing`. The `stale-map` and `map-label` lint rules use the same computation.
 
@@ -83,15 +75,15 @@ What the helper implements, so you can *read* a Map:
 
 Rewrite the properties and bullets from the session knowledge that produced the Session Log entry and Current Plan, then run `brain digest <page> --apply`. Unconditional — see `brain-save` step 8. Cost: ~1 read + 1 edit.
 
-Unconditional by design: v0.9.0 recorded the lesson for the `Index.md` one-liner — *rot comes precisely from "only when it changed" judgment calls.*
+Unconditional by design: rot comes from "only when it changed" judgment calls.
 
 ### Remap (cheapest, byte-moving writes only)
 
-Recompute **only** the Map bullet. Leave every prose slot (Identity, Now, Binding, Hazard, the free slot) exactly as it was — and leave `digest-updated::` alone too. A Remap writes the *Map*, not the digest: bumping the date would silence `stale-digest` for another 30 days on prose nobody touched. The two signals stay orthogonal — `stale-map` guards the Map arithmetically, `stale-digest` guards the prose by date. This is the correct response to a write that moved or changed the page's *bytes* without changing what the page *means* — the Session Log got smaller (rotation) or a format violation got fixed (a `brain-doctor` repair), but the project itself didn't change. Cost: one call — `brain digest <page> --apply`, which touches only the Map line.
+For a write that changed the page's *bytes* but not what it *means*: a rotation, or a `brain-doctor` repair. Recompute **only** the Map, with `brain digest <page> --apply`, one call. Leave every prose slot **and `digest-updated::`** as they were: bumping the date would silence `stale-digest` for 30 days on prose nobody touched. `stale-map` guards the Map, `stale-digest` guards the prose.
 
-Neither of the other two paths fits a byte-moving write. Refresh rewrites the prose slots **from the session knowledge that produced this save** — rotation and a doctor repair have no such session, so calling either of them "Refresh" would mean rewriting prose from nothing (silently blanking it) or silently reusing stale prose under a freshly-stamped `digest-updated::` (looking current while saying nothing new) — which is exactly why a Remap leaves that date alone. Rebuild re-reads the page section by section, which is exactly the cost a write that only moved bytes doesn't need to pay.
+Refresh would rewrite prose from no session knowledge, and Rebuild would pay to re-read a page whose meaning did not change, so a byte-moving write is always a Remap.
 
-**Triggers:** `skills/brain-save/references/rotation.md` step 6, after a confirmed rotation (on the project page and on the archive page too, if it carries a digest); `brain-doctor`'s repair verify step, for every page whose bytes changed during a fix.
+**Triggers:** `skills/brain-save/references/rotation.md` step 6, after a confirmed rotation (on the project page; archive pages carry no digest, see Scope); `brain-doctor`'s repair verify step, for every page whose bytes changed during a fix.
 
 ### Rebuild from source (expensive, corrective)
 
@@ -105,21 +97,17 @@ Refresh only ever knows the current session, so across dozens of sessions a dige
 2. Read `## Current Plan` → Now, and `next::`.
 3. Read `## Decisions` — headline lines only → Binding.
 4. `brain tail <page> "Session Log" --entries 3 --max 4096` — recent entries carry more signal per byte. Stop once the slots are filled.
-5. Where `pages/Projects___<Name>___SessionArchive.md` exists, read **its digest**, never its contents.
+5. Never read the project's `___SessionArchive` page: it carries no digest, and the Map's `Archive` clause already points to it.
 6. Write the properties and prose slots with Edit, then `brain digest <page> --apply`.
 
-**Procedure — task-shaped pages (no fixed template):** task pages routinely have none of `## Overview` / `## Current Plan` / `## Decisions` / `## Session Log` by that name — measured live, `Tasks___CRMGM-1994.md` (108,143 B) has only `## Overview` (1,335 B) and `## Notes` (106,526 B — 98% of the page). The five project-shaped steps above have nowhere to land on a page like this: none of them names `## Notes`, so a rebuild that only knew those five headings would read almost nothing of a page that is almost nothing *but* that one section. Branch instead:
+**Procedure — task-shaped pages (no fixed template):** task pages often have none of the project headings; one oversized `## Notes` can be most of the file. Branch instead:
 
-1. Read the property block (unchanged — generic regardless of page shape).
+1. Read the property block.
 2. **`brain sections <page>`** — every real section, measured, in one call.
-3. **Read the largest one or two of those candidates**, each capped at the per-section budget (`skills/_shared/section-locator.md`, ≤ 8 KB per section):
-   - At or under the cap → read it whole.
-   - Over the cap → `brain tail <page> "<section>" --max 8192`, which reads the newest content first.
-4. **Derive Identity from the smallest/most-stable candidate** (often literally called `## Overview` even without the rest of the project template) and **Now from the most recent dated content** the tail read surfaced in the largest candidate.
-5. **Skip Binding/Hazard/the free slot** when nothing in the page's real sections supports them — task-page digests already run thinner by design (typically Identity + Now + Map; see "Slots" above).
-6. Where `pages/Tasks___<ID>___SessionArchive.md` exists, read its digest, never its contents (unchanged).
+3. **Read the largest one or two sections**, ≤ 8 KB each: `brain read`, or over the cap `brain tail <page> "<section>" --max 8192` (newest first).
+4. **Identity** from the smallest, most stable section (often `## Overview`); **Now** from the newest dated content in the largest.
+5. **Skip Binding, Hazard and the free slot** when nothing supports them; task digests run thin by design.
+6. Never read a `___SessionArchive` page: it carries no digest, and the Map's `Archive` clause already points to it.
 7. Write the prose with Edit, then `brain digest <page> --apply`.
-
-Worked example, `Tasks___CRMGM-1994.md` (108,143 B — the spec's own §9.10 acceptance page): `brain sections` finds exactly two real sections, `## Overview` (1,335 B) and `## Notes` (106,526 B). Both clear the 1 KB threshold. Overview is under the 8 KB per-section cap, so it's read whole for Identity (256 B property block + 1,335 B). Notes is nowhere near the cap — its last 3 dated entries (the tail recipe, scoped to the section) read **5,670 B**, comfortably inside the 8 KB per-section cap, and supply Now. Total read: 256 + 1,335 + 5,670 = **7,261 B**, a two-slot digest (Identity + Now + Map) built without ever reading the 106.5 KB `## Notes` whole.
 
 **Never read the whole file in a single Read during a rebuild** — that is the cost this feature exists to avoid, on a task page most of all, since a task page's one oversized section is usually most of the file.

@@ -41,7 +41,7 @@ function candidates(   k, i, j, t, a, b, changed) {
 function clause(k) { return label(SH[k], WID[k]) " | " fig(SB[k]) cnt(k) }
 
 # Map text for page total T. Reserves the fixed tail and the worst-case "+N more" up front
-# (digest.md "Fitting the 800-byte cap"), then keeps candidates largest-first; never fewer than one.
+# (docs/reference/digest-map.md, cap fitting), then keeps candidates largest-first; never fewer than one.
 function map_text(T,   tail, budget, run, i, cost, kept, out) {
   tail = ""
   if (NN >= 1) tail = "+" NN " smaller sections, " fig(NB)

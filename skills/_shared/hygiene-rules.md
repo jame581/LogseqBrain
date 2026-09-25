@@ -3,7 +3,7 @@
 The single source of truth for the format violations that corrupt a Logseq brain graph. Two consumers read this file:
 
 - **`skills/brain-doctor/SKILL.md`** — iterates every rule whose `enforced-at` includes `scan` (reactive whole-graph lint + repair).
-- **`skills/brain-save/SKILL.md`** — follows the compose-time rules while composing, including `jira-markup`'s "fence it up front" instruction. After writing, it runs `brain check` on every file it wrote. That reports every mechanical rule on the lines the save added, plus `stale-map`, `map-label`, `oversized-digest` and a missing Map measured over the whole page (see "Post-write verify" below). The whole-graph judgment rules (`description-link`, `duplicate-entry`, `structural-integrity`) stay brain-doctor's.
+- **`skills/brain-save/SKILL.md`** — follows the compose-time rules while composing (including `jira-markup`'s "fence it up front"), and checks every file it wrote (see "Post-write verify"). The whole-graph judgment rules (`description-link`, `duplicate-entry`, `structural-integrity`) stay brain-doctor's.
 
 The narrative "why" and the compose-time guidance live in `skills/_shared/logseq-format.md`; this file is the operational catalog.
 
@@ -11,16 +11,9 @@ The narrative "why" and the compose-time guidance live in `skills/_shared/logseq
 
 ## Rule entry schema
 
-Each rule below has:
+Each rule has: its **id** (the `## ` heading slug, used by both consumers; never rename); **severity** (`breaks-render` | `phantom-page` | `data-quality`); **enforced-at** (`compose`: brain-save prevents it; `scan`: brain-doctor finds it); **auto-fixable** (`yes`: bulk-fix; `safe-only`: fix the unambiguous subset, report the rest; `report`: never auto-write); **detection**; **remediation**.
 
-- **id** — stable slug; it is the rule's `## …` section heading (the backtick-wrapped slug shown on each entry below), not a separate `id:` line; used by both consumers; never rename.
-- **severity** — `breaks-render` | `phantom-page` | `data-quality`.
-- **enforced-at** — `compose` (brain-save can prevent it) and/or `scan` (brain-doctor finds it).
-- **auto-fixable** — `yes` (safe to bulk-fix), `safe-only` (auto-fix the unambiguous subset, report the rest), `report` (never auto-write; surface with a suggestion).
-- **detection** — the grep/procedure (run from the graph root, over `pages/` and `journals/`).
-- **remediation** — the transform, or the report guidance.
-
-Detections that match inside backticks or `{{ }}` are false positives for the `#`/link rules (Logseq does not linkify code/macro content) — mask inline-code and macro spans before counting, as noted per rule. Content inside ``` … ``` fenced code blocks is never linkified or macro-expanded by Logseq either, so a hit *inside* a fence is a false positive for **all** rules, not just `jira-markup` — mask fenced blocks (in addition to inline-code and macro spans) before counting or transforming, for every rule below.
+**Masking, for every manual detection and every repair transform:** Logseq never linkifies or expands code, so a hit inside inline code or a `{{ }}` span is a false positive for the `#` and link rules, and a hit inside a ``` fenced block is a false positive for **all** rules. Mask fenced blocks, inline code and macro spans before counting or transforming, then unmask.
 
 ---
 
@@ -28,7 +21,7 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **severity:** breaks-render
 - **enforced-at:** compose, scan
 - **auto-fixable:** yes
-- **detection:** `brain lint` → `code-in-braces`: a `{{` outside inline code and fences that does not open a Logseq macro (`query`, `embed`, `video`, `renderer`, `cards`, `function`, `namespace`, `tutorial`, `cloze`, `youtube`, `youtube-timestamp`, `vimeo`, `bilibili`, `tweet`, `twitter`, `pdf`, `contents`, `zotero-imported-file`, `zotero-linked-file`). If `logseq/config.edn` defines custom `:macros`, hits naming them are intentional.
+- **detection:** `brain lint` → `code-in-braces`: a `{{` outside inline code and fences that does not open a built-in Logseq macro. If `logseq/config.edn` defines custom `:macros`, hits naming them are intentional.
 - **remediation:** `{{X}}` → `` `X` ``. The bulk pass must skip fenced blocks — mask them before the regex replace and unmask after. Two edge cases the bulk pass must skip and you hand-fix:
   - Span contains a backtick (e.g. `` Expression`1 ``): use a double-backtick fence `` `` … `` ``.
   - Span contains a literal `{` or `}` (Mongo query `countDocuments({ … })`, a CSS rule, a `{list}` template): the simple regex won't match it; reconstruct the literal braces (a bad save sometimes *doubled* them, `{`→`{{`) and wrap the whole thing in backticks.
@@ -39,7 +32,7 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **severity:** phantom-page
 - **enforced-at:** compose, scan
 - **auto-fixable:** yes
-- **detection:** `brain lint` → `bare-hash-tag`. Logseq makes a tag of `#` followed by any character except whitespace, `#`, `[`, a backtick, `,`, `"`, `:`, `!`, `?` or `'` (verified against the fixture graph on 2026-09-12), or `]` (assumed; covers `[[C#]]`), **whatever precedes the `#`**. That includes `.`, `;` and `*`, all verified the same day: `#.a` → page `.a`, `#;b` → `;b`, `#**i**` → `**i**` — so `C#.NET` makes a phantom page `.NET`. One verified exception: a `*` that **closes** an already-open `**` span is emphasis, not a tag, so `**C#**` makes no page. Measured against Logseq's parse cache on 2026-09-11: `C#-parity` → page `-parity`, `C#)` → `)`, `PKCS#12` → `12`, CSS `#image` → `image`. The previous rule caught 0 of those 6. Masked first: fenced blocks, inline code, whole markdown links (`[#65](url)` is not a tag), bare URLs, `#[[…]]`, heading markers. Each hit is classified `number`, `hex`, `after-word`, `word` or `punct`.
+- **detection:** `brain lint` → `bare-hash-tag`: a `#` directly before non-space text, **whatever precedes it** (`C#-parity` makes a page `-parity`, `PKCS#12` a page `12`), with code, links, URLs and `#[[…]]` masked. A `*` closing an open `**` span is not a tag. Each hit is classified `number`, `hex`, `after-word`, `word` or `punct`.
 - **remediation:** `#44` → `` `#44` ``, `#0066CC` → `` `#0066CC` ``. Punctuation-adjacent hits are in scope — `(#1)` → `` (`#1`) ``, `#2–#5` → `` `#2`–`#5` ``. **Never touch `#[[Page Name]]`** (valid tag-link) or `#` already inside backticks/`{{ }}`/fenced blocks. Mask inline-code spans (`` `…` ``), macro spans (`{{…}}`), fenced code blocks (``` … ```), and `#[[…]]` first, transform on the remainder, then unmask. `after-word` hits: backtick the token (`` `C#`-parity ``) or rephrase (`C# parity`). `word` hits (e.g. a CSS selector): backtick them.
 
 ## `unnamespaced-link`
@@ -97,13 +90,13 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **severity:** data-quality
 - **enforced-at:** scan
 - **auto-fixable:** report
-- **detection:** `brain lint` reports `[[Projects/…]]` / `[[Tasks/…]]` targets with no page file, as tier `warn`. That is the most common save-time error: 71 links in 13 of 16 saves measured. The full phantom-target list that `description-link` and `unnamespaced-link` consume still comes from this procedure:
+- **detection:** `brain lint` reports `[[Projects/…]]` / `[[Tasks/…]]` targets with no page file, as tier `warn`. The full phantom-target list that `description-link` and `unnamespaced-link` consume still comes from this procedure:
   ```
   ls pages/*.md | sed 's#pages/##; s/\.md$//; s/___/\//g' | sort -u > /tmp/real.txt
   grep -rohE "\[\[[^]]+\]\]" pages/ journals/ | sed 's/^\[\[//; s/\]\]$//' | grep -v '^file:///' | sort -u > /tmp/links.txt
   comm -23 /tmp/links.txt /tmp/real.txt
   ```
-  Do **not** re-run this command inside `description-link` or `unnamespaced-link` — they consume the two lists from this single run. The `/tmp/*` paths are illustrative scratch — use any temp/host-scratchpad location (on Windows Git Bash `/tmp` resolves).
+  Do **not** re-run this command inside `description-link` or `unnamespaced-link` — they consume the two lists from this single run.
 - **remediation:** report. Sub-classify each phantom target: (a) missing namespace (e.g. `[[CRMGM-x]]`) → handled by `unnamespaced-link` (auto-fix); (b) prose-like or slug-like target → handled by `description-link` (unbracket/backtick); (c) fuzzy-close to an existing page → likely typo → report **with the suggested match**; (d) no close match → forward-reference → report under "intentional? leaving as-is." Never auto-delete a link.
 
 ## `duplicate-entry`
@@ -135,21 +128,21 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **severity:** phantom-page
 - **enforced-at:** compose, scan
 - **auto-fixable:** yes
-- **detection:** `brain lint` → `relative-link`: a markdown link whose target is not a URL, `mailto:`, `file:`, an anchor, a block ref, a `[[page]]` ref or `assets/` (`lint.awk` carries the full exclusion list). For example, `[design](docs/specs/x.md)` makes Logseq create a page named after the target (two live cases on 2026-09-11).
+- **detection:** `brain lint` → `relative-link`: a markdown link to a relative path, such as `[design](docs/specs/x.md)`, which makes Logseq create a page named after the target.
 - **remediation:** keep the label and backtick the path: ``design (`docs/specs/x.md`)``. For a real local file, use a `file:///` markdown link instead.
 
 ## `new-property-key`
 - **severity:** phantom-page
 - **enforced-at:** compose, scan
 - **auto-fixable:** report
-- **detection:** `brain lint` → `new-property-key`: a `key::` used nowhere else in the graph and not one of the plugin's own keys. With `:property-pages/enabled? true`, every key becomes a Logseq page: 80 on the live graph on 2026-09-11, many of them one-offs.
+- **detection:** `brain lint` → `new-property-key`: a `key::` used nowhere else in the graph and not one of the plugin's own keys. With `:property-pages/enabled? true`, every key becomes a page.
 - **remediation:** report. Suggest an existing key (`next-action::`, `open-questions::`, …) or plain prose. Whether the graph should turn property pages off is a separate, future graph-policy decision.
 
 ## `missing-digest`
 - **severity:** data-quality
 - **enforced-at:** scan
 - **auto-fixable:** report
-- **detection:** a project or task page carrying no digest, **or one whose `## Digest` section has no `Map:` bullet** — the Map is a required slot (`skills/_shared/digest.md`), so a digest missing it is a missing digest, not a shorter one. Excludes session-archive pages and the singletons. `brain lint` (through `map.awk`) reports it for every digest-bearing page: no `## Digest`, or a Digest with no `Map:` line.
+- **detection:** `brain lint` (through `map.awk`), for every digest-bearing page: no `## Digest` (warn), or a Digest with no `Map:` bullet (error; the Map is a required slot).
 - **remediation:** report each page with its byte size, largest first (biggest pages pay back a digest soonest). Offer the rebuild-from-source procedure in `skills/_shared/digest.md`. **Report-tier**: building a digest is a judgment call with real token cost — never auto-spent. For a whole-graph pass use brain-doctor's guided digest backfill.
 
 ## `stale-digest`
@@ -163,7 +156,7 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **severity:** data-quality
 - **enforced-at:** scan, and every save via `brain check`
 - **auto-fixable:** report — there is no transform to apply; the helper itself refuses to write
-- **detection:** `brain lint` / `brain digest <page> --apply`: the page's own byte total sits within ~2 bytes of a KiB boundary, so recomputing the Map has no fixed point — the figure oscillates between two values each time it's measured (e.g. `1023 B` vs `1 KB`, exactly the 2 bytes the shorter label costs) because the Map line's own length feeds back into the total it describes. `--apply` **refuses to write** rather than publish a figure it knows is wrong (exit 2); `brain lint` / `brain check` report it as `nonconvergent-map` instead of silently falling back to a guess.
+- **detection:** `brain lint` / `brain digest <page> --apply`: the page total sits within ~2 bytes of a KiB boundary, so the Map line's own length keeps flipping the figure it states. `--apply` refuses to write (exit 2).
 - **remediation:** never hand-write the Map figure to "fix" the oscillation. Change the page by an ordinary edit — any edit that adds or removes even one byte elsewhere on the page moves the total off the boundary — then rerun `brain digest <page> --apply`.
 
 ## `stale-map`
@@ -177,33 +170,26 @@ Detections that match inside backticks or `{{ }}` are false positives for the `#
 - **severity:** data-quality
 - **enforced-at:** scan, and every save via `brain check`
 - **auto-fixable:** yes (the same Remap)
-- **detection:** a Map clause whose label is neither a real heading nor its 40-byte cut, e.g. `Session 08-12` for `Session 2026-08-12 — solved…` (7 of 66 digests measured on the live graph). A label that doesn't resolve can't lead back to its section.
+- **detection:** a Map clause whose label is neither a real heading nor its 40-byte cut, so it cannot lead back to its section.
 - **remediation:** `brain digest <page> --apply`.
 
 ## `duplicate-map`
 - **severity:** data-quality
 - **enforced-at:** scan, and every save via `brain check`
 - **auto-fixable:** report — deleting the extra line needs a human choice, not a bulk pass
-- **detection:** `brain lint` / `brain digest <page> --apply`: the `## Digest` section carries more than one `- Map:` bullet — most plausibly a Logseq Sync merge that duplicated the block. `--apply` refuses to write (exit 2) until only one remains; `brain lint` / `brain check` report it as `duplicate-map`, naming the count.
+- **detection:** `brain lint` / `brain digest <page> --apply`: `## Digest` carries more than one `- Map:` bullet, most plausibly from a Logseq Sync merge. `--apply` refuses to write (exit 2) until one remains.
 - **remediation:** delete all but one `- Map:` line with Edit — either copy is fine to keep, since the surviving one gets recomputed on the next `--apply` — then rerun `brain digest <page> --apply`. Never let a bulk pass guess which copy to keep.
 
 ## `oversized-digest`
 - **severity:** data-quality
 - **enforced-at:** compose, scan
 - **auto-fixable:** safe-only
-- **detection:** the `## Digest` section exceeds 800 bytes, or any digest property value exceeds 120 **bytes**. `brain digest <page>` prints `over:` lines, and `brain lint` reports `oversized-digest`: the section over 800 bytes, or `focus::` / `next::` / `open::` over 120 bytes (all counted in bytes by the helper).
+- **detection:** `brain digest <page>` prints `over:` lines, and `brain lint` reports `oversized-digest`: the `## Digest` section over 800 bytes, or `focus::` / `next::` / `open::` over 120 bytes.
 - **remediation:** the safe subset is **compose-time only** — `brain-save` recompresses its own composed digest before writing it: drop the free slot first, then shorten Binding and Hazard; **never drop the Map**. At **scan** time this rule is **report-only**: trimming content already on disk is never safe to automate, because the excess may be the only place something is recorded. Same scoping discipline as `malformed-property`.
 
 ## Post-write verify (scoped)
 
-After all writes in an operation, run `brain check <every file written>`. It prints, in order: the mechanical findings on lines added since the baseline that `brain sections <page> --baseline <other files>` recorded before the first Edit; then the digest findings for that page (`missing-digest`, `nonconvergent-map`, `stale-map`, `map-label`, `duplicate-map`, `oversized-digest`, `stale-digest`) — these are always measured over the whole page, not just the lines this save added, so a digest finding may predate this save; then, **last**, a summary line: `check <file>: N new (E error, W warn), P pre-existing`, with a `· digest: D error, M warn` suffix appended whenever digest findings exist. Example:
-```
-pages/Projects___X.md:19  bare-hash-tag  error  #44 (number)
-pages/Projects___X.md:12  stale-map      error  Session Log | 1 KB (1 entries) → 326 B (2 entries) · page | 2 KB → 712 B
-pages/Projects___X.md:7   stale-digest   warn   digest-updated 2026-08-01 is 31 days behind last-updated 2026-09-01
-check pages/Projects___X.md: 1 new (1 error, 0 warn), 0 pre-existing · digest: 1 error, 1 warn
-```
-It exits 1 on any new error-tier finding, mechanical or digest. Fix a mechanical error with Edit and re-run `check` on that file; fix a digest error by re-running `brain digest <page> --apply` (never by hand-editing the Map — and never on a line a rotation moved verbatim, per `references/rotation.md`). Warn-tier findings go in the confirmation to the user. Pre-existing findings belong to brain-doctor: mention them, don't silently fix them. Also check per-file backtick parity on every file this save touched — an odd number of `` ` `` characters means a broken inline-code span (see "After repair — verify" below); no lint rule catches this.
+After all writes, check every file written (`brain check <files>`, or the check step of `brain save-finish`). It lists the mechanical findings on lines added since the baseline, then the digest findings for the page, which are measured over the **whole** page and may predate the save, then one `check <file>: N new (E error, W warn), P pre-existing` line per file, then one `fix <rule>:` hint per rule that fired. It exits 1 on any new error-tier finding. Fix a mechanical error with Edit and re-check that file; fix a digest error with `brain digest <page> --apply`, never by hand-editing the Map, and never on a line a rotation moved verbatim (`references/rotation.md`). Warn-tier findings go in the confirmation to the user. Pre-existing findings belong to brain-doctor: mention them, don't silently fix them. Also check backtick parity on every file written (see "After repair — verify"): no lint rule catches a broken inline-code span.
 
 ## After repair — verify
 
