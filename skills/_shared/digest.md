@@ -73,7 +73,7 @@ Reading a Map: each clause is `label | figure`, joined by ` · `. Figures are Ki
 
 ### Refresh (cheap, every save)
 
-Rewrite the properties and bullets from the session knowledge that produced the Session Log entry and Current Plan, then run `brain digest <page> --apply`. Unconditional — see `brain-save` step 8. Cost: ~1 read + 1 edit.
+Rewrite the properties and bullets from the session knowledge that produced the Session Log entry and Current Plan, in one Edit; `brain save-finish` then writes the Map. Unconditional — see `brain-save` step 5. Cost: 1 edit.
 
 Unconditional by design: rot comes from "only when it changed" judgment calls.
 
