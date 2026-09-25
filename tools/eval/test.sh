@@ -21,6 +21,8 @@ check summarize-table 1 $? "$T/expected-table.txt" "$out"
 sed "s#$T/##" "$out.raw" > "$out"
 printf 'load-digest\t1\ttrace-load.jsonl\nsave-basic\t1\ttrace-save.jsonl\n' > "$out.want"
 check summarize-traces 0 "$rc" "$out.want" "$out"
+"$PY" "$HERE/summarize.py" breakdown "$T/trace-breakdown.jsonl" > "$out" 2>&1
+check summarize-breakdown 0 $? "$T/expected-breakdown.txt" "$out"
 
 "$PY" "$HERE/summarize.py" bogus > "$out" 2>&1; rc=$?
 if [ "$rc" = 2 ] && grep -q 'summarize.py table RESULT_JSON' "$out"; then echo "ok   summarize-usage"
