@@ -22,7 +22,7 @@ description: >
 
 ## Loading a project
 
-1. **One call: `brain load <name>`.** Pass the user's words as-is. The helper accepts `X`, `Projects/X` or `Tasks/X`. Don't list the graph first. On `page not found`, offer its `did you mean:` lines. Only when there are none, follow `references/matching.md`.
+1. **One call: `brain load <name>`.** Pass the user's words as-is. Don't list the graph first. On `page not found`, offer its `did you mean:` lines. Only when there are none, follow `references/matching.md`.
 2. **Read its blocks:**
    - `map: stale` or `missing`: say so, and state coverage from `computed:`. Read-only: suggest a save, never write.
    - `drift:` over 30 days: suggest a rebuild (`skills/_shared/digest.md`), never unprompted.
@@ -41,20 +41,20 @@ description: >
 
 ### Fallback: no digest
 
-`brain load` printed the section table. Read, each bounded, each with its coverage:
-- Overview's first 5 bullets: `Read` with `offset` = its line in the table, `limit 6`.
+`brain load` printed the section table. Read, bounded, with coverage:
+- Overview's first 5 bullets: `Read` `<graph:>/pages/Projects___<Name>.md` with `offset` = its line in the table, `limit 6`.
 - `brain read <page> 'Current Plan'`; over its cap, `brain tail <page> 'Current Plan' --max 8192`.
 - `brain tail <page> 'Session Log' --entries 3 --max 4096`.
 
-Build the hint from the newest entry. Then list every section you didn't fetch, with its bytes from the table (mandatory, as in step 6). Log it: `brain activity 'loaded [[Projects/<Name>]] (brief)'`. Offer a digest, quoting the bytes read: *"No digest yet — this load read ~X KB. Build one?"* Build only on yes, via Rebuild in `skills/_shared/digest.md`.
+Build the hint from the newest entry. Then list every section you didn't fetch, with its bytes from the table (mandatory). Log it: `brain activity 'loaded [[Projects/<Name>]] (brief)'`. **End with this question**, with the bytes read: *"This page has no digest yet — this load read ~X KB; a digest brings loads to about 2 KB. Build one?"* Build only on yes, via Rebuild in `skills/_shared/digest.md`.
 
 ## Full mode ("load <project> full")
 
-`brain load <name> --mode full` prints the section table and `full-budget:`. **Over 24 KB, state it and ask first.** Then run `brain read` on Overview, Current Plan, Implementation and Decisions, and `brain tail <page> 'Session Log' --entries 10 --max 8192`. Report any section refused by its cap. For each task the page references, run `brain digest Tasks/<ID>`, skipping `status:: done`. Linked `[[Projects/…]]` pages likewise get `brain digest` only, never the body. Then log it: `brain activity 'loaded [[Projects/<Name>]] (full)'` (`[[Tasks/<ID>]]` for a task page).
+`brain load <name> --mode full` prints the section table and `full-budget:`. **Over 24 KB, state it and ask first.** Then run `brain read` on Overview, Current Plan, Implementation and Decisions, and `brain tail <page> 'Session Log' --entries 10 --max 8192`. Report any section refused by its cap. For each task the page references, run `brain digest Tasks/<ID>`, skipping `status:: done`. Linked `[[Projects/…]]` pages: `brain digest` only, never the body. Then log it: `brain activity 'loaded [[Projects/<Name>]] (full)'` (`[[Tasks/<ID>]]` for a task page).
 
 ## "load brain"
 
-Read `pages/Index.md` and `pages/Meta.md` (both small). Present active projects, cross-project decisions and preferences. `brain activity 'loaded brain overview'`.
+Read `pages/Index.md` and `pages/Meta.md` (both small). Present active projects, cross-project decisions, preferences. `brain activity 'loaded brain overview'`.
 
 ## "what do we know about X"
 
