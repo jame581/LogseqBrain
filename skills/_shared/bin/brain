@@ -355,10 +355,13 @@ digest_lint() {
   return 0
 }
 
+# print_hints FILE — one "fix <rule>: …" line per rule named in column 2 of FILE, first-seen order.
+print_hints() { cut -f2 "$1" | $AWK -v BINMODE=3 -f "$LIB/hints.awk"; }
+
 cmd_check() {
   [ $# -ge 1 ] || die "usage: brain check <file|page>…"
   graph_lists
-  _crc=0
+  _crc=0; _rules="$RUN_DIR/check.rules"; : > "$_rules"
   for _a in "$@"; do
     _rel=${_a#"$GRAPH"/}
     case $_rel in pages/*|journals/*) guard_rel "$_rel" ;; *) resolve_page "$_a"; _rel=$PAGE_REL ;; esac
@@ -392,11 +395,11 @@ cmd_check() {
     [ "${_nf:-}" = 1 ] || die "check failed on $_rel — the engine linted ${_nf:-no} file(s), expected 1"
     _ne=$(cut -f2 "$_cnt"); _nw=$(cut -f3 "$_cnt"); _pre=$(cut -f4 "$_cnt")
     [ "$_lrc" = 1 ] && _crc=1
-    cat "$_lo"
+    cat "$_lo"; cat "$_lo" >> "$_rules"
     _ds=
     if [ -z "${SKIP_DIGEST_LINT:-}" ]; then
       _dl="$RUN_DIR/check-digest.out"
-      digest_lint "$_rel" > "$_dl"; cat "$_dl"
+      digest_lint "$_rel" > "$_dl"; cat "$_dl"; cat "$_dl" >> "$_rules"
       # Named in the summary, so the summary and the exit code agree: a page whose only new problem
       # is a digest finding used to print "0 new (0 error, 0 warn)" and exit 1.
       _de=$(cut -f3 "$_dl" | grep -c '^error$'); _dw=$(cut -f3 "$_dl" | grep -c '^warn$')
@@ -411,6 +414,7 @@ cmd_check() {
         "$_rel" "$((_ne + _nw))" "$_ds"
     fi
   done
+  print_hints "$_rules"
   return $_crc
 }
 
@@ -442,6 +446,7 @@ cmd_lint() {
   cat "$_out"
   _e=$(cut -f3 "$_out" | grep -c '^error$'); _w=$(cut -f3 "$_out" | grep -c '^warn$')
   _by=$(cut -f2 "$_out" | sort | uniq -c | $AWK -v BINMODE=3 '{ printf "%s%s=%s", (NR > 1 ? " · " : ""), $2, $1 }')
+  print_hints "$_out"
   echo "summary: $_e error, $_w warn${_by:+ · $_by}"
   [ $((_e + _w)) -eq 0 ]
 }
