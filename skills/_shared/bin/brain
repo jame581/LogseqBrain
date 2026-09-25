@@ -26,6 +26,7 @@ usage: brain <command> [args] [--graph DIR]
   lint [--all | <file…>]                every rule over whole files
   status                                one TSV row per project and task page
   activity <line>                       append "HH:MM <line>" under today's ## Activity
+  load <page> [--mode digest|full]      info, digest, journal, then the (digest) activity line
 EOF
 }
 
@@ -522,6 +523,47 @@ cmd_activity() {
   printf 'activity: %s → %s\n' "$_line" "$_rel"      # not echo: dash's echo expands backslashes
 }
 
+# --- composites: one process for a fixed sequence of the commands above; each block is headed
+# "== <name>" and holds that command's unchanged output. Composite locals are prefixed (_ld_, _sb_,
+# _sf_): the cmd_* functions share un-prefixed globals and reset PAGE_REL/PAGE_NAME.
+
+# load_full_budget REL — the section table without recording baselines (cmd_sections always
+# records them), then the bytes a full load reads: each of Overview, Current Plan, Implementation,
+# Decisions and Session Log, capped at 8192.
+load_full_budget() {
+  _ld_f="$GRAPH/$1"; _ld_tab="$RUN_DIR/load-sections.out"
+  run_awk sections -v rel="$1" -v nonl="$(nonl "$_ld_f")" "$_ld_f" > "$_ld_tab" || die "sections failed on $1"
+  cat "$_ld_tab"
+  $AWK -v BINMODE=3 -F '\t' '
+    $5 == "Overview" || $5 == "Current Plan" || $5 == "Implementation" || $5 == "Decisions" || $5 == "Session Log" {
+      b += ($3 + 0 > 8192 ? 8192 : $3 + 0)
+    }
+    END { printf "full-budget: %d B\n", b }' "$_ld_tab"
+}
+
+cmd_load() {
+  [ $# -ge 1 ] || die "usage: brain load <page> [--mode digest|full]"
+  _ld_pg=$1; shift; _ld_mode=digest
+  if [ "${1:-}" = --mode ]; then [ $# -ge 2 ] || die "--mode needs digest|full"; _ld_mode=$2; shift 2; fi
+  [ $# -eq 0 ] || die "unknown option: $1"
+  case $_ld_mode in digest|full) ;; *) die "--mode must be digest or full" ;; esac
+  resolve_page "$_ld_pg"; archive_of
+  _ld_rel=$PAGE_REL; _ld_name=$PAGE_NAME
+  echo "== info"; cmd_info
+  echo "== digest"; _ld_out="$RUN_DIR/load-digest.out"
+  digest_report "$GRAPH/$_ld_rel" > "$_ld_out"; _ld_rc=$?; cat "$_ld_out"
+  echo "== journal"; cmd_journal "$_ld_rel"
+  if [ "$_ld_mode" = full ]; then echo "== sections"; load_full_budget "$_ld_rel"; return $_ld_rc; fi
+  # map.awk prints a map: line only once a ## Digest exists; "digest: missing" and "not applicable"
+  # pages get the fallback, and the model logs (brief) only after it has read them.
+  if grep -q '^map: ' "$_ld_out"; then
+    echo "== activity"; cmd_activity "loaded [[$_ld_name]] (digest)"
+  else
+    printf "activity: not written — no digest; run the fallback reads, then brain activity 'loaded [[%s]] (brief)'\n" "$_ld_name"
+  fi
+  return $_ld_rc
+}
+
 cmd_status() {
   _list="$RUN_DIR/status.lst"
   (cd "$GRAPH" && ls pages/Projects___*.md pages/Tasks___*.md 2>/dev/null) | grep -v '___SessionArchive\.md$' > "$_list"
@@ -567,6 +609,7 @@ case $cmd in
   journal)           resolve_graph; init_run; cmd_journal "$@" ;;
   activity)          resolve_graph; init_run; cmd_activity "$@" ;;
   status)            resolve_graph; init_run; cmd_status ;;
+  load)              resolve_graph; init_run; cmd_load "$@" ;;
   # --- dispatch end ---
   *) die "unknown command: $cmd (try: brain help)" ;;
 esac
