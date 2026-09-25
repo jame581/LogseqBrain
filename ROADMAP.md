@@ -83,7 +83,7 @@
 
 ## Current — v0.12.0: Fewer round trips, for real (in design)
 
-- Design: `docs/superpowers/specs/2026-09-25-v0.12.0-design.md` (draft; maintainer decisions open)
+- Design: `docs/superpowers/specs/2026-09-25-v0.12.0-design.md` (approved); plan: `docs/superpowers/plans/2026-09-25-v0.12.0-fewer-round-trips.md`
 - Fix the trailing `--graph` flag, which can silently use the configured graph instead of the named one
 - Composite helper commands `brain load`, `brain save-begin` and `brain save-finish`, so a digest load is 2 calls and a save 7–11 (measured on v0.11.0: 11 and 27)
 - Instruction diet, part 2: the routine load and save read nothing but their SKILL.md
