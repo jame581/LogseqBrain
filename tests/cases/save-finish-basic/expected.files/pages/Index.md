@@ -1,0 +1,5 @@
+- ## Quick Links
+  - [[Projects/Dig]] quick
+- ## Projects
+  - [[Projects/Dig]] — test page (v2 — c)
+  - [[Projects/Other]] — other, see [[Projects/Dig]]

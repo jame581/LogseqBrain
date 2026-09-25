@@ -9,7 +9,7 @@ BIN_DIR=$(cd "$(dirname "$0")" && pwd)
 LIB=$(cd "$BIN_DIR/../lib" && pwd)
 AWK=${BRAIN_AWK:-awk}
 NL='
-'; CR=$(printf '\r')
+'; CR=$(printf '\r'); TAB=$(printf '\t')
 
 die() { printf 'brain: %s\n' "$1" >&2; exit "${2:-2}"; }
 
@@ -30,6 +30,8 @@ usage: brain <command> [args] [--graph DIR]
   activity <line>                       append "HH:MM <line>" under today's ## Activity
   load <page> [--mode digest|full]      info, digest, journal, then the (digest) activity line
   save-begin <page> [--also FILE…]      baselines, digest, Session Log tail, Current Plan, Edit anchors
+  save-finish <page> [--summary T] [--index T]
+                                        validate; Sessions, Index, Maps; check the save; activity
 EOF
 }
 
@@ -719,6 +721,102 @@ cmd_save_begin() {
   worst "$_sb_r1" "$_sb_r2" "$_sb_r3"
 }
 
+# cmd_save_finish PAGE [--summary TEXT] [--index TEXT] — the end of a save, after the model's Edits.
+# 1. Validate, writing nothing: the manifest, the texts, the digest caps and a dry-run Map on every
+#    digest-bearing page in the save. A refusal leaves the graph as it was; rerun the same command.
+# 2-4. The Sessions bullet, the Index parenthetical, the Maps (each checked against the page's
+#    checksum at validation, so a page changed since then is refused, not overwritten).
+# 5. One check over every file save-begin baselined, digest lint on.
+# 6. The activity line — deferred while the save has a new error-tier finding. A completed save
+#    consumes its manifest; a deferred one keeps it, so the printed `brain check` has its baselines.
+cmd_save_finish() {
+  [ $# -ge 1 ] || die "usage: brain save-finish <page> [--summary TEXT] [--index TEXT]"
+  _sf_pg=$1; shift; _sf_sum=; _sf_hs=0; _sf_idx=; _sf_hi=0
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --summary) [ $# -ge 2 ] || die "--summary needs text"; _sf_sum=$2; _sf_hs=1; shift 2 ;;
+      --index)   [ $# -ge 2 ] || die "--index needs text";   _sf_idx=$2; _sf_hi=1; shift 2 ;;
+      *) die "unknown option: $1" ;;
+    esac
+  done
+  resolve_page "$_sf_pg"; _sf_rel=$PAGE_REL; _sf_name=$PAGE_NAME
+  _sf_m=$(save_manifest_path "$_sf_rel")
+  if [ ! -f "$_sf_m" ] || ! manifest_fresh "$_sf_m"; then
+    die "no save-begin for $_sf_name in the last 12 h — run brain save-begin first"
+  fi
+  _sf_files="$RUN_DIR/save-finish.files"; sed -n 's/^file //p' "$_sf_m" > "$_sf_files"
+  case $_sf_rel in pages/Projects___*) _sf_proj=1 ;; *) _sf_proj=0 ;; esac
+
+  # 1. Validate.
+  _sf_bad=0
+  if [ "$_sf_hs" = 1 ]; then validate_text summary "$_sf_name" "$_sf_sum" || _sf_bad=1; fi
+  if [ "$_sf_hi" = 1 ] && [ "$_sf_proj" = 1 ]; then validate_text index "$_sf_name" "$_sf_idx" || _sf_bad=1; fi
+  [ "$_sf_bad" = 0 ] || exit 1
+  _sf_maps="$RUN_DIR/save-finish.maps"; : > "$_sf_maps"; _sf_over=0; _sf_i=0
+  while IFS= read -r _sf_f || [ -n "$_sf_f" ]; do
+    case $_sf_f in pages/Projects___*|pages/Tasks___*) ;; *) continue ;; esac
+    [ -f "$GRAPH/$_sf_f" ] || continue
+    PAGE_REL=$_sf_f; PAGE_NAME=$(basename "$_sf_f" .md | sed 's#___#/#g'); archive_of
+    _sf_rep="$RUN_DIR/save-finish.report"
+    digest_report "$GRAPH/$_sf_f" > "$_sf_rep"
+    grep -q '^digest: not applicable' "$_sf_rep" && continue
+    # An --also page with no ## Digest yet is not this save's to backfill; the saved page is.
+    if [ "$_sf_f" != "$_sf_rel" ] && grep -q '^digest: missing' "$_sf_rep"; then continue; fi
+    if grep -q '^over: ' "$_sf_rep"; then
+      if [ "$_sf_f" = "$_sf_rel" ]; then grep '^over: ' "$_sf_rep"
+      else grep '^over: ' "$_sf_rep" | sed "s#^#$_sf_f: #"; fi
+      _sf_over=1; continue
+    fi
+    _sf_i=$((_sf_i + 1)); _sf_out="$RUN_DIR/save-finish.map.$_sf_i"
+    _sf_ck=$(cksum < "$GRAPH/$_sf_f")
+    apply_compute "$GRAPH/$_sf_f" "$_sf_out" || exit 2      # map.awk or apply_compute named the reason
+    printf '%s\t%s\t%s\n' "$_sf_f" "$_sf_out" "$_sf_ck" >> "$_sf_maps"
+  done < "$_sf_files"
+  if [ "$_sf_over" = 1 ]; then echo "fix the digest with one Edit and rerun this same command"; exit 1; fi
+
+  # 2-3. The two text writes.
+  if [ "$_sf_hs" = 1 ]; then echo "== sessions"; write_sessions "$_sf_name" "$_sf_sum"; fi
+  if [ "$_sf_hi" = 1 ]; then
+    echo "== index"
+    case $_sf_rel in
+      pages/Projects___*) write_index "$_sf_name" "$_sf_idx" ;;
+      pages/Tasks___*)    echo "index: not applicable (task page)" ;;
+      *)                  echo "index: not applicable (not a project page)" ;;
+    esac
+  fi
+
+  # 4. The Maps, then the saved page's report.
+  echo "== map"
+  while IFS="$TAB" read -r _sf_f _sf_out _sf_ck || [ -n "$_sf_f" ]; do
+    apply_commit "$_sf_f" "$_sf_out" "$_sf_ck"
+  done < "$_sf_maps"
+  PAGE_REL=$_sf_rel; PAGE_NAME=$_sf_name; archive_of
+  digest_report "$GRAPH/$_sf_rel" > "$_sf_rep"
+  if grep -q '^digest: not applicable' "$_sf_rep"; then echo "map: not applicable"; else cat "$_sf_rep"; fi
+
+  # 5. One check over the save set. A file absent now that was absent at save-begin was not written.
+  echo "== check"
+  set --
+  while IFS= read -r _sf_f || [ -n "$_sf_f" ]; do
+    _sf_b="$STATE_DIR/base/$(printf '%s' "$_sf_f" | sed 's#/#%#g')"
+    if [ ! -f "$GRAPH/$_sf_f" ] && [ ! -s "$_sf_b" ]; then echo "check $_sf_f: not written (absent)"; continue; fi
+    set -- "$@" "$_sf_f"
+  done < "$_sf_files"
+  _sf_crc=0
+  if [ $# -gt 0 ]; then SKIP_DIGEST_LINT=; cmd_check "$@"; _sf_crc=$?; fi
+
+  # 6. The activity line.
+  echo "== activity"
+  if [ "$_sf_crc" = 0 ]; then
+    cmd_activity "saved [[$_sf_name]]"
+    rm -f "$_sf_m"
+    return 0
+  fi
+  _sf_q=; for _sf_f in "$@"; do _sf_q="$_sf_q '$_sf_f'"; done
+  printf "activity: deferred — fix the errors above, then run: brain check%s && brain activity 'saved [[%s]]'\n" "$_sf_q" "$_sf_name"
+  return 1
+}
+
 # manifest_fresh FILE — its ts line is within the 12 h baseline expiry.
 manifest_fresh() {
   _mf=$(sed -n 's/^ts //p' "$1")
@@ -773,6 +871,7 @@ case $cmd in
   status)            resolve_graph; init_run; cmd_status ;;
   load)              resolve_graph; init_run; cmd_load "$@" ;;
   save-begin)        resolve_graph; init_run; cmd_save_begin "$@" ;;
+  save-finish)       resolve_graph; init_run; cmd_save_finish "$@" ;;
   # Test-only arms: each new writer and the validator alone (tests/cases/sessions-*, index-*, validate-*).
   _write-sessions|_write-index|_validate)
     [ "${BRAIN_TEST_INTERNAL:-}" = 1 ] || die "unknown command: $cmd (try: brain help)"
