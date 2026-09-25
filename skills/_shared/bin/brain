@@ -13,7 +13,8 @@ die() { printf 'brain: %s\n' "$1" >&2; exit "${2:-2}"; }
 
 usage() {
   cat <<'EOF'
-usage: brain [--graph DIR] <command> [args]
+usage: brain <command> [args] [--graph DIR]
+  --graph may appear anywhere; -- ends flag parsing
   info                                  version, graph source, awk in use
   sections <page> [--baseline FILE…]    section table; records baselines for check
   read <page> <section> [--max BYTES]   whole section if under the cap (default 8192)
@@ -465,8 +466,22 @@ cmd_journal() {
   [ "$_rc" = 0 ] || die "journal failed on $_rel (awk exit $_rc)"
 }
 
+# flag_text_guard WHAT TEXT — refuse text whose first or last word is a --graph flag: a quoting
+# slip that would otherwise write the flag (and a path) into the journal.
+flag_text_guard() {
+  _fg_what=$1; _fg_text=$2
+  set -f; set -- $_fg_text; set +f        # split on whitespace, never expand globs
+  [ $# -gt 0 ] || return 0
+  _fg_first=$1; eval "_fg_last=\${$#}"
+  for _fg_w in "$_fg_first" "$_fg_last"; do
+    case $_fg_w in --graph|--graph=*) die "$_fg_what text contains a --graph flag — pass it outside the text" ;; esac
+  done
+  return 0
+}
+
 cmd_activity() {
   [ $# -ge 1 ] || die "usage: brain activity <text>"
+  flag_text_guard activity "$*"
   if [ "$(json_get journeyLog "$(config_file)")" = false ]; then echo "journey log disabled (journeyLog: false)"; return 0; fi
   _d=$TODAY; _rel="journals/$(printf '%s' "$_d" | tr '-' '_').md"; _t="$GRAPH/$_rel"
   _line="$(now_hm) $*"
@@ -493,14 +508,26 @@ cmd_status() {
 
 # --- commands end ---
 
-OPT_GRAPH=
-while [ $# -gt 0 ]; do
-  case $1 in
-    --graph)   [ $# -ge 2 ] || die "--graph needs a directory"; OPT_GRAPH=$2; shift 2 ;;
-    --graph=*) OPT_GRAPH=${1#--graph=}; shift ;;
-    *) break ;;
+# --graph is accepted anywhere on the line: models write `brain info --graph DIR`, and a flag the
+# loop stopped short of used to run silently against the configured graph (and land in activity
+# text). `--` ends flag parsing and is consumed. The loop rotates "$@" in place: each argument is
+# either taken as the flag (with its value) or re-appended, so kept arguments keep their exact bytes.
+OPT_GRAPH=; _gset=0; _dd=0; _n=$#
+while [ "$_n" -gt 0 ]; do
+  _a=$1; shift; _n=$((_n - 1))
+  if [ "$_dd" = 1 ]; then set -- "$@" "$_a"; continue; fi
+  case $_a in
+    --)        _dd=1 ;;
+    --graph)   [ "$_n" -ge 1 ] || die "--graph needs a directory"
+               [ "$_gset" = 0 ] || die "--graph given twice"
+               OPT_GRAPH=$1; _gset=1; shift; _n=$((_n - 1)) ;;
+    --graph=*) [ "$_gset" = 0 ] || die "--graph given twice"
+               OPT_GRAPH=${_a#--graph=}; _gset=1 ;;
+    *)         set -- "$@" "$_a" ;;
   esac
 done
+# An empty value would fall through to LOGSEQ_BRAIN_PATH or the config: the wrong-graph bug again.
+[ "$_gset" = 0 ] || [ -n "$OPT_GRAPH" ] || die "--graph needs a directory"
 cmd=${1:-help}; [ $# -gt 0 ] && shift
 case $cmd in
   help|-h|--help)    usage ;;
