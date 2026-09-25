@@ -25,7 +25,7 @@ Persist session context to the Claude Brain Logseq graph, for continuity across 
 1. **Targets.** Take the project from the names, files and repos discussed, or the user's words. If unclear, ask: "This touched [X] and [Y] — save to both?" Several pages are saved **one at a time**, each running steps 2–7 before the next begins.
 
 2. **`brain save-begin <page> [--also FILE…]`.** Don't list the graph first. It baselines the page, `pages/Index.md` and today's journal, and prints what you edit:
-   - `== digest`: the property block and `## Digest`;
+   - `== digest`: the property block and `## Digest` (a `map: stale` or `missing` here is expected: `save-finish` recomputes the Map);
    - `== session-log`: the newest entry;
    - `== current-plan`;
    - `== anchors`: the page's Index line and the end of today's `## Sessions`.

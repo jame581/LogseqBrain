@@ -685,12 +685,16 @@ cmd_save_begin() {
   fi
   resolve_page "$_sb_pg"
   _sb_rel=$PAGE_REL; _sb_name=$PAGE_NAME; _sb_journal=$(today_file)
+  case $_sb_rel in
+    pages/Projects___*|pages/Tasks___*) ;;
+    *) die "save-begin takes a project or task page (pages/Projects___… or pages/Tasks___…); pass $_sb_rel with --also" ;;
+  esac
   for _sb_a in "$@"; do guard_rel "${_sb_a#"$GRAPH"/}"; done
   echo "== info"; cmd_info
   echo "== sections"; _sb_tab="$RUN_DIR/save-begin-sections.out"
   cmd_sections "$_sb_rel" --baseline pages/Index.md "$_sb_journal" "$@" > "$_sb_tab"; cat "$_sb_tab"
   PAGE_REL=$_sb_rel; PAGE_NAME=$_sb_name; archive_of
-  echo "== digest"; digest_report "$GRAPH/$_sb_rel"; _sb_r1=$?
+  echo "== digest"; digest_report "$GRAPH/$_sb_rel"
   echo "== session-log"; _sb_r2=0
   if [ -z "$(table_bytes "$_sb_tab" 'Session Log')" ]; then echo "session-log: none"
   else cmd_read_tail tail "$_sb_rel" "Session Log" --entries 1 --max 4096; _sb_r2=$?; fi
@@ -718,11 +722,16 @@ cmd_save_begin() {
     printf 'file %s\n' "$_sb_rel" pages/Index.md "$_sb_journal"
     for _sb_a in "$@"; do printf 'file %s\n' "${_sb_a#"$GRAPH"/}"; done
     if [ -f "$_sb_m" ] && manifest_fresh "$_sb_m"; then grep '^file ' "$_sb_m"; fi
-  } | $AWK '!seen[$0]++' > "$_sb_m.$$.files" || die "cannot write the save manifest"
+  } | $AWK -v BINMODE=3 '!seen[$0]++' > "$_sb_m.$$.files" || die "cannot write the save manifest"
+  # Every file in the manifest gets a fresh baseline, inherited ones too: a file kept from an earlier
+  # save-begin (say, after a deferred save-finish) would otherwise be checked against its old snapshot.
+  while IFS= read -r _sb_l || [ -n "$_sb_l" ]; do save_baseline "${_sb_l#file }"; done < "$_sb_m.$$.files"
   { printf 'page %s\n' "$_sb_rel"; cat "$_sb_m.$$.files"; printf 'ts %s\n' "$(date +%s)"; } > "$_sb_m.$$" \
     && mv "$_sb_m.$$" "$_sb_m" || die "cannot write the save manifest"
   rm -f "$_sb_m.$$.files"
-  worst "$_sb_r1" "$_sb_r2" "$_sb_r3"
+  # Digest findings (a stale or missing Map, a cap) don't count: a page edited in Logseq since the
+  # last save is routinely stale, and save-finish recomputes and rechecks the digest anyway.
+  worst "$_sb_r2" "$_sb_r3"
 }
 
 # cmd_save_finish PAGE [--summary TEXT] [--index TEXT] — the end of a save, after the model's Edits.
@@ -750,6 +759,7 @@ cmd_save_finish() {
   fi
   _sf_files="$RUN_DIR/save-finish.files"; sed -n 's/^file //p' "$_sf_m" > "$_sf_files"
   case $_sf_rel in pages/Projects___*) _sf_proj=1 ;; *) _sf_proj=0 ;; esac
+  _sf_rep="$RUN_DIR/save-finish.report"
 
   # 1. Validate.
   _sf_bad=0

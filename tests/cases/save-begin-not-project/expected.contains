@@ -1,0 +1,1 @@
+brain: save-begin takes a project or task page (pages/Projects___… or pages/Tasks___…); pass pages/Meta.md with --also
