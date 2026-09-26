@@ -1,0 +1,40 @@
+{
+ "schemaVersion": 1,
+ "claudeVersion": "2.1.270",
+ "durationSeconds": 30,
+ "costUsd": 0.21,
+ "partial": false,
+ "suite": {
+  "ablation": "none",
+  "threshold": 1
+ },
+ "cases": [
+  {
+   "name": "load-digest",
+   "arms": {
+    "with": [
+     {
+      "score": 1,
+      "passed": true,
+      "costUsd": 0.21,
+      "durationSeconds": 30,
+      "error": null,
+      "tracePath": "trace-load.jsonl",
+      "graders": [
+       {
+        "name": "not-read",
+        "passed": true,
+        "explanation": "matched not read",
+        "scored": true
+       }
+      ]
+     }
+    ]
+   },
+   "aggregates": {
+    "score": 1,
+    "passRate": 1
+   }
+  }
+ ]
+}

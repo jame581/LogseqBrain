@@ -20,6 +20,7 @@ skills/
 tests/                  # Golden-file suite for the helper: `sh tests/run.sh`
 evals/                  # claude plugin eval suite, run locally in WSL2: see evals/README.md
 tools/                  # Dev-only oracle, measurement and eval-wrapper scripts, not shipped
+docs/reference/         # Developer-only contracts the helper implements (Map computation, lint detection), not shipped
 ROADMAP.md              # Shipped / Current / Future phases (verify shipped status by reading skills)
 CLAUDE.md               # Guidance for agents working in this repo
 ```
@@ -79,7 +80,7 @@ export LOGSEQ_BRAIN_PATH=/tmp/scratch-brain
 5. `load ScratchProject full` — verify full-mode load. Verify `## Activity` gains `loaded [[Projects/ScratchProject]] (full)`.
 6. `brain status` — verify dashboard. Verify `## Activity` gains `viewed dashboard`.
 7. `what do we know about X` — verify search. Verify `## Activity` gains `searched "X" · N hits`.
-8. **Token check.** Add ~200 lines of fake Session Log entries, then load and save. Count tool calls per operation (`python tools/measure/cost.py --since <today>`): a digest load ≤ 4, a save ≤ 13. `cost.py` counts from the brain Skill call onward, and brain-load's own mandated steps are already 5 calls, so a load reads over 4: record the figure rather than fail on it. No full-file Reads.
+8. **Token check.** Add ~200 lines of fake Session Log entries, then load and save. Count tool calls per operation (`python tools/measure/cost.py --since <today>`, which counts from the brain Skill call onward): a digest load ≤ 4 (its shape is 2: Skill, `brain load`), a save ≤ 13 (shape 7: Skill, `save-begin`, one Read, three Edits, `save-finish`). Over either target is a failure, as it is in the eval suite. No full-file Reads.
 9. **Surgical edits.** For `brain-save`, confirm the Edit was anchored to a section (no whole-page rewrite).
 10. **Config toggle.** Set `"journeyLog": false` in the user config file (`%APPDATA%\logseq-brain\config.json` on Windows; on macOS/Linux `$XDG_CONFIG_HOME/logseq-brain/config.json` if `XDG_CONFIG_HOME` is set, else `~/.config/logseq-brain/config.json`). Re-run any of the above. Verify `## Activity` does NOT gain a new bullet. Restore to `journeyLog: true` and verify activity logging resumes.
 11. **Durable config.** Resolve a path by answering the prompt; confirm it persists to the user config file. Simulate `/reload-plugins` (or delete the plugin cache) and re-run — confirm no re-prompt. Set `LOGSEQ_BRAIN_PATH` to a different graph and confirm it overrides the file.
@@ -97,7 +98,11 @@ export LOGSEQ_BRAIN_PATH=/tmp/scratch-brain
 23. **Dashboard:** `brain status` is one call; a project with no digest falls back alone, and the count is reported.
 24. **Doctor:** `missing-digest` lists exactly the un-backfilled pages largest-first; `backfill digests` states the read cost before doing any work.
 25. **Oracle.** `python tools/oracle/oracle.py --graph <graph>` exits 0 on the live graph and on `tools/oracle/fixture-graph`. For the fixture graph, copy it **outside the repo first** and open the copy in Logseq desktop (see `tools/oracle/README.md`) — opening the in-tree copy makes Logseq generate `logseq/bak`, `logseq/version-files`, and possibly `.recycle/` inside the tracked working tree, none of which `.gitignore` covers, so a careless `git add` commits generated cruft.
-26. **PowerShell host.** On Windows, run `brain status` through Git's `bash.exe` from PowerShell (`skills/_shared/run-brain.md`) and confirm the output matches the Bash run.
+26. **PowerShell host.** On Windows, run `brain status` through Git's `bash.exe` from PowerShell (the invocation block in any `SKILL.md`) and confirm the output matches the Bash run.
+27. **A refused save-finish writes nothing.** Push a digest prose slot over 800 B, then save: `save-finish` refuses with `over:` lines, and the page, `pages/Index.md` and today's journal are byte-identical. Shorten the slot with one Edit, rerun the same command, and it completes.
+28. **Activity deferral.** Save a Session Log entry with a bare `#44`: `save-finish` writes the Sessions bullet, the Index text and the Map, reports the new error, and prints `activity: deferred` with the commands to run. Fix the line, run them, and exactly one `saved` activity line appears.
+29. **A backticked token survives.** Save with a summary that names `someFunction()` in backticks: the `## Sessions` bullet carries it byte for byte, and no shell output says `command not found`.
+30. **Multi-project save.** A session that touched two projects: each page runs `save-begin` → Edits → `save-finish` in turn, both pages get their Session Log entry and Map, the journal gets both Sessions bullets, and each `save-finish` checks only its own save's files.
 
 ## Releasing a new version
 
@@ -105,7 +110,7 @@ Releases follow semver and are cut from `main`.
 
 0. The `tests` workflow is green on the release commit.
 1. The eval suite passes on the release commit: `sh tools/eval/run.sh`, run as the `logseq-eval` WSL user, exits 0 — every case passes, and the summary shows both `canary: sentinels unchanged (/tmp and Windows mount)` and `canary: confinement re-proven` ([`evals/README.md`](./evals/README.md)). If the Windows half cannot run, the wrapper refuses: restore WSL interop with `wsl --shutdown` and rerun; or, after a run with `EVAL_CANARY_SKIP_WIN=1`, rerun `--case isolation-canary` with `EVAL_CANARY_WINDIR` set, and record both results in the release notes. A failed case may be rerun once with `--case <name>`: a pass on the rerun goes in the release notes as a flake, and a second failure blocks the release. A usage-limit error in the summary is not a failure; rerun after the limit resets. Put the `load-digest` and `save-basic` tool-call figures from its summary in the release notes. It runs locally only; CI keeps running the golden tests.
-2. Update `.claude-plugin/plugin.json` → `"version": "X.Y.Z"`.
+2. Update `.claude-plugin/plugin.json` → `"version": "X.Y.Z"`, and `BRAIN_VERSION` in `skills/_shared/bin/brain` to match (the `version-matches-plugin` golden case fails until both agree).
 3. Update `ROADMAP.md` if phase status changed.
 4. Commit with a `chore: prepare vX.Y.Z release` message.
 5. Tag and push:

@@ -56,8 +56,8 @@ wsl -d FedoraLinux-44 -u logseq-eval -e env EVAL_CANARY_WINDIR=/mnt/c/Users/<you
 
 **What the wrapper prints.** A table with a row per case: pass/fail, tool calls, the target for the two measured cases, cost and time.
 - Tool calls are counted from the first `brain-` Skill call onward, as `tools/measure/cost.py` counts them.
-- The targets (`load-digest` ≤ 4, `save-basic` ≤ 13) are flagged `OVER` when exceeded, but never fail a run: one run per case is one sample.
-- brain-load's own mandated steps are already 5 calls, so `load-digest` reads `OVER` by construction.
+- The targets (`load-digest` ≤ 4, `save-basic` ≤ 13) are **pass criteria** since v0.12.0 (spec `2026-09-25-v0.12.0-design.md` §5). An over-target run is flagged `OVER`, listed with the failures, and fails its case. `claude plugin eval` has no grader that counts every tool call, so `tools/eval/summarize.py` applies the gate. One run per case is one sample: before changing prose over a single `OVER`, run `python3 tools/eval/summarize.py breakdown <trace>` to see where the calls went.
+- Since v0.12.0 the routine shapes are 2 calls (`load-digest`: Skill, `brain load`) and 7 (`save-basic`: Skill, `save-begin`, one Read, three Edits, `save-finish`).
 
 **Where results go.** The summary, the harness's JSON and HTML report, and each run's trace go to `evals/results/<timestamp>/`. An interrupted run (HUP, INT or TERM) keeps what the harness wrote in `<timestamp>-partial/`, with a `canary.txt` that compares the sentinels before they are deleted. The directory is gitignored because traces are full transcripts.
 
@@ -108,10 +108,11 @@ wsl -d FedoraLinux-44 -u logseq-eval -e sh -c 'rm -rf ~/logseq-eval-run.* /mnt/c
 | Case | Checks |
 |---|---|
 | `isolation-canary` | Bash, Write and Edit are each attempted, and none changes the sentinels. `LOGSEQ_BRAIN_PATH` is unset inside the run |
-| `load-digest` | brain-load fires. One `brain digest`, no `--apply`. The page is not read with Read or through the shell. The reply says what was not read. The `(digest)` activity line is written. Tool calls against ≤ 4 |
+| `load-digest` | brain-load fires. One `brain load` (or `brain digest`), no `--apply`. The page is not read with Read or through the shell. The reply says what was not read. The `(digest)` activity line is written. Tool calls ≤ 4, gating |
 | `load-no-digest` | Coverage is stated. The skill offers to build a digest (its "Build one?", or an invitation such as "say the word") but does not build one: the page still has no `## Digest` and was neither edited nor rewritten. `Projects/Legacy` is 5.9 KB, so the fallback reads about 4.8 KB and the skill's "a digest brings loads to about 2 KB" is true |
 | `search-scoped` | "what do we know about export?" (33 hits) gets a `brain search` whose output is counts only. No whole-page Read, no `cat`. Coverage is stated |
-| `save-basic` | A Session Log entry. The save's own `brain check` prints a line for Index and for the journal, and no `brain check` line reports a new error on any file, digest findings included. The `saved` activity line. Tool calls against ≤ 13 |
+| `save-basic` | A Session Log entry. The save's own `brain check` prints a line for Index and for the journal, and no `brain check` line reports a new error on any file, digest findings included. The `saved` activity line. The backticked `uploadCsv()` reaches the `## Sessions` bullet intact, and no shell ever ran it. Tool calls ≤ 13, gating |
+| `graph-flag-trailing` | The user config points at a decoy graph and the prompt names `./graph`. A `brain info` without `--graph` reports `graph-source: config` (proof the sandbox reads the config, so the decoy is in play). The load reports `graph-source: flag`, the `(digest)` activity line is written, no activity bullet carries `--graph`, and the decoy gains no journal |
 | `save-phantom-syntax` | With a bare `#12`, `C#-parity` and PR `#44` in the session, the Session Log gets the `44`. The save's own `brain check` prints a line for Index and for the journal, and no `brain check` line ever reports a new error on any file, digest findings included, not even one that is later fixed |
 | `status-dashboard` | brain-status fires and brain-load does not. Exactly one `brain status` call. The counts line |
 | `doctor-report-only` | The planted bare `#44` is reported. No Write or Edit call, no Bash call with `--apply`, and `PR #44` is still in `Notes.md` afterwards, so a scripted repair fails too |
@@ -128,7 +129,7 @@ wsl -d FedoraLinux-44 -u logseq-eval -e sh -c 'rm -rf ~/logseq-eval-run.* /mnt/c
 2. **The graph.** Add `case.yaml` with `context.scaffold_script: scaffold.sh`, and a `scaffold.sh` that runs `sh "$(dirname "$0")/../fixtures/materialize.sh" graph [overlay-dir]`. A scaffold does **not** receive `EVAL_*` variables; the agent's Bash does.
 3. **`graders/*.md`, deterministic only.**
    - Write `pattern` and `input_match` as single-quoted YAML scalars; `tools/eval/lint_cases.py` reports any other form.
-   - `tool_used` inputs are matched JSON-encoded, so a quote in a command is `\"`. Match helper calls with this pattern rather than literal quotes: `(?:bin/brain|--graph\W+[^\s"\\]+)\W+(?:--graph\W+[^\s"\\]+\W+)?<command>\b(?!(?:[^;&|"\\]|\\[^n])*--graph\W)`. The tail rejects a subcommand placed before `--graph`, which exits 2. It stops at a bare `"`, the end of the command string, so the Bash tool's `description` field cannot affect the match.
+   - `tool_used` inputs are matched JSON-encoded, so a quote in a command is `\"`. Match helper calls with this pattern rather than literal quotes: `(?:bin/brain|--graph\W+[^\s"\\]+)\W+(?:--graph\W+[^\s"\\]+\W+)?<command>\b`. Since v0.12.0 the helper accepts `--graph` anywhere, so a pattern must not reject a trailing `--graph` (before v0.12.0 such a call exited 2, and graders carried a tail that rejected it).
    - A must-not-fire `tool_used: Skill` grader (`min: 0`, `max: 0`) also sets `arm: both`. Otherwise a two-arm run reports it as an unscored indicator.
    - Grade "no new errors" with `match: not_contains` over the trace's check lines, including their ` · digest: <E> error` suffix, as `save-basic/graders/never-new-error.md` does. A `contains` pattern for a clean line passes as soon as any clean line exists.
    - A `trace` target also contains the prompt and every file the agent read. A `not_contains` pattern must occur in neither: `skills/_shared/hygiene-rules.md` quotes an example `check pages/Projects___X.md` line.

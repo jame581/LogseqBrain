@@ -2,7 +2,8 @@ case                   run result score tools target       cost  time
 load-digest              1 pass    1.00     5 <=4 OVER    $0.21   30s
 save-basic               1 FAIL    0.50    12 <=13 ok     $0.60   60s
 no-trigger               1 FAIL    0.00     - -           $0.10    5s
-total: 3 cases, 1 passed · cost $0.91 · 95s
+total: 3 cases, 0 passed · cost $0.91 · 95s
 failed graders and run errors:
+  load-digest #1: 5 tool calls, over the target of 4
   save-basic #1 / check-clean: no match for check pages/Projects___Demo
   no-trigger #1: run error: max turns reached

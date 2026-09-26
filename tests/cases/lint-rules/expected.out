@@ -5,4 +5,10 @@ journals/2026_09_10.md:4	relative-link	error	docs/specs/x.md
 journals/2026_09_10.md:5	jira-markup	error	h3. Shrnutí
 journals/2026_09_10.md:6	jira-markup	error	[~jan.m] please check {code}x{code}
 journals/2026_09_10.md:10	new-property-key	warn	new-key:: used nowhere else in the graph
+fix code-in-braces: replace {{X}} with backticks `X` (double backticks if X holds a backtick)
+fix unnamespaced-link: namespace the link: [[CRMGM-1234]] -> [[Tasks/CRMGM-1234]]
+fix file-link: use a markdown link [name](file:///path) or backticks, never [[file:...]]
+fix relative-link: keep the label and backtick the path, or use a file:/// markdown link
+fix jira-markup: put the Jira draft verbatim in a fenced code block under a one-line pointer bullet
+fix new-property-key: reuse an existing key (next-action::, open-questions::) or write it as prose
 summary: 6 error, 1 warn · code-in-braces=1 · file-link=1 · jira-markup=2 · new-property-key=1 · relative-link=1 · unnamespaced-link=1

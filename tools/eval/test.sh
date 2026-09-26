@@ -16,11 +16,18 @@ trap 'rm -f "$out" "$out.raw" "$out.want"' EXIT
 
 "$PY" "$HERE/summarize.py" table "$T/result.json" > "$out" 2>&1
 check summarize-table 1 $? "$T/expected-table.txt" "$out"
+# The call targets gate (v0.12.0 spec §5): every grader passed, but load-digest took 5 calls > 4.
+"$PY" "$HERE/summarize.py" table "$T/result-over.json" > "$out" 2>&1
+check summarize-table-over-target 1 $? "$T/expected-table-over.txt" "$out"
+"$PY" "$HERE/summarize.py" table "$T/result-ok.json" > "$out" 2>&1
+check summarize-table-within-target 0 $? "$T/expected-table-ok.txt" "$out"
 
 "$PY" "$HERE/summarize.py" traces "$T/result.json" > "$out.raw" 2>&1; rc=$?
 sed "s#$T/##" "$out.raw" > "$out"
 printf 'load-digest\t1\ttrace-load.jsonl\nsave-basic\t1\ttrace-save.jsonl\n' > "$out.want"
 check summarize-traces 0 "$rc" "$out.want" "$out"
+"$PY" "$HERE/summarize.py" breakdown "$T/trace-breakdown.jsonl" > "$out" 2>&1
+check summarize-breakdown 0 $? "$T/expected-breakdown.txt" "$out"
 
 "$PY" "$HERE/summarize.py" bogus > "$out" 2>&1; rc=$?
 if [ "$rc" = 2 ] && grep -q 'summarize.py table RESULT_JSON' "$out"; then echo "ok   summarize-usage"
@@ -44,8 +51,11 @@ for s in "$REPO"/evals/*/scaffold.sh; do
   [ -f "$s" ] || continue
   c=$(basename "$(dirname "$s")"); w=$(mktemp -d) || exit 2
   mkdir -p "$w/cwd" "$w/home"
+  # graph-flag-trailing's decoy only proves anything with the user config written and no digest to load.
+  extra=true
+  [ "$c" = graph-flag-trailing ] && extra='[ -s "$w/home/.config/logseq-brain/config.json" ] && ! grep -q "## Digest" "$w/cwd/decoy/pages/Projects___Demo.md"'
   if (cd "$w/cwd" && env -i HOME="$w/home" PATH=/usr/bin:/bin bash "$s") > "$w/log" 2>&1 \
-     && [ -f "$w/cwd/graph/pages/Index.md" ] && ! grep -rq '@TODAY' "$w/cwd/graph"; then
+     && [ -f "$w/cwd/graph/pages/Index.md" ] && ! grep -rq '@TODAY' "$w/cwd/graph" && eval "$extra"; then
     echo "ok   scaffold $c"
   else
     echo "FAIL scaffold $c: $(cat "$w/log")"; fail=1

@@ -8,4 +8,6 @@ pages/Tasks___Lint.md:5	bare-hash-tag	error	#**b** (punct)
 pages/Tasks___Lint.md:7	bare-hash-tag	error	#.a (punct)
 pages/Tasks___Lint.md:7	bare-hash-tag	error	#;b (punct)
 pages/Tasks___Lint.md:1	missing-digest	warn	no ## Digest section
+fix bare-hash-tag: backtick the token (`#44`, `C#`) or rephrase; never # directly before non-space text
+fix missing-digest: a Map-less digest: brain digest <page> --apply; no digest: offer a rebuild (digest.md)
 summary: 9 error, 1 warn · bare-hash-tag=9 · missing-digest=1

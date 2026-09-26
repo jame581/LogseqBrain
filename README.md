@@ -59,8 +59,9 @@ Then say **"init brain"** to set up the graph structure, and **"init brain proje
 - "init brain project MyProject" — adds a new project page
 
 **brain-load** — Load project context into the current session.
-- "load MyProject" — loads the project's **digest**: **one** read of the page, ~1.5 KB no matter how big the page is, plus today's journal entry for that project if there is one (targeting ~2 KB). It tells you exactly what it *didn't* read
+- "load MyProject" — loads the project's **digest** in one helper call: ~1.5 KB no matter how big the page is, plus today's journal entry for that project if there is one (targeting ~2 KB). It tells you exactly what it *didn't* read
 - Anything it didn't read is one question away — ask and it greps for just that, announcing each step
+- Since v0.12.0 a digest load is 2 tool calls and a save about 6, down from 11 and 27 (measured with the eval suite in `evals/`)
 - "load MyProject full" — loads everything including decisions, implementation, linked tasks
 - "load brain" — loads a high-level overview of all projects
 - "what do we know about strategy pattern" — searches across the graph
@@ -71,24 +72,26 @@ Then say **"init brain"** to set up the graph structure, and **"init brain proje
 - "remember this" — save specific information
 - Automatically detects multi-project sessions and Jira task context
 - Updates Meta.md when new user preferences are discovered
-- Jira comment drafts are stored verbatim in fenced code blocks, then verified with a mechanical post-write check over the files just written
+- Jira comment drafts are stored verbatim in fenced code blocks
+- Every save ends with one helper call that writes the journal's `## Sessions` bullet, the `Index.md` one-liner and the digest Map, then checks every file the save touched for format problems before it logs the save. Text it would write is checked *before* writing, so a refused save leaves the graph untouched
 - Seeds and updates task `status::` as work progresses, and suggests Session Log rotation to a `SessionArchive` page once a project page grows past 64 KB / 40 entries
-- Refreshes the project's `Index.md` one-liner on every save
-- Refreshes the page's digest on every save, so the cheap-recall surface never goes stale
+- Refreshes the project's `Index.md` one-liner and the page's digest on every save, so the cheap-recall surface never goes stale; a page without a digest gets one on its first save
 
 **brain-status** — Quick dashboard of all projects.
 - "brain status" — shows all projects with status, last activity, current focus
 - "show projects" — same as above
 - Flags stale projects that haven't been updated recently
 - Groups task pages by `status::` (active, blocked, done)
-- Builds the whole dashboard from a single search across digest properties
+- Builds the whole dashboard from one `brain status` call over every project and task page's digest properties
+- "brain stats" — graph analytics: projects, tasks, decisions, sessions, recent activity
 
 **brain-doctor** — Lint and repair the graph (graph hygiene).
 - "brain doctor" / "check brain health" — scans for format problems and reports them
 - "fix brain" / "clean up brain" — repairs them after a backup and your confirmation
-- Catches the things that quietly create empty "phantom" pages or broken macros: code wrapped in `{{ }}`, bare `#number`/hex tags, un-namespaced `[[Task]]` links, `[[file://]]` links; also flags malformed properties, broken/duplicate entries, and structural gaps
+- Catches the things that quietly create empty "phantom" pages or broken macros: code wrapped in `{{ }}`, bare `#number`/hex tags (and `#` after a letter, as in `C#-parity`), un-namespaced `[[Task]]` links, `[[file://]]` links, relative file links, and links whose description is itself a link
+- Also flags malformed properties, links to pages that don't exist, one-off property keys, duplicate entries and structural gaps
 - Reports unfenced Jira markup residue and guides a one-time batch backfill of missing task `status::`
-- Reports pages with a missing, stale, or oversized digest, and can backfill them in one guided pass ("backfill digests")
+- Reports digests that are missing, stale, over their 800 B cap, or whose Map is stale, mislabelled, duplicated or can't converge, and can backfill missing ones in one guided pass ("backfill digests")
 
 ## Graph Structure
 
@@ -98,7 +101,9 @@ ClaudeBrain/
 │   ├── Index.md                    ← master index
 │   ├── Meta.md                     ← your preferences and conventions
 │   ├── Decisions.md                ← cross-project decisions
-│   └── Projects___MyProject.md     ← project pages (namespace: Projects/)
+│   ├── Projects___MyProject.md     ← project pages (namespace: Projects/)
+│   ├── Projects___MyProject___SessionArchive.md  ← rotated Session Log entries
+│   └── Tasks___PROJ-1234.md        ← task pages (namespace: Tasks/)
 ├── journals/
 │   └── 2026_04_12.md                ← daily journal: ## Sessions + ## Activity
 └── logseq/
@@ -115,6 +120,6 @@ Every project and task page carries a small summary at the top — four properti
 
 The last digest bullet is a **map** — e.g. `Session Log | 87 KB (47 entries) · Active Tasks | 10 KB · Current Plan | 3 KB · Decisions | 2 KB (2) · page | 107 KB` — computed from the file, never written from memory, and derived from whatever sections the page actually has (not a fixed list — a page whose real second-largest section is `Active Tasks` shows `Active Tasks`). It does two jobs: it tells Claude what it doesn't have (so it can't quietly reason as though it read everything), and it's the index Claude uses when you ask for more.
 
-Pages without a digest keep working exactly as before, and get one the first time you load or save them. Run `brain-doctor` and say "backfill digests" to do the whole graph at once.
+Pages without a digest keep working exactly as before: a load *offers* to build one, and the first save creates one. Run `brain-doctor` and say "backfill digests" to do the whole graph at once.
 
 The Map is computed by the bundled helper from the page itself, never written by hand.

@@ -1,0 +1,8 @@
+sessions: [[Projects/Dig]]: did c → journals/2026_09_11.md
+index: pages/Index.md line 4:   - [[Projects/Dig]] — test page (v2 — c)
+applied: Map line written to pages/Projects___Dig.md
+map: ok
+check pages/Projects___Dig.md: 0 new
+check pages/Index.md: 0 new
+check journals/2026_09_11.md: 0 new
+activity: 14:32 saved [[Projects/Dig]] → journals/2026_09_11.md

@@ -50,4 +50,4 @@ While composing the session summary (SKILL.md step 4), scan your own composed te
 
 > "These N statements look like decisions — record them in Decisions? (1) … (2) …"
 
-Approved ones are written as proper decision entries (categories.md §2: `context:: / alternatives:: / rationale:: / status:: accepted`) to the project page's `## Decisions` section — and, when the cross-project rule above applies, to `pages/Decisions.md` too. Declined ones stay as session-log prose. Never record a decision the user didn't approve; never retro-mine old session logs (explicitly out of scope for v0.9.0).
+Approved ones are written as proper decision entries (categories.md § Decisions: `context:: / alternatives:: / rationale:: / status:: accepted`) to the project page's `## Decisions` section — and, when the cross-project rule above applies, to `pages/Decisions.md` too. Declined ones stay as session-log prose. Never record a decision the user didn't approve; never retro-mine old session logs (explicitly out of scope for v0.9.0).

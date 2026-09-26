@@ -9,6 +9,6 @@ allowed_tools: [Read, Glob, Grep, Skill]
 
 Save this session to my Logseq brain, project Demo. The graph is the folder ./graph in the current working directory; use that folder as the graph path.
 
-What happened this session: I added retry backoff to the CSV export upload step (three attempts, doubling the wait from 500 ms), covered it with two new Vitest tests, and both pass. Next step: wire the column picker into the export dialog.
+What happened this session: I added retry backoff to the CSV export upload step (three attempts, doubling the wait from 500 ms), covered it with two new Vitest tests, and both pass. The function is `uploadCsv()`; name it, in backticks, in the journal summary. Next step: wire the column picker into the export dialog.
 
 This is a progress note only. If you would ask me anything, assume yes.

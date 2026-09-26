@@ -4,16 +4,21 @@
 # Design: docs/superpowers/specs/2026-09-11-v0.11.0-design.md
 set -u
 LC_ALL=C; export LC_ALL
-BRAIN_VERSION=0.11.0
+# Every `cd` below means the named directory: an exported CDPATH would send `cd graph` elsewhere.
+unset CDPATH
+BRAIN_VERSION=0.12.0
 BIN_DIR=$(cd "$(dirname "$0")" && pwd)
 LIB=$(cd "$BIN_DIR/../lib" && pwd)
 AWK=${BRAIN_AWK:-awk}
+NL='
+'; CR=$(printf '\r'); TAB=$(printf '\t')
 
 die() { printf 'brain: %s\n' "$1" >&2; exit "${2:-2}"; }
 
 usage() {
   cat <<'EOF'
-usage: brain [--graph DIR] <command> [args]
+usage: brain <command> [args] [--graph DIR]
+  --graph may appear anywhere; -- ends flag parsing
   info                                  version, graph source, awk in use
   sections <page> [--baseline FILE…]    section table; records baselines for check
   read <page> <section> [--max BYTES]   whole section if under the cap (default 8192)
@@ -25,6 +30,10 @@ usage: brain [--graph DIR] <command> [args]
   lint [--all | <file…>]                every rule over whole files
   status                                one TSV row per project and task page
   activity <line>                       append "HH:MM <line>" under today's ## Activity
+  load <page> [--mode digest|full]      info, digest, journal, then the (digest) activity line
+  save-begin <page> [--also FILE…]      baselines, digest, Session Log tail, Current Plan, Edit anchors
+  save-finish <page> [--summary T] [--index T]
+                                        validate; Sessions, Index, Maps; check the save; activity
 EOF
 }
 
@@ -36,6 +45,10 @@ to_posix() {
     *) printf '%s\n' "$1" ;;
   esac
 }
+
+# rel_of PATH — a file argument made graph-relative. An absolute path may come in the form `info`'s
+# graph: line prints (C:/… on Git for Windows) or the POSIX one (/c/…); both name the same file.
+rel_of() { _rp=$(to_posix "$1"); printf '%s\n' "${_rp#"$GRAPH"/}"; }
 
 config_file() {
   if [ -n "${APPDATA:-}" ]; then printf '%s/logseq-brain/config.json\n' "$(to_posix "$APPDATA")"
@@ -74,7 +87,9 @@ resolve_graph() {
     esac
     [ -n "$g" ] || continue
     g=$(to_posix "$g")
-    if [ -d "$g" ]; then GRAPH=${g%/}; GRAPH_SRC=$src; return 0; fi
+    # Canonical and absolute: `info` prints it for the skills' own Read/Edit, and the state
+    # directory is keyed on it (./graph and its absolute form once got different baselines).
+    if [ -d "$g" ]; then GRAPH=$(cd "$g" && pwd) || die "cannot enter the graph: $g"; GRAPH_SRC=$src; return 0; fi
     [ "$src" = flag ] && die "graph not found: $g"
   done
   die "graph not resolved — pass --graph DIR, set LOGSEQ_BRAIN_PATH, or set graphPath in $(config_file)"
@@ -136,7 +151,7 @@ PAGE_REL=; PAGE_NAME=
 resolve_page() {
   _p=$1
   case $_p in
-    *.md) _rel=${_p#"$GRAPH"/}; guard_rel "$_rel" ;;
+    *.md) _rel=$(rel_of "$_p"); guard_rel "$_rel" ;;
     *)    _rel="pages/$(printf '%s' "$_p" | sed 's#/#___#g').md" ;;
   esac
   if [ ! -f "$GRAPH/$_rel" ]; then
@@ -189,7 +204,7 @@ cmd_sections() {
   save_baseline "$PAGE_REL"; _saved=$PAGE_REL
   if [ "${1:-}" = --baseline ]; then
     shift
-    for _b in "$@"; do _b=${_b#"$GRAPH"/}; save_baseline "$_b"; _saved="$_saved $_b"; done
+    for _b in "$@"; do _b=$(rel_of "$_b"); save_baseline "$_b"; _saved="$_saved $_b"; done
   fi
   printf '# baseline saved: %s\n' "$_saved"
 }
@@ -199,6 +214,8 @@ cmd_read_tail() {
   _mode=$1; shift
   [ $# -ge 2 ] || die "usage: brain $_mode <page> <section> [--max BYTES] [--entries N]"
   resolve_page "$1"; _sec=$2; shift 2
+  # The heading as written on the page ("## X", "- ## X") names the same section as "X".
+  _sec=${_sec#- }; _sec=${_sec#"## "}
   if [ "$_mode" = read ]; then _max=8192; else _max=4096; fi
   _n=3
   while [ $# -gt 0 ]; do
@@ -301,21 +318,40 @@ commit_write() {
   rm -f "$2"; COMMITTED=1
 }
 
+# The --apply steps are separate so a composite can validate every Map before writing any file
+# (compute), write them later (commit), and run one check over a whole save (report is apply's own).
+# apply_compute FILE OUT — the would-be page in OUT. Returns 0, or 2 when map.awk refused and
+# already named the reason, or 3 when the engine failed (reason printed here). Never exits.
+apply_compute() {
+  map_awk apply "$1" > "$2"; _ac=$?
+  [ "$_ac" = 2 ] && { rm -f "$2"; return 2; }
+  if [ "$_ac" != 0 ]; then rm -f "$2"; printf 'brain: digest failed on %s (awk exit %s)\n' "$PAGE_REL" "$_ac" >&2; return 3; fi
+  [ -s "$2" ] || { rm -f "$2"; printf 'brain: digest failed on %s — the apply engine produced no output\n' "$PAGE_REL" >&2; return 3; }
+  return 0
+}
+
+# apply_commit REL OUT SUM — write the Map line from OUT; SUM is the page's cksum when OUT was computed.
+apply_commit() {
+  commit_write "$1" "$2" 1 1 "$3" '^[ \t]*- Map: '
+  if [ "$COMMITTED" = 1 ]; then printf 'applied: Map line written to %s\n' "$1"
+  else printf 'unchanged: Map line already current in %s\n' "$1"; fi
+}
+
+# apply_report — digest --apply's own tail: the report, then a check of the page's added lines.
+apply_report() {
+  digest_report "$GRAPH/$PAGE_REL"; _r1=$?
+  echo "--"
+  SKIP_DIGEST_LINT=1; cmd_check "$PAGE_REL"; _r2=$?; SKIP_DIGEST_LINT=
+  [ "$_r1" = 0 ] && [ "$_r2" = 0 ]
+}
+
 cmd_digest_apply() {
   _f="$GRAPH/$PAGE_REL"
   _sum=$(cksum < "$_f")
   _tmp="$RUN_DIR/apply"
-  map_awk apply "$_f" > "$_tmp"; _rc=$?
-  if [ "$_rc" = 2 ]; then rm -f "$_tmp"; exit 2; fi      # map.awk already named the reason
-  if [ "$_rc" != 0 ]; then rm -f "$_tmp"; die "digest failed on $PAGE_REL (awk exit $_rc)"; fi
-  [ -s "$_tmp" ] || { rm -f "$_tmp"; die "digest failed on $PAGE_REL — the apply engine produced no output"; }
-  commit_write "$PAGE_REL" "$_tmp" 1 1 "$_sum" '^[ \t]*- Map: '
-  if [ "$COMMITTED" = 1 ]; then printf 'applied: Map line written to %s\n' "$PAGE_REL"
-  else printf 'unchanged: Map line already current in %s\n' "$PAGE_REL"; fi
-  digest_report "$_f"; _r1=$?
-  echo "--"
-  SKIP_DIGEST_LINT=1 cmd_check "$PAGE_REL"; _r2=$?
-  [ "$_r1" = 0 ] && [ "$_r2" = 0 ]
+  apply_compute "$_f" "$_tmp" || exit 2
+  apply_commit "$PAGE_REL" "$_tmp" "$_sum"
+  apply_report
 }
 
 graph_lists() {
@@ -335,12 +371,15 @@ digest_lint() {
   return 0
 }
 
+# print_hints FILE — one "fix <rule>: …" line per rule named in column 2 of FILE, first-seen order.
+print_hints() { cut -f2 "$1" | $AWK -v BINMODE=3 -f "$LIB/hints.awk"; }
+
 cmd_check() {
   [ $# -ge 1 ] || die "usage: brain check <file|page>…"
   graph_lists
-  _crc=0
+  _crc=0; _rules="$RUN_DIR/check.rules"; : > "$_rules"
   for _a in "$@"; do
-    _rel=${_a#"$GRAPH"/}
+    _rel=$(rel_of "$_a")
     case $_rel in pages/*|journals/*) guard_rel "$_rel" ;; *) resolve_page "$_a"; _rel=$PAGE_REL ;; esac
     [ -f "$GRAPH/$_rel" ] || die "no such file: $_rel"
     _b="$STATE_DIR/base/$(printf '%s' "$_rel" | sed 's#/#%#g')"
@@ -372,11 +411,11 @@ cmd_check() {
     [ "${_nf:-}" = 1 ] || die "check failed on $_rel — the engine linted ${_nf:-no} file(s), expected 1"
     _ne=$(cut -f2 "$_cnt"); _nw=$(cut -f3 "$_cnt"); _pre=$(cut -f4 "$_cnt")
     [ "$_lrc" = 1 ] && _crc=1
-    cat "$_lo"
+    cat "$_lo"; cat "$_lo" >> "$_rules"
     _ds=
     if [ -z "${SKIP_DIGEST_LINT:-}" ]; then
       _dl="$RUN_DIR/check-digest.out"
-      digest_lint "$_rel" > "$_dl"; cat "$_dl"
+      digest_lint "$_rel" > "$_dl"; cat "$_dl"; cat "$_dl" >> "$_rules"
       # Named in the summary, so the summary and the exit code agree: a page whose only new problem
       # is a digest finding used to print "0 new (0 error, 0 warn)" and exit 1.
       _de=$(cut -f3 "$_dl" | grep -c '^error$'); _dw=$(cut -f3 "$_dl" | grep -c '^warn$')
@@ -391,6 +430,7 @@ cmd_check() {
         "$_rel" "$((_ne + _nw))" "$_ds"
     fi
   done
+  print_hints "$_rules"
   return $_crc
 }
 
@@ -403,7 +443,7 @@ cmd_lint() {
   else
     : > "$_list"
     for _a in "$@"; do
-      _r=${_a#"$GRAPH"/}; guard_rel "$_r"
+      _r=$(rel_of "$_a"); guard_rel "$_r"
       [ -f "$GRAPH/$_r" ] || die "no such file: $_r"
       printf '%s\n' "$_r" >> "$_list"
     done
@@ -422,6 +462,7 @@ cmd_lint() {
   cat "$_out"
   _e=$(cut -f3 "$_out" | grep -c '^error$'); _w=$(cut -f3 "$_out" | grep -c '^warn$')
   _by=$(cut -f2 "$_out" | sort | uniq -c | $AWK -v BINMODE=3 '{ printf "%s%s=%s", (NR > 1 ? " · " : ""), $2, $1 }')
+  print_hints "$_out"
   echo "summary: $_e error, $_w warn${_by:+ · $_by}"
   [ $((_e + _w)) -eq 0 ]
 }
@@ -465,10 +506,115 @@ cmd_journal() {
   [ "$_rc" = 0 ] || die "journal failed on $_rel (awk exit $_rc)"
 }
 
+# flag_text_guard WHAT TEXT — refuse (message on stderr, return 1) text whose first or last word is a
+# --graph flag: a quoting slip that would otherwise write the flag (and a path) into the journal.
+flag_text_guard() {
+  _fg_what=$1; _fg_text=$2
+  set -f; set -- $_fg_text; set +f        # split on whitespace, never expand globs
+  [ $# -gt 0 ] || return 0
+  _fg_first=$1; eval "_fg_last=\${$#}"
+  for _fg_w in "$_fg_first" "$_fg_last"; do
+    case $_fg_w in
+      --graph|--graph=*)
+        printf 'brain: %s text contains a --graph flag — pass it outside the text\n' "$_fg_what" >&2; return 1 ;;
+    esac
+  done
+  return 0
+}
+
+# validate_text KIND NAME TEXT — Claude-composed text the helper is about to write (KIND summary or
+# index), checked before anything is written: one line, the --graph guard, balanced parentheses for
+# --index, and no error-tier lint finding. Only the new text is linted (as the bullet it becomes),
+# so an old error elsewhere in the file never blocks a save. Warn-tier findings print and pass.
+# Returns 1 with the reason printed; never exits.
+validate_text() {
+  _vt_k=$1; _vt_n=$2; _vt_t=$3
+  case $_vt_t in
+    *"$NL"*|*"$CR"*) printf 'refusing to write --%s text: it contains a line break\n' "$_vt_k"; return 1 ;;
+  esac
+  flag_text_guard "$_vt_k" "$_vt_t" || return 1
+  if [ "$_vt_k" = index ] && ! printf '%s\n' "$_vt_t" | $AWK -v BINMODE=3 '
+      { for (i = 1; i <= length($0); i++) { c = substr($0, i, 1)
+          if (c == "(") d++; else if (c == ")" && --d < 0) exit 1 } }
+      END { exit (d != 0) }'; then
+    printf 'refusing to write --%s text: unbalanced parentheses\n' "$_vt_k"; return 1
+  fi
+  graph_lists
+  _vt_d="$RUN_DIR/prelint"; mkdir -p "$_vt_d/pages" || die "cannot create $_vt_d"
+  if [ "$_vt_k" = summary ]; then printf -- '- [[%s]]: %s\n' "$_vt_n" "$_vt_t"
+  else printf -- '- %s\n' "$_vt_t"; fi > "$_vt_d/pages/Prelint.md"
+  printf 'pages/Prelint.md\n' > "$_vt_d/list"; : > "$_vt_d/cnt"
+  (cd "$_vt_d" && run_awk lint -v listfile=list -v pagesfile="$PAGES_LST" -v keysfile="$KEYS_LST" -v countfile=cnt) \
+    > "$_vt_d/out" || die "lint failed on the --$_vt_k text"
+  [ "$(cut -f1 "$_vt_d/cnt")" = 1 ] || die "lint failed on the --$_vt_k text — the engine did not lint it"
+  sed "s#^pages/Prelint\.md:[0-9]*#--$_vt_k text#" "$_vt_d/out"
+  if [ "$(cut -f2 "$_vt_d/cnt")" != 0 ]; then
+    printf 'refusing to write --%s text: fix it and rerun\n' "$_vt_k"; return 1
+  fi
+  return 0
+}
+
+# write_sessions NAME TEXT — "- [[NAME]]: TEXT" under today's ## Sessions (heading or journal created
+# when missing), through the verified single-change commit. An identical bullet is not written twice.
+# The guard regexes go through awk -v, so their backslashes are doubled (Global Constraints).
+write_sessions() {
+  _ws_rel=$(today_file); _ws_t="$GRAPH/$_ws_rel"; _ws_tmp="$RUN_DIR/sessions"
+  _ws_bullet="[[$1]]: $2"; _ws_want='^[ \t]*- \\[\\[(Projects|Tasks)/'
+  BRAIN_BULLET=$_ws_bullet; export BRAIN_BULLET
+  if [ -f "$_ws_t" ]; then
+    _ws_sum=$(cksum < "$_ws_t")
+    run_awk activity -v section=Sessions -v nonl="$(nonl "$_ws_t")" -v new=0 "$_ws_t" > "$_ws_tmp" \
+      || { rm -f "$_ws_tmp"; die "sessions failed on $_ws_rel"; }
+    unset BRAIN_BULLET
+    if run_awk anchors -v mode=sessions "$_ws_t" | grep -q '^sessions: absent'; then
+      commit_write "$_ws_rel" "$_ws_tmp" 0 2 "$_ws_sum" '^(- )?## Sessions|'"$_ws_want"
+    else
+      commit_write "$_ws_rel" "$_ws_tmp" 0 1 "$_ws_sum" "$_ws_want"
+    fi
+  else
+    mkdir -p "$GRAPH/journals" || die "cannot create journals/"
+    run_awk activity -v section=Sessions -v new=1 /dev/null > "$_ws_tmp" \
+      || { rm -f "$_ws_tmp"; die "sessions failed on $_ws_rel"; }
+    unset BRAIN_BULLET
+    commit_write "$_ws_rel" "$_ws_tmp" 0 2 absent '^(- )?## Sessions|'"$_ws_want"
+  fi
+  if [ "$COMMITTED" = 1 ]; then printf 'sessions: %s → %s\n' "$_ws_bullet" "$_ws_rel"
+  else echo "sessions: unchanged"; fi
+}
+
+# write_index NAME TEXT — the parenthetical of NAME's one-liner in pages/Index.md becomes "(TEXT)".
+# Missing, ambiguous or no Index: nothing is written, the message says what to do, and it returns 0.
+write_index() {
+  _wi_rel=pages/Index.md; _wi_f="$GRAPH/$_wi_rel"; _wi_tmp="$RUN_DIR/index"
+  [ -f "$_wi_f" ] || { echo "index: no pages/Index.md — nothing written"; return 0; }
+  _wi_sum=$(cksum < "$_wi_f")
+  BRAIN_NAME=$1; BRAIN_PAREN=$2; export BRAIN_NAME BRAIN_PAREN
+  run_awk index -v nonl="$(nonl "$_wi_f")" "$_wi_f" > "$_wi_tmp"; _wi_rc=$?
+  unset BRAIN_PAREN
+  case $_wi_rc in
+    0) ;;
+    3) rm -f "$_wi_tmp"; unset BRAIN_NAME
+       echo "index: missing — add the one-liner under ## Projects with Edit"; return 0 ;;
+    4) printf 'index: %s — edit it by hand\n' "$(cat "$_wi_tmp")"; rm -f "$_wi_tmp"; unset BRAIN_NAME; return 0 ;;
+    *) rm -f "$_wi_tmp"; die "index failed on $_wi_rel (awk exit $_wi_rc)" ;;
+  esac
+  # The guard's regex: the name with every ERE metacharacter escaped, backslashes doubled for -v.
+  _wi_esc=$(printf '%s' "$1" | sed 's/[][\.*^$+?(){}|/]/\\\\&/g')
+  commit_write "$_wi_rel" "$_wi_tmp" 1 1 "$_wi_sum" '\\[\\['"$_wi_esc"'\\]\\]'
+  if [ "$COMMITTED" = 1 ]; then
+    run_awk anchors -v mode=index "$_wi_f" | sed 's#^index: \([0-9]*\) #index: pages/Index.md line \1: #'
+  else echo "index: unchanged"; fi
+  unset BRAIN_NAME
+}
+
+# today_file — today's journal, graph-relative.
+today_file() { printf 'journals/%s.md\n' "$(printf '%s' "$TODAY" | tr '-' '_')"; }
+
 cmd_activity() {
   [ $# -ge 1 ] || die "usage: brain activity <text>"
+  flag_text_guard activity "$*" || exit 2
   if [ "$(json_get journeyLog "$(config_file)")" = false ]; then echo "journey log disabled (journeyLog: false)"; return 0; fi
-  _d=$TODAY; _rel="journals/$(printf '%s' "$_d" | tr '-' '_').md"; _t="$GRAPH/$_rel"
+  _rel=$(today_file); _t="$GRAPH/$_rel"
   _line="$(now_hm) $*"
   _tmp="$RUN_DIR/activity"
   if [ -f "$_t" ]; then
@@ -483,6 +629,241 @@ cmd_activity() {
   printf 'activity: %s → %s\n' "$_line" "$_rel"      # not echo: dash's echo expands backslashes
 }
 
+# --- composites: one process for a fixed sequence of the commands above; each block is headed
+# "== <name>" and holds that command's unchanged output. Composite locals are prefixed (_ld_, _sb_,
+# _sf_): the cmd_* functions share un-prefixed globals and reset PAGE_REL/PAGE_NAME.
+
+# load_full_budget REL — the section table without recording baselines (cmd_sections always
+# records them), then the bytes a full load reads: each of Overview, Current Plan, Implementation,
+# Decisions and Session Log, capped at 8192.
+load_full_budget() {
+  _ld_f="$GRAPH/$1"; _ld_tab="$RUN_DIR/load-sections.out"
+  run_awk sections -v rel="$1" -v nonl="$(nonl "$_ld_f")" "$_ld_f" > "$_ld_tab" || die "sections failed on $1"
+  cat "$_ld_tab"
+  $AWK -v BINMODE=3 -F '\t' '
+    $5 == "Overview" || $5 == "Current Plan" || $5 == "Implementation" || $5 == "Decisions" || $5 == "Session Log" {
+      b += ($3 + 0 > 8192 ? 8192 : $3 + 0)
+    }
+    END { printf "full-budget: %d B\n", b }' "$_ld_tab"
+}
+
+cmd_load() {
+  [ $# -ge 1 ] || die "usage: brain load <page> [--mode digest|full]"
+  _ld_pg=$1; shift; _ld_mode=digest
+  if [ "${1:-}" = --mode ]; then [ $# -ge 2 ] || die "--mode needs digest|full"; _ld_mode=$2; shift 2; fi
+  [ $# -eq 0 ] || die "unknown option: $1"
+  case $_ld_mode in digest|full) ;; *) die "--mode must be digest or full" ;; esac
+  resolve_page "$_ld_pg"; archive_of
+  _ld_rel=$PAGE_REL; _ld_name=$PAGE_NAME
+  echo "== info"; cmd_info
+  echo "== digest"; _ld_out="$RUN_DIR/load-digest.out"
+  digest_report "$GRAPH/$_ld_rel" > "$_ld_out"; _ld_rc=$?; cat "$_ld_out"
+  echo "== journal"; cmd_journal "$_ld_rel"
+  if [ "$_ld_mode" = full ]; then echo "== sections"; load_full_budget "$_ld_rel"; return $_ld_rc; fi
+  # map.awk prints a map: line only once a ## Digest exists; "digest: missing" and "not applicable"
+  # pages get the fallback, and the model logs (brief) only after it has read them.
+  if grep -q '^map: ' "$_ld_out"; then
+    echo "== activity"; cmd_activity "loaded [[$_ld_name]] (digest)"
+  else
+    printf "activity: not written — no digest; run the fallback reads, then brain activity 'loaded [[%s]] (brief)'\n" "$_ld_name"
+  fi
+  return $_ld_rc
+}
+
+# worst RC… — the composite exit code: 2 over 1 over 0.
+worst() { _wr=0; for _wx in "$@"; do [ "$_wx" -gt "$_wr" ] && _wr=$_wx; done; return $_wr; }
+
+# table_bytes TABLE HEADING — that section's bytes from a section table (first match), or nothing.
+table_bytes() { $AWK -v BINMODE=3 -F '\t' -v h="$2" '$5 == h && $1 ~ /^[0-9]+$/ { print $3; exit }' "$1"; }
+
+# save_manifest_path REL — one manifest per page: the files a save baselined, for save-finish.
+save_manifest_path() { printf '%s/save.%s.lst\n' "$STATE_DIR" "$(printf '%s' "$1" | sed 's#/#%#g')"; }
+
+# cmd_save_begin PAGE [--also FILE…] — everything a save needs before its first Edit: baselines for
+# the page, Index, today's journal and every --also file; the digest; the newest Session Log entry;
+# Current Plan; the Index and ## Sessions anchors; and the manifest save-finish checks against.
+cmd_save_begin() {
+  [ $# -ge 1 ] || die "usage: brain save-begin <page> [--also FILE…]"
+  _sb_pg=$1; shift
+  if [ $# -gt 0 ]; then
+    [ "$1" = --also ] || die "unknown option: $1"
+    shift; [ $# -ge 1 ] || die "--also needs at least one file"
+  fi
+  resolve_page "$_sb_pg"
+  _sb_rel=$PAGE_REL; _sb_name=$PAGE_NAME; _sb_journal=$(today_file)
+  case $_sb_rel in
+    pages/Projects___*|pages/Tasks___*) ;;
+    *) die "save-begin takes a project or task page (pages/Projects___… or pages/Tasks___…); pass $_sb_rel with --also" ;;
+  esac
+  # --also files, graph-relative from here on (the manifest and the baseline line name them so).
+  _sb_n=$#
+  while [ "$_sb_n" -gt 0 ]; do _sb_a=$(rel_of "$1"); shift; set -- "$@" "$_sb_a"; _sb_n=$((_sb_n - 1)); done
+  for _sb_a in "$@"; do guard_rel "$_sb_a"; done
+  # A rerun re-baselines every file, so an Edit made since the last save-begin could no longer be
+  # checked. The skill says to rerun only before the first Edit; say so when a page shows otherwise.
+  # Journals are left out: activity lines land there all the time.
+  _sb_m=$(save_manifest_path "$_sb_rel")
+  if [ -f "$_sb_m" ] && manifest_fresh "$_sb_m"; then
+    _sb_chg=
+    sed -n 's/^file //p' "$_sb_m" > "$RUN_DIR/save-begin.prev"
+    while IFS= read -r _sb_f || [ -n "$_sb_f" ]; do
+      case $_sb_f in pages/*) ;; *) continue ;; esac
+      _sb_b="$STATE_DIR/base/$(printf '%s' "$_sb_f" | sed 's#/#%#g')"
+      [ -f "$_sb_b" ] || continue
+      if [ -f "$GRAPH/$_sb_f" ]; then cmp -s "$_sb_b" "$GRAPH/$_sb_f" && continue
+      else [ -s "$_sb_b" ] || continue; fi
+      _sb_chg="$_sb_chg $_sb_f"
+    done < "$RUN_DIR/save-begin.prev"
+    [ -z "$_sb_chg" ] || printf 'warning: changed since the last save-begin, so lines written there will not be checked:%s\n' "$_sb_chg"
+  fi
+  echo "== info"; cmd_info
+  echo "== sections"; _sb_tab="$RUN_DIR/save-begin-sections.out"
+  cmd_sections "$_sb_rel" --baseline pages/Index.md "$_sb_journal" "$@" > "$_sb_tab"; cat "$_sb_tab"
+  PAGE_REL=$_sb_rel; PAGE_NAME=$_sb_name; archive_of
+  echo "== digest"; digest_report "$GRAPH/$_sb_rel"
+  echo "== session-log"; _sb_r2=0
+  if [ -z "$(table_bytes "$_sb_tab" 'Session Log')" ]; then echo "session-log: none"
+  else cmd_read_tail tail "$_sb_rel" "Session Log" --entries 1 --max 4096; _sb_r2=$?; fi
+  echo "== current-plan"; _sb_r3=0; _sb_cp=$(table_bytes "$_sb_tab" 'Current Plan')
+  if [ -z "$_sb_cp" ]; then echo "current-plan: none"
+  elif [ "$_sb_cp" -gt 8192 ]; then cmd_read_tail tail "$_sb_rel" "Current Plan" --max 8192; _sb_r3=$?
+  else cmd_read_tail read "$_sb_rel" "Current Plan"; _sb_r3=$?; fi
+  echo "== anchors"
+  case $_sb_rel in
+    pages/Tasks___*) echo "index: not applicable (task page)" ;;
+    *) if [ -f "$GRAPH/pages/Index.md" ]; then
+         BRAIN_NAME=$_sb_name; export BRAIN_NAME
+         run_awk anchors -v mode=index "$GRAPH/pages/Index.md" || die "anchors failed on pages/Index.md"
+         unset BRAIN_NAME
+       else echo "index: no Index.md"; fi ;;
+  esac
+  if [ -f "$GRAPH/$_sb_journal" ]; then
+    run_awk anchors -v mode=sessions -v nonl="$(nonl "$GRAPH/$_sb_journal")" "$GRAPH/$_sb_journal" \
+      || die "anchors failed on $_sb_journal"
+  else echo "sessions: no journal"; fi
+  # The manifest: this run's files, plus those of a fresh earlier save-begin for the same page (a
+  # rerun that adds --also keeps what the first run baselined). Written whole, then renamed.
+  _sb_m=$(save_manifest_path "$_sb_rel")
+  {
+    printf 'file %s\n' "$_sb_rel" pages/Index.md "$_sb_journal"
+    for _sb_a in "$@"; do printf 'file %s\n' "$_sb_a"; done
+    if [ -f "$_sb_m" ] && manifest_fresh "$_sb_m"; then grep '^file ' "$_sb_m"; fi
+  } | $AWK -v BINMODE=3 '!seen[$0]++' > "$_sb_m.$$.files" || die "cannot write the save manifest"
+  # Every file in the manifest gets a fresh baseline, inherited ones too: a file kept from an earlier
+  # save-begin (say, after a deferred save-finish) would otherwise be checked against its old snapshot.
+  while IFS= read -r _sb_l || [ -n "$_sb_l" ]; do save_baseline "${_sb_l#file }"; done < "$_sb_m.$$.files"
+  { printf 'page %s\n' "$_sb_rel"; cat "$_sb_m.$$.files"; printf 'ts %s\n' "$(date +%s)"; } > "$_sb_m.$$" \
+    && mv "$_sb_m.$$" "$_sb_m" || die "cannot write the save manifest"
+  rm -f "$_sb_m.$$.files"
+  # Digest findings (a stale or missing Map, a cap) don't count: a page edited in Logseq since the
+  # last save is routinely stale, and save-finish recomputes and rechecks the digest anyway.
+  worst "$_sb_r2" "$_sb_r3"
+}
+
+# cmd_save_finish PAGE [--summary TEXT] [--index TEXT] — the end of a save, after the model's Edits.
+# 1. Validate, writing nothing: the manifest, the texts, the digest caps and a dry-run Map on every
+#    digest-bearing page in the save. A refusal leaves the graph as it was; rerun the same command.
+# 2-4. The Sessions bullet, the Index parenthetical, the Maps (each checked against the page's
+#    checksum at validation, so a page changed since then is refused, not overwritten).
+# 5. One check over every file save-begin baselined, digest lint on.
+# 6. The activity line — deferred while the save has a new error-tier finding. A completed save
+#    consumes its manifest; a deferred one keeps it, so the printed `brain check` has its baselines.
+cmd_save_finish() {
+  [ $# -ge 1 ] || die "usage: brain save-finish <page> [--summary TEXT] [--index TEXT]"
+  _sf_pg=$1; shift; _sf_sum=; _sf_hs=0; _sf_idx=; _sf_hi=0
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --summary) [ $# -ge 2 ] || die "--summary needs text"; _sf_sum=$2; _sf_hs=1; shift 2 ;;
+      --index)   [ $# -ge 2 ] || die "--index needs text";   _sf_idx=$2; _sf_hi=1; shift 2 ;;
+      *) die "unknown option: $1" ;;
+    esac
+  done
+  resolve_page "$_sf_pg"; _sf_rel=$PAGE_REL; _sf_name=$PAGE_NAME
+  _sf_m=$(save_manifest_path "$_sf_rel")
+  if [ ! -f "$_sf_m" ] || ! manifest_fresh "$_sf_m"; then
+    die "no save-begin for $_sf_name in the last 12 h — run brain save-begin first"
+  fi
+  _sf_files="$RUN_DIR/save-finish.files"; sed -n 's/^file //p' "$_sf_m" > "$_sf_files"
+  case $_sf_rel in pages/Projects___*) _sf_proj=1 ;; *) _sf_proj=0 ;; esac
+  _sf_rep="$RUN_DIR/save-finish.report"
+
+  # 1. Validate.
+  _sf_bad=0
+  if [ "$_sf_hs" = 1 ]; then validate_text summary "$_sf_name" "$_sf_sum" || _sf_bad=1; fi
+  if [ "$_sf_hi" = 1 ] && [ "$_sf_proj" = 1 ]; then validate_text index "$_sf_name" "$_sf_idx" || _sf_bad=1; fi
+  [ "$_sf_bad" = 0 ] || exit 1
+  _sf_maps="$RUN_DIR/save-finish.maps"; : > "$_sf_maps"; _sf_over=0; _sf_i=0
+  while IFS= read -r _sf_f || [ -n "$_sf_f" ]; do
+    case $_sf_f in pages/Projects___*|pages/Tasks___*) ;; *) continue ;; esac
+    [ -f "$GRAPH/$_sf_f" ] || continue
+    PAGE_REL=$_sf_f; PAGE_NAME=$(basename "$_sf_f" .md | sed 's#___#/#g'); archive_of
+    _sf_rep="$RUN_DIR/save-finish.report"
+    digest_report "$GRAPH/$_sf_f" > "$_sf_rep"
+    grep -q '^digest: not applicable' "$_sf_rep" && continue
+    # An --also page with no ## Digest yet is not this save's to backfill; the saved page is.
+    if [ "$_sf_f" != "$_sf_rel" ] && grep -q '^digest: missing' "$_sf_rep"; then continue; fi
+    if grep -q '^over: ' "$_sf_rep"; then
+      if [ "$_sf_f" = "$_sf_rel" ]; then grep '^over: ' "$_sf_rep"
+      else grep '^over: ' "$_sf_rep" | sed "s#^#$_sf_f: #"; fi
+      _sf_over=1; continue
+    fi
+    _sf_i=$((_sf_i + 1)); _sf_out="$RUN_DIR/save-finish.map.$_sf_i"
+    _sf_ck=$(cksum < "$GRAPH/$_sf_f")
+    apply_compute "$GRAPH/$_sf_f" "$_sf_out" || exit 2      # map.awk or apply_compute named the reason
+    printf '%s\t%s\t%s\n' "$_sf_f" "$_sf_out" "$_sf_ck" >> "$_sf_maps"
+  done < "$_sf_files"
+  if [ "$_sf_over" = 1 ]; then echo "fix the digest with one Edit and rerun this same command"; exit 1; fi
+
+  # 2-3. The two text writes.
+  if [ "$_sf_hs" = 1 ]; then echo "== sessions"; write_sessions "$_sf_name" "$_sf_sum"; fi
+  if [ "$_sf_hi" = 1 ]; then
+    echo "== index"
+    case $_sf_rel in
+      pages/Projects___*) write_index "$_sf_name" "$_sf_idx" ;;
+      pages/Tasks___*)    echo "index: not applicable (task page)" ;;
+      *)                  echo "index: not applicable (not a project page)" ;;
+    esac
+  fi
+
+  # 4. The Maps, then the saved page's report.
+  echo "== map"
+  while IFS="$TAB" read -r _sf_f _sf_out _sf_ck || [ -n "$_sf_f" ]; do
+    apply_commit "$_sf_f" "$_sf_out" "$_sf_ck"
+  done < "$_sf_maps"
+  PAGE_REL=$_sf_rel; PAGE_NAME=$_sf_name; archive_of
+  digest_report "$GRAPH/$_sf_rel" > "$_sf_rep"
+  if grep -q '^digest: not applicable' "$_sf_rep"; then echo "map: not applicable"; else cat "$_sf_rep"; fi
+
+  # 5. One check over the save set. A file absent now that was absent at save-begin was not written.
+  echo "== check"
+  set --
+  while IFS= read -r _sf_f || [ -n "$_sf_f" ]; do
+    _sf_b="$STATE_DIR/base/$(printf '%s' "$_sf_f" | sed 's#/#%#g')"
+    if [ ! -f "$GRAPH/$_sf_f" ] && [ ! -s "$_sf_b" ]; then echo "check $_sf_f: not written (absent)"; continue; fi
+    set -- "$@" "$_sf_f"
+  done < "$_sf_files"
+  _sf_crc=0
+  if [ $# -gt 0 ]; then SKIP_DIGEST_LINT=; cmd_check "$@"; _sf_crc=$?; fi
+
+  # 6. The activity line.
+  echo "== activity"
+  if [ "$_sf_crc" = 0 ]; then
+    cmd_activity "saved [[$_sf_name]]"
+    rm -f "$_sf_m"
+    return 0
+  fi
+  _sf_q=; for _sf_f in "$@"; do _sf_q="$_sf_q '$_sf_f'"; done
+  printf "activity: deferred — fix the errors above, then run: brain check%s && brain activity 'saved [[%s]]'\n" "$_sf_q" "$_sf_name"
+  return 1
+}
+
+# manifest_fresh FILE — its ts line is within the 12 h baseline expiry.
+manifest_fresh() {
+  _mf=$(sed -n 's/^ts //p' "$1")
+  case $_mf in ''|*[!0-9]*) return 1 ;; esac
+  [ $(( $(date +%s) - _mf )) -le 43200 ]
+}
+
 cmd_status() {
   _list="$RUN_DIR/status.lst"
   (cd "$GRAPH" && ls pages/Projects___*.md pages/Tasks___*.md 2>/dev/null) | grep -v '___SessionArchive\.md$' > "$_list"
@@ -493,14 +874,26 @@ cmd_status() {
 
 # --- commands end ---
 
-OPT_GRAPH=
-while [ $# -gt 0 ]; do
-  case $1 in
-    --graph)   [ $# -ge 2 ] || die "--graph needs a directory"; OPT_GRAPH=$2; shift 2 ;;
-    --graph=*) OPT_GRAPH=${1#--graph=}; shift ;;
-    *) break ;;
+# --graph is accepted anywhere on the line: models write `brain info --graph DIR`, and a flag the
+# loop stopped short of used to run silently against the configured graph (and land in activity
+# text). `--` ends flag parsing and is consumed. The loop rotates "$@" in place: each argument is
+# either taken as the flag (with its value) or re-appended, so kept arguments keep their exact bytes.
+OPT_GRAPH=; _gset=0; _dd=0; _n=$#
+while [ "$_n" -gt 0 ]; do
+  _a=$1; shift; _n=$((_n - 1))
+  if [ "$_dd" = 1 ]; then set -- "$@" "$_a"; continue; fi
+  case $_a in
+    --)        _dd=1 ;;
+    --graph)   [ "$_n" -ge 1 ] || die "--graph needs a directory"
+               [ "$_gset" = 0 ] || die "--graph given twice"
+               OPT_GRAPH=$1; _gset=1; shift; _n=$((_n - 1)) ;;
+    --graph=*) [ "$_gset" = 0 ] || die "--graph given twice"
+               OPT_GRAPH=${_a#--graph=}; _gset=1 ;;
+    *)         set -- "$@" "$_a" ;;
   esac
 done
+# An empty value would fall through to LOGSEQ_BRAIN_PATH or the config: the wrong-graph bug again.
+[ "$_gset" = 0 ] || [ -n "$OPT_GRAPH" ] || die "--graph needs a directory"
 cmd=${1:-help}; [ $# -gt 0 ] && shift
 case $cmd in
   help|-h|--help)    usage ;;
@@ -516,6 +909,18 @@ case $cmd in
   journal)           resolve_graph; init_run; cmd_journal "$@" ;;
   activity)          resolve_graph; init_run; cmd_activity "$@" ;;
   status)            resolve_graph; init_run; cmd_status ;;
+  load)              resolve_graph; init_run; cmd_load "$@" ;;
+  save-begin)        resolve_graph; init_run; cmd_save_begin "$@" ;;
+  save-finish)       resolve_graph; init_run; cmd_save_finish "$@" ;;
+  # Test-only arms: each new writer and the validator alone (tests/cases/sessions-*, index-*, validate-*).
+  _write-sessions|_write-index|_validate)
+    [ "${BRAIN_TEST_INTERNAL:-}" = 1 ] || die "unknown command: $cmd (try: brain help)"
+    resolve_graph; init_run
+    case $cmd in
+      _write-sessions) write_sessions "$1" "$2" ;;
+      _write-index)    write_index "$1" "$2" ;;
+      _validate)       validate_text "$1" "$2" "$3" || exit 1 ;;
+    esac ;;
   # --- dispatch end ---
   *) die "unknown command: $cmd (try: brain help)" ;;
 esac
