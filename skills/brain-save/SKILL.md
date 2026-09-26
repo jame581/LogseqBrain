@@ -82,6 +82,6 @@ See `references/auto-suggest.md`. Suggest only; never auto-save.
 
 ## Important notes
 
-- Run `save-begin` once per page, before its first Edit. A rerun resets the baselines `save-finish` checks against.
+- Run `save-begin` once per page, before its first Edit. A rerun resets the baselines `save-finish` checks against; if it prints `warning: changed since the last save-begin`, run `brain lint` on the files it names before you finish.
 - Never hand-edit the Map line, and never compute a byte figure yourself.
 - A rotation moves Session Log entries verbatim. A finding its `brain check` reports on the archive page is carried-over content: report it and leave it for brain-doctor.

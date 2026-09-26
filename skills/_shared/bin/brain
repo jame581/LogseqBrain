@@ -46,6 +46,10 @@ to_posix() {
   esac
 }
 
+# rel_of PATH — a file argument made graph-relative. An absolute path may come in the form `info`'s
+# graph: line prints (C:/… on Git for Windows) or the POSIX one (/c/…); both name the same file.
+rel_of() { _rp=$(to_posix "$1"); printf '%s\n' "${_rp#"$GRAPH"/}"; }
+
 config_file() {
   if [ -n "${APPDATA:-}" ]; then printf '%s/logseq-brain/config.json\n' "$(to_posix "$APPDATA")"
   elif [ -n "${XDG_CONFIG_HOME:-}" ]; then printf '%s/logseq-brain/config.json\n' "$XDG_CONFIG_HOME"
@@ -147,7 +151,7 @@ PAGE_REL=; PAGE_NAME=
 resolve_page() {
   _p=$1
   case $_p in
-    *.md) _rel=${_p#"$GRAPH"/}; guard_rel "$_rel" ;;
+    *.md) _rel=$(rel_of "$_p"); guard_rel "$_rel" ;;
     *)    _rel="pages/$(printf '%s' "$_p" | sed 's#/#___#g').md" ;;
   esac
   if [ ! -f "$GRAPH/$_rel" ]; then
@@ -200,7 +204,7 @@ cmd_sections() {
   save_baseline "$PAGE_REL"; _saved=$PAGE_REL
   if [ "${1:-}" = --baseline ]; then
     shift
-    for _b in "$@"; do _b=${_b#"$GRAPH"/}; save_baseline "$_b"; _saved="$_saved $_b"; done
+    for _b in "$@"; do _b=$(rel_of "$_b"); save_baseline "$_b"; _saved="$_saved $_b"; done
   fi
   printf '# baseline saved: %s\n' "$_saved"
 }
@@ -375,7 +379,7 @@ cmd_check() {
   graph_lists
   _crc=0; _rules="$RUN_DIR/check.rules"; : > "$_rules"
   for _a in "$@"; do
-    _rel=${_a#"$GRAPH"/}
+    _rel=$(rel_of "$_a")
     case $_rel in pages/*|journals/*) guard_rel "$_rel" ;; *) resolve_page "$_a"; _rel=$PAGE_REL ;; esac
     [ -f "$GRAPH/$_rel" ] || die "no such file: $_rel"
     _b="$STATE_DIR/base/$(printf '%s' "$_rel" | sed 's#/#%#g')"
@@ -439,7 +443,7 @@ cmd_lint() {
   else
     : > "$_list"
     for _a in "$@"; do
-      _r=${_a#"$GRAPH"/}; guard_rel "$_r"
+      _r=$(rel_of "$_a"); guard_rel "$_r"
       [ -f "$GRAPH/$_r" ] || die "no such file: $_r"
       printf '%s\n' "$_r" >> "$_list"
     done
@@ -691,7 +695,27 @@ cmd_save_begin() {
     pages/Projects___*|pages/Tasks___*) ;;
     *) die "save-begin takes a project or task page (pages/Projects___… or pages/Tasks___…); pass $_sb_rel with --also" ;;
   esac
-  for _sb_a in "$@"; do guard_rel "${_sb_a#"$GRAPH"/}"; done
+  # --also files, graph-relative from here on (the manifest and the baseline line name them so).
+  _sb_n=$#
+  while [ "$_sb_n" -gt 0 ]; do _sb_a=$(rel_of "$1"); shift; set -- "$@" "$_sb_a"; _sb_n=$((_sb_n - 1)); done
+  for _sb_a in "$@"; do guard_rel "$_sb_a"; done
+  # A rerun re-baselines every file, so an Edit made since the last save-begin could no longer be
+  # checked. The skill says to rerun only before the first Edit; say so when a page shows otherwise.
+  # Journals are left out: activity lines land there all the time.
+  _sb_m=$(save_manifest_path "$_sb_rel")
+  if [ -f "$_sb_m" ] && manifest_fresh "$_sb_m"; then
+    _sb_chg=
+    sed -n 's/^file //p' "$_sb_m" > "$RUN_DIR/save-begin.prev"
+    while IFS= read -r _sb_f || [ -n "$_sb_f" ]; do
+      case $_sb_f in pages/*) ;; *) continue ;; esac
+      _sb_b="$STATE_DIR/base/$(printf '%s' "$_sb_f" | sed 's#/#%#g')"
+      [ -f "$_sb_b" ] || continue
+      if [ -f "$GRAPH/$_sb_f" ]; then cmp -s "$_sb_b" "$GRAPH/$_sb_f" && continue
+      else [ -s "$_sb_b" ] || continue; fi
+      _sb_chg="$_sb_chg $_sb_f"
+    done < "$RUN_DIR/save-begin.prev"
+    [ -z "$_sb_chg" ] || printf 'warning: changed since the last save-begin, so lines written there will not be checked:%s\n' "$_sb_chg"
+  fi
   echo "== info"; cmd_info
   echo "== sections"; _sb_tab="$RUN_DIR/save-begin-sections.out"
   cmd_sections "$_sb_rel" --baseline pages/Index.md "$_sb_journal" "$@" > "$_sb_tab"; cat "$_sb_tab"
@@ -722,7 +746,7 @@ cmd_save_begin() {
   _sb_m=$(save_manifest_path "$_sb_rel")
   {
     printf 'file %s\n' "$_sb_rel" pages/Index.md "$_sb_journal"
-    for _sb_a in "$@"; do printf 'file %s\n' "${_sb_a#"$GRAPH"/}"; done
+    for _sb_a in "$@"; do printf 'file %s\n' "$_sb_a"; done
     if [ -f "$_sb_m" ] && manifest_fresh "$_sb_m"; then grep '^file ' "$_sb_m"; fi
   } | $AWK -v BINMODE=3 '!seen[$0]++' > "$_sb_m.$$.files" || die "cannot write the save manifest"
   # Every file in the manifest gets a fresh baseline, inherited ones too: a file kept from an earlier
