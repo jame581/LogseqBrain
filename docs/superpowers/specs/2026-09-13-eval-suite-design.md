@@ -193,6 +193,12 @@ Each case's score is its weighted grader pass fraction. The suite uses the defau
 - **Targets:** `load-digest` is compared against ≤ 4 and `save-basic` against ≤ 13.
 - **Figures are reported, never gating.** With one run per case each figure is one sample, so an over-target count is flagged in the table and recorded, but does not change the exit code. "0 new error-tier findings per save" **is** gated, by the graders of cases 3 and 4.
 
+> **Post-launch correction (v0.12.0, 2026-09-26):** for `load-digest` (≤ 4) and `save-basic` (≤ 13), the figures **are** gating since v0.12.0 (`docs/superpowers/specs/2026-09-25-v0.12.0-design.md` §5).
+> - An over-target run fails its case in `tools/eval/summarize.py table`, and `run.sh` exits 1.
+> - `claude plugin eval` has no grader that counts every tool call, so the gate is applied there rather than in the harness.
+> - The reason for "never gating" still holds: one run is one sample. Before changing skill prose over a single over-target run, read `summarize.py breakdown` on its trace.
+> - Every other figure stays reported only.
+
 ---
 
 ## 8. The wrapper — `tools/eval/run.sh`

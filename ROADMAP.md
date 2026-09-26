@@ -2,6 +2,14 @@
 
 ## Shipped
 
+### v0.12.0 — Fewer round trips, for real
+- `--graph` is accepted anywhere on the helper's command line, and an empty one is refused. A trailing flag used to run silently against the configured graph, and could write the flag into the journal.
+- Composite helper commands: `brain load` (a digest load in one call), and `brain save-begin` / `brain save-finish` (a save is: begin, one Read, the Edits, finish). Eval suite, 2026-09-26: a digest load in 2 tool calls and a save in 6 (v0.11.0: 11 and 27).
+- `save-finish` writes the journal's `## Sessions` bullet and the `Index.md` one-liner parenthetical itself. It validates the text before writing, checks every file the save touched, and holds the activity line back while a new error stands.
+- Instruction diet, part 2: a routine load or save reads nothing but its own SKILL.md (`brain-load` 5.0 KB, `brain-save` 9.3 KB). Developer-only contract text moved to `docs/reference/`. `brain check` and `brain lint` print a `fix` hint per rule.
+- The eval suite's call targets are pass criteria. New case `graph-flag-trailing` proves the wrong-graph fix against a decoy config.
+- Golden suite 78 → 182 cases. Also fixed: the graph path is canonical and absolute, the archive-page Remap instruction, and `BRAIN_VERSION` drift (a golden case pins it to `plugin.json`).
+
 ### v0.11.0 — Deterministic helper: exact figures, fewer round trips
 - One POSIX `sh` + `awk` helper (`skills/_shared/bin/brain` + `skills/_shared/lib/*.awk`) performs every mechanical step: section measurement, the digest Map (`digest --apply`), cap checks, count-first scoped search, format lint, and the activity line. It writes only the Map line and one activity bullet.
 - Write safety: path guard, no-op detection, region-and-kind guard, final-newline and checksum race checks, and a staged rollback — a refusal leaves the file byte-identical
@@ -81,18 +89,16 @@
 - Save/load cycle against a Logseq graph
 - Initial graph layout (`pages/`, `journals/`, `Index.md`, `Meta.md`)
 
-## Current — v0.12.0: Fewer round trips, for real (implemented on branch `v0.12.0`; release pending)
+## Current — v0.13.0: Graph policy (not started)
 
-- Design: `docs/superpowers/specs/2026-09-25-v0.12.0-design.md` (approved); plan: `docs/superpowers/plans/2026-09-25-v0.12.0-fewer-round-trips.md`
-- Fix the trailing `--graph` flag, which can silently use the configured graph instead of the named one
-- Composite helper commands `brain load`, `brain save-begin` and `brain save-finish`. Measured by the eval suite on 2026-09-26: a digest load in 2 calls and a save in 6 (v0.11.0: 11 and 27)
-- Instruction diet, part 2: the routine load and save read nothing but their SKILL.md
-- Post-v0.11.0 fixes: the archive-page Remap instruction, `BRAIN_VERSION` drift, README / CLAUDE.md drift
-- The eval suite's call targets become pass criteria
+- Task-first entry: stub task pages, and loading by Jira ID.
+- Size-based Session Log rotation, and rotation for task pages.
+- A property vocabulary and the `:property-pages/enabled?` setting.
+- Re-checking stale `open::` items on save.
+- After v0.12.0 ships, about two weeks of real use: rerun `tools/measure/cost.py` against the v0.11.0 real-use baseline (load median 12 calls, save 21.5).
 
 ## Future — OG (markdown)
 
-- **Graph policy** (planned for v0.13.0) — task-first entry (stub task pages, loading by Jira ID), size-based Session Log rotation, a property vocabulary and the `:property-pages/enabled?` setting, re-checking stale `open::` items on save.
 - **Maintainer graph cleanup** — fix what `brain lint --all` reports, re-index in Logseq, backfill digests.
 - **Hygiene at a glance** (deferred from the v0.8.0 hygiene spec) — a one-line health figure in brain-status, and scheduled scans instead of on-demand only.
 - **Rotation, widened** (deferred from the v0.10.0 spec) — rotation for task pages, and rotation that runs without a prompt once the thresholds are crossed.
