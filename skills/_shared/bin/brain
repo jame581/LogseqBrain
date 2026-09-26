@@ -4,6 +4,8 @@
 # Design: docs/superpowers/specs/2026-09-11-v0.11.0-design.md
 set -u
 LC_ALL=C; export LC_ALL
+# Every `cd` below means the named directory: an exported CDPATH would send `cd graph` elsewhere.
+unset CDPATH
 BRAIN_VERSION=0.11.0
 BIN_DIR=$(cd "$(dirname "$0")" && pwd)
 LIB=$(cd "$BIN_DIR/../lib" && pwd)
