@@ -16,6 +16,9 @@ END {
   }
   i = IDX[1]; t = L[i]; crs = ""
   if (t ~ /\r$/) { crs = "\r"; sub(/\r$/, "", t) }
+  # Trailing whitespace is kept but set aside: a parenthetical followed by spaces still closes the line.
+  tws = ""; if (match(t, /[ \t]+$/)) { tws = substr(t, RSTART); t = substr(t, 1, RSTART - 1) }
+  crs = tws crs
   paren = "(" ENVIRON["BRAIN_PAREN"] ")"
   j = 0
   if (substr(t, length(t), 1) == ")") {
