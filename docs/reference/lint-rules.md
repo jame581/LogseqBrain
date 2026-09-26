@@ -44,9 +44,7 @@ Not shipped, and no skill reads this file. The helper implements these detection
 
 ## Post-write verify (scoped)
 
-## Post-write verify (scoped)
-
-After all writes in an operation, run `brain check <every file written>`. It prints, in order: the mechanical findings on lines added since the baseline that `brain sections <page> --baseline <other files>` recorded before the first Edit; then the digest findings for that page (`missing-digest`, `nonconvergent-map`, `stale-map`, `map-label`, `duplicate-map`, `oversized-digest`, `stale-digest`) — these are always measured over the whole page, not just the lines this save added, so a digest finding may predate this save; then, **last**, a summary line: `check <file>: N new (E error, W warn), P pre-existing`, with a `· digest: D error, M warn` suffix appended whenever digest findings exist. Example:
+After all writes in an operation, run `brain check <every file written>`. It prints, in order: the mechanical findings on lines added since the baseline recorded before the first Edit (by `brain save-begin` in a save, or `brain sections <page> --baseline <other files>`; `save-finish` runs this check itself over every file `save-begin` baselined); then the digest findings for that page (`missing-digest`, `nonconvergent-map`, `stale-map`, `map-label`, `duplicate-map`, `oversized-digest`, `stale-digest`) — these are always measured over the whole page, not just the lines this save added, so a digest finding may predate this save; then, **last**, a summary line: `check <file>: N new (E error, W warn), P pre-existing`, with a `· digest: D error, M warn` suffix appended whenever digest findings exist. Example:
 ```
 pages/Projects___X.md:19  bare-hash-tag  error  #44 (number)
 pages/Projects___X.md:12  stale-map      error  Session Log | 1 KB (1 entries) → 326 B (2 entries) · page | 2 KB → 712 B
