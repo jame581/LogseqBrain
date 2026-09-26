@@ -9,5 +9,10 @@ here=$(dirname "$0")
 sh "$here/../fixtures/materialize.sh" graph
 sh "$here/../fixtures/materialize.sh" decoy
 rm -f decoy/journals/*.md
+# The decoy's Demo has no ## Digest, so a load that reached it prints `digest: missing` and can never
+# satisfy graders/activity.md (the `(digest)` line): with decoy-untouched.md, two independent tells.
+awk '/^- ## Digest/ { skip = 1; next } /^- ## / { skip = 0 } !skip' decoy/pages/Projects___Demo.md > decoy/demo.tmp
+mv decoy/demo.tmp decoy/pages/Projects___Demo.md
+if grep -q '## Digest' decoy/pages/Projects___Demo.md; then echo "scaffold: decoy digest not stripped" >&2; exit 1; fi
 mkdir -p "$HOME/.config/logseq-brain"
 printf '{ "graphPath": "%s" }\n' "$(pwd)/decoy" > "$HOME/.config/logseq-brain/config.json"

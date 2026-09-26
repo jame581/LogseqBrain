@@ -51,8 +51,11 @@ for s in "$REPO"/evals/*/scaffold.sh; do
   [ -f "$s" ] || continue
   c=$(basename "$(dirname "$s")"); w=$(mktemp -d) || exit 2
   mkdir -p "$w/cwd" "$w/home"
+  # graph-flag-trailing's decoy only proves anything with the user config written and no digest to load.
+  extra=true
+  [ "$c" = graph-flag-trailing ] && extra='[ -s "$w/home/.config/logseq-brain/config.json" ] && ! grep -q "## Digest" "$w/cwd/decoy/pages/Projects___Demo.md"'
   if (cd "$w/cwd" && env -i HOME="$w/home" PATH=/usr/bin:/bin bash "$s") > "$w/log" 2>&1 \
-     && [ -f "$w/cwd/graph/pages/Index.md" ] && ! grep -rq '@TODAY' "$w/cwd/graph"; then
+     && [ -f "$w/cwd/graph/pages/Index.md" ] && ! grep -rq '@TODAY' "$w/cwd/graph" && eval "$extra"; then
     echo "ok   scaffold $c"
   else
     echo "FAIL scaffold $c: $(cat "$w/log")"; fail=1
