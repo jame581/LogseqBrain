@@ -23,3 +23,14 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y mawk original-awk gawk
       - name: golden tests
         run: BRAIN_AWK=${{ matrix.awk }} sh tests/run.sh
+  validate:
+    # Manifest and SKILL.md frontmatter: a skill whose YAML fails to parse still loads,
+    # with every field dropped — nothing else here catches it before it ships to Cowork.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: claude plugin validate
+        run: npx -y @anthropic-ai/claude-code plugin validate .
