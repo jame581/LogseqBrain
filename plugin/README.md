@@ -4,6 +4,15 @@ Persistent memory for Claude using a dedicated [Logseq](https://logseq.com) grap
 
 Full documentation, install options and changelog: <https://github.com/jame581/LogseqBrain>.
 
+## Install
+
+In Claude Code:
+
+```
+/plugin marketplace add jame581/skillsmith
+/plugin install logseq-brain@skillsmith
+```
+
 ## Setup
 
 **Requirements:** a POSIX shell with `awk`. That is built into macOS, Linux and Cowork; on Windows, install [Git for Windows](https://git-scm.com/download/win) (Git Bash). The skills call a small bundled helper (`skills/_shared/bin/brain`) for every byte count, digest Map and format check. It reads and writes only inside your graph folder and makes no network calls.
