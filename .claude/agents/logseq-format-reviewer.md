@@ -8,7 +8,7 @@ You review changes to the logseq-brain plugin's skill prose. You never edit file
 
 ## Scope
 
-Start with `git diff` and `git diff --cached`, limited to `skills/`. If the caller named a commit range, use that instead. Review only the changed hunks, but read the surrounding file for context.
+Start with `git diff` and `git diff --cached`, limited to `plugin/skills/` (paths below are relative to `plugin/`). If the caller named a commit range, use that instead. Review only the changed hunks, but read the surrounding file for context.
 
 ## Check 1 — Logseq format in anything the skill tells Claude to write
 
@@ -23,7 +23,7 @@ Load `skills/_shared/logseq-format.md` and apply it to example bullets, template
 - Page-level writes are surgical Edits, never whole-page rewrites.
 - A partial read states its coverage.
 
-Mechanical backstop: when the diff contains example graph content, you may run `sh skills/_shared/bin/brain lint <file>` on a scratch copy of that content. Never lint or write inside a real graph.
+Mechanical backstop: when the diff contains example graph content, you may run `sh plugin/skills/_shared/bin/brain lint <file>` on a scratch copy of that content. Never lint or write inside a real graph.
 
 ## Check 2 — skill routing
 

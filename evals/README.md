@@ -15,7 +15,7 @@ Design: [`docs/superpowers/specs/2026-09-13-eval-suite-design.md`](../docs/super
 
 - **WSL2 or Linux only.** A run that grants Bash needs Claude Code's OS sandbox. Native Windows has none, so the harness refuses the run (score 0) rather than run it unconfined.
 - **As a dedicated user, `logseq-eval`.** The sandbox refuses to start while `~/.docker` contains a symlink, and Docker Desktop's WSL integration creates one for your normal user. A separate user avoids that without weakening the check. It has no `~/.docker`, no sudo, and its own Claude login. Never work around the check with `DOCKER_CONFIG`.
-- **Against the committed plugin.** The wrapper exports `HEAD`'s `.claude-plugin`, `skills` and `evals` to a temporary copy, so uncommitted edits are never evaluated. Commit first.
+- **Against the committed plugin.** The wrapper exports `HEAD`'s `plugin/` folder plus `evals` to a temporary copy, so uncommitted edits are never evaluated. Commit first.
 
 ## One-time setup
 
@@ -137,7 +137,7 @@ wsl -d FedoraLinux-44 -u logseq-eval -e sh -c 'rm -rf ~/logseq-eval-run.* /mnt/c
    - Journal file names are today's date, so assert the helper's `activity:` output in the trace instead.
 4. **Fixture dates** are 10-byte tokens: `@TODAY-NN@` (NN days ago) in content, `@TODAY_NN@` in file names. After changing `evals/fixtures/base-graph/`:
    - materialize a copy (`sh evals/fixtures/materialize.sh /tmp/g`);
-   - regenerate any Map line there with `sh skills/_shared/bin/brain --graph /tmp/g digest <page> --apply`;
+   - regenerate any Map line there with `sh plugin/skills/_shared/bin/brain --graph /tmp/g digest <page> --apply`;
    - copy the new line back into the tokenized page;
    - update the golden cases, and run `sh tests/run.sh 'eval-fixture-*'`.
 5. **Commit,** then run `sh tools/eval/test.sh`, then `run.sh --check`, then `run.sh --case <name>`.

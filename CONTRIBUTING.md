@@ -1,22 +1,24 @@
 # Contributing to logseq-brain
 
-Thanks for your interest in contributing! `logseq-brain` is a Claude Code plugin that gives agents persistent memory via a user-owned [Logseq](https://logseq.com) graph. It has **no build step**. The plugin is markdown skills (`skills/<name>/SKILL.md`), `.claude-plugin/plugin.json`, and — since v0.11.0 — one POSIX `sh` + `awk` helper (`skills/_shared/bin/brain` plus `skills/_shared/lib/*.awk`) that performs the mechanical steps: section measurement, the digest Map, caps, scoped search, lint, the activity line. The agent supplies the judgment.
+Thanks for your interest in contributing! `logseq-brain` is a Claude Code plugin that gives agents persistent memory via a user-owned [Logseq](https://logseq.com) graph. It has **no build step**. The shipped plugin is the `plugin/` folder: markdown skills (`plugin/skills/<name>/SKILL.md`), `plugin/.claude-plugin/plugin.json`, and — since v0.11.0 — one POSIX `sh` + `awk` helper (`skills/_shared/bin/brain` plus `skills/_shared/lib/*.awk`) that performs the mechanical steps: section measurement, the digest Map, caps, scoped search, lint, the activity line. The agent supplies the judgment.
 
 Please open an issue before large changes so we can align on scope.
 
 ## Project layout
 
 ```
-.claude-plugin/
-  plugin.json           # Plugin metadata (name, version, author)
-skills/
-  brain-init/SKILL.md   # First-time graph setup + new project pages
-  brain-load/SKILL.md   # Load project context into a session
-  brain-save/SKILL.md   # Surgical append of logs, decisions, plan updates
-  brain-status/SKILL.md # Dashboard across all projects
-  brain-doctor/SKILL.md # Graph-hygiene lint + repair (phantom pages, broken macros)
-  _shared/bin/brain     # The helper: a POSIX sh dispatcher
-  _shared/lib/*.awk     # The helper's awk programs
+plugin/                   # Everything installers get, and nothing else
+  .claude-plugin/
+    plugin.json           # Plugin metadata (name, version, author)
+  skills/
+    brain-init/SKILL.md   # First-time graph setup + new project pages
+    brain-load/SKILL.md   # Load project context into a session
+    brain-save/SKILL.md   # Surgical append of logs, decisions, plan updates
+    brain-status/SKILL.md # Dashboard across all projects
+    brain-doctor/SKILL.md # Graph-hygiene lint + repair (phantom pages, broken macros)
+    _shared/bin/brain     # The helper: a POSIX sh dispatcher
+    _shared/lib/*.awk     # The helper's awk programs
+  README.md, LICENSE      # Short installer-facing README; the full one is at the repo root
 tests/                  # Golden-file suite for the helper: `sh tests/run.sh`
 evals/                  # claude plugin eval suite, run locally in WSL2: see evals/README.md
 tools/                  # Dev-only oracle, measurement and eval-wrapper scripts, not shipped
@@ -110,7 +112,7 @@ Releases follow semver and are cut from `main`.
 
 0. The `tests` workflow is green on the release commit.
 1. The eval suite passes on the release commit: `sh tools/eval/run.sh`, run as the `logseq-eval` WSL user, exits 0 — every case passes, and the summary shows both `canary: sentinels unchanged (/tmp and Windows mount)` and `canary: confinement re-proven` ([`evals/README.md`](./evals/README.md)). If the Windows half cannot run, the wrapper refuses: restore WSL interop with `wsl --shutdown` and rerun; or, after a run with `EVAL_CANARY_SKIP_WIN=1`, rerun `--case isolation-canary` with `EVAL_CANARY_WINDIR` set, and record both results in the release notes. A failed case may be rerun once with `--case <name>`: a pass on the rerun goes in the release notes as a flake, and a second failure blocks the release. A usage-limit error in the summary is not a failure; rerun after the limit resets. Put the `load-digest` and `save-basic` tool-call figures from its summary in the release notes. It runs locally only; CI keeps running the golden tests.
-2. Update `.claude-plugin/plugin.json` → `"version": "X.Y.Z"`, and `BRAIN_VERSION` in `skills/_shared/bin/brain` to match (the `version-matches-plugin` golden case fails until both agree).
+2. Update `plugin/.claude-plugin/plugin.json` → `"version": "X.Y.Z"`, and `BRAIN_VERSION` in `plugin/skills/_shared/bin/brain` to match (the `version-matches-plugin` golden case fails until both agree).
 3. Update `ROADMAP.md` if phase status changed.
 4. Commit with a `chore: prepare vX.Y.Z release` message.
 5. Tag and push:
@@ -121,11 +123,12 @@ Releases follow semver and are cut from `main`.
 6. Create a GitHub release with notes summarizing changes.
 7. Rebuild the `.plugin` archive from committed content and verify it before shipping — nothing else keeps it current, and a stale one silently ships old skills to Cowork:
    ```bash
-   git archive --format=zip -o logseq-brain.plugin HEAD .claude-plugin skills README.md
+   git archive --format=zip -o logseq-brain.plugin HEAD:plugin
    python -m zipfile -l logseq-brain.plugin
    ```
    Confirm the listing contains `skills/_shared/bin/brain` and `skills/_shared/lib/core.awk`, and contains **no** `tests/` or `tools/` entries.
-8. Bump the version in [`skillsmith`](https://github.com/jame581/skillsmith) `.claude-plugin/marketplace.json` so new installs pick up the release.
+8. Bump the version in [`skillsmith`](https://github.com/jame581/skillsmith) `.claude-plugin/marketplace.json` so new installs pick up the release. Its `logseq-brain` entry must point at the `plugin/` subfolder, e.g. `"source": { "source": "git-subdir", "url": "https://github.com/jame581/LogseqBrain.git", "path": "plugin", "ref": "vX.Y.Z" }`, so installs get only the plugin folder.
+9. For the Anthropic plugin directory, the submission's plugin path is `plugin`. Push, then Re-validate on the portal's Source step.
 
 ## Pull request checklist
 
@@ -133,7 +136,7 @@ Releases follow semver and are cut from `main`.
 - [ ] `SKILL.md` frontmatter still valid; `description` still accurately reflects when the skill should trigger
 - [ ] Logseq format invariants respected in any generated-content examples
 - [ ] README / ROADMAP / CLAUDE.md updated if user- or contributor-facing
-- [ ] `version` bumped in `.claude-plugin/plugin.json` if user-facing
+- [ ] `version` bumped in `plugin/.claude-plugin/plugin.json` if user-facing
 - [ ] Tested against a real ClaudeBrain graph
 
 ## License

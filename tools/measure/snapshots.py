@@ -11,7 +11,7 @@ Usage: python tools/measure/snapshots.py --graph PATH [--since yyyy-mm-dd] [--sh
 import argparse, collections, datetime, glob, hashlib, os, re, shutil, subprocess, sys, tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-BRAIN = os.path.join(ROOT, 'skills', '_shared', 'bin', 'brain')
+BRAIN = os.path.join(ROOT, 'plugin', 'skills', '_shared', 'bin', 'brain')
 TS = re.compile(r'^(\d{4})-(\d{2})-(\d{2})T(\d{2})_(\d{2})_(\d{2})')
 DIGEST = re.compile(r'(?ms)^\s*(?:- )?## Digest\s*$.*?(?=^\s*(?:- )?## |\Z)')
 
