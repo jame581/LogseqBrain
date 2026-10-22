@@ -164,8 +164,8 @@ resolve_page() {
   fi
   if [ ! -f "$GRAPH/$_rel" ]; then
     printf 'brain: page not found: %s\n' "$_p" >&2
-    _key=$(printf '%s' "$_p" | sed 's#\.md$##; s#___#/#g; s#.*/##')
-    ls "$GRAPH/pages" 2>/dev/null | sed 's#\.md$##; s#___#/#g' | grep -i -F -- "$_key" \
+    _slug=$(printf '%s' "$_p" | sed 's#\.md$##; s#___#/#g; s#.*/##')
+    ls "$GRAPH/pages" 2>/dev/null | sed 's#\.md$##; s#___#/#g' | grep -i -F -- "$_slug" \
       | head -n 5 | sed 's/^/  did you mean: /' >&2
     exit 2
   fi
@@ -191,9 +191,9 @@ cmd_info() {
 save_baseline() {
   guard_rel "$1"
   _sd="$STATE_DIR/base"
-  _key=$(printf '%s' "$1" | sed 's#/#%#g')
-  if [ -f "$GRAPH/$1" ]; then cp "$GRAPH/$1" "$_sd/$_key"; else : > "$_sd/$_key"; fi
-  date +%s > "$_sd/$_key.ts"
+  _slug=$(printf '%s' "$1" | sed 's#/#%#g')
+  if [ -f "$GRAPH/$1" ]; then cp "$GRAPH/$1" "$_sd/$_slug"; else : > "$_sd/$_slug"; fi
+  date +%s > "$_sd/$_slug.ts"
 }
 
 cmd_sections() {
