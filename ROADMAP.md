@@ -2,6 +2,10 @@
 
 ## Shipped
 
+### v0.12.1 — Packaging for the plugin directory
+- The shipped plugin moved into `plugin/` (41 files: `.claude-plugin/`, `skills/`, a short installer README, LICENSE and a listing icon). Tests, evals, tools, design docs and the repo's `CLAUDE.md` stay outside it, so installers and Anthropic's plugin directory get only the plugin. No skill or helper behavior changed.
+- The skillsmith marketplace entry installs from the `plugin/` subfolder (`git-subdir`).
+
 ### v0.12.0 — Fewer round trips, for real
 - `--graph` is accepted anywhere on the helper's command line, and an empty one is refused. A trailing flag used to run silently against the configured graph, and could write the flag into the journal.
 - Composite helper commands: `brain load` (a digest load in one call), and `brain save-begin` / `brain save-finish` (a save is: begin, one Read, the Edits, finish). Eval suite, 2026-09-26: a digest load in 2 tool calls and a save in 6 (v0.11.0: 11 and 27).
