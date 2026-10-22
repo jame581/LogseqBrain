@@ -19,7 +19,7 @@ Link any related issues, discussions, or previous PRs.
 
 - [ ] Kept changes focused on the intended scope
 - [ ] Updated the relevant documentation (README / ROADMAP / CLAUDE.md)
-- [ ] Bumped `version` in `.claude-plugin/plugin.json` if user-facing
+- [ ] Bumped `version` in `plugin/.claude-plugin/plugin.json` if user-facing
 
 ## Skill-specific checklist
 

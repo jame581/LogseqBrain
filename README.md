@@ -43,7 +43,7 @@ gemini extensions install https://github.com/jame581/LogseqBrain
 
 ## Setup
 
-**Requirements:** a POSIX shell with `awk`. That is built into macOS, Linux and Cowork; on Windows, install [Git for Windows](https://git-scm.com/download/win) (Git Bash). The skills call a small bundled helper (`skills/_shared/bin/brain`) for every byte count, digest Map and format check.
+**Requirements:** a POSIX shell with `awk`. That is built into macOS, Linux and Cowork; on Windows, install [Git for Windows](https://git-scm.com/download/win) (Git Bash). The skills call a small bundled helper (`plugin/skills/_shared/bin/brain` in this repo) for every byte count, digest Map and format check.
 
 After installing, create a Logseq graph (e.g. "ClaudeBrain") and tell the plugin where to find it. Pick one:
 

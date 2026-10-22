@@ -11,7 +11,7 @@ Exit 1 if brain lint misses a live parse-error page, or reports a tag Logseq nev
 import argparse, collections, glob, json, os, shutil, subprocess, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-BRAIN = os.path.join(ROOT, 'skills', '_shared', 'bin', 'brain')
+BRAIN = os.path.join(ROOT, 'plugin', 'skills', '_shared', 'bin', 'brain')
 
 
 class Kw(str):

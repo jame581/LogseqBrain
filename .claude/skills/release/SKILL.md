@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 `CONTRIBUTING.md` § Releasing a new version is the source of truth. Read it now, in full, and follow it step by step. This skill only adds the order of operations and the checks that have slipped before.
 
-Argument: the version `X.Y.Z`. If none was given, read `.claude-plugin/plugin.json` and `ROADMAP.md` and ask which version to cut.
+Argument: the version `X.Y.Z`. If none was given, read `plugin/.claude-plugin/plugin.json` and `ROADMAP.md` and ask which version to cut.
 
 ## Before step 0
 
@@ -22,7 +22,7 @@ Argument: the version `X.Y.Z`. If none was given, read `.claude-plugin/plugin.js
 
 ## Mechanical steps
 
-- Bump **both** `.claude-plugin/plugin.json` `"version"` and `BRAIN_VERSION` in `skills/_shared/bin/brain`. The `version-matches-plugin` golden case fails until they agree, so run `sh tests/run.sh 'version-*'`.
+- Bump **both** `plugin/.claude-plugin/plugin.json` `"version"` and `BRAIN_VERSION` in `plugin/skills/_shared/bin/brain`. The `version-matches-plugin` golden case fails until they agree, so run `sh tests/run.sh 'version-*'`.
 - Annotate the version's design spec with the release measurement if the spec calls for it. Never rewrite the spec body.
 - Commit with `chore(release): prepare vX.Y.Z`, then tag it annotated and push the tag. **Confirm with the user before pushing.**
 - Create the GitHub release (`gh release create vX.Y.Z --notes-file …`). Draft the notes from the commits since the previous tag, and include the eval figures.

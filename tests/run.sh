@@ -1,5 +1,5 @@
 #!/bin/sh
-# Golden-file tests for skills/_shared/bin/brain.
+# Golden-file tests for plugin/skills/_shared/bin/brain.
 # Usage: sh tests/run.sh [case-name-glob]      BRAIN_AWK=mawk sh tests/run.sh
 #
 # Case files (tests/cases/<name>/): cmd (required); graph/, setup.sh, env, no-graph-flag;
@@ -11,7 +11,7 @@
 set -u
 LC_ALL=C; export LC_ALL
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-BRAIN="$ROOT/skills/_shared/bin/brain"
+BRAIN="$ROOT/plugin/skills/_shared/bin/brain"
 . "$ROOT/tests/lib/fixture.sh"
 WORK="${TMPDIR:-/tmp}/brain-tests.$$"
 rm -rf "$WORK"; mkdir -p "$WORK" || exit 2

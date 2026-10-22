@@ -127,10 +127,12 @@ trap 'exit 2' HUP INT TERM
 repo_git() { git -c safe.directory="$REPO" -c core.filemode=false --no-optional-locks -C "$REPO" "$@"; }
 SHA=$(repo_git rev-parse --short HEAD 2>/dev/null) || die "not a git repository: $REPO"
 PLUGIN="$WORK/logseq-brain"; mkdir -p "$PLUGIN"
-repo_git archive --format=tar HEAD .claude-plugin skills evals | tar -x -C "$PLUGIN" 2>/dev/null
-[ -f "$PLUGIN/.claude-plugin/plugin.json" ] && [ -d "$PLUGIN/evals" ] || die "could not export .claude-plugin, skills and evals from HEAD ($SHA)"
+# The shipped plugin is plugin/; evals/ sits beside it in the repo and joins it only in this copy.
+repo_git archive --format=tar HEAD:plugin | tar -x -C "$PLUGIN" 2>/dev/null
+repo_git archive --format=tar HEAD evals | tar -x -C "$PLUGIN" 2>/dev/null
+[ -f "$PLUGIN/.claude-plugin/plugin.json" ] && [ -d "$PLUGIN/evals" ] || die "could not export plugin/ and evals from HEAD ($SHA)"
 rm -rf "$PLUGIN/evals/results"
-DIRTY=$(repo_git status --porcelain -- .claude-plugin skills evals 2>/dev/null)
+DIRTY=$(repo_git status --porcelain -- plugin evals 2>/dev/null)
 
 # 3. Canary sentinels outside the run workspace, proven writable by this user before the run.
 seed() { printf 'ORIGINAL\n' > "$1/edit-target.txt" && touch "$1/.writable" && rm "$1/.writable"; }
@@ -188,7 +190,7 @@ set -- "$PLUGIN" --runs 1 --ablation none --scaffold --allow-tools Bash Write Ed
 [ -z "$CASE_GLOB" ] || set -- "$@" --case "$CASE_GLOB"
 set -- "$@" --output-dir "$OUT" --json "$OUT/result.json"
 echo "logseq-brain eval · $MODE · HEAD $SHA · Claude Code $CLAUDE_VER · $MODEL${CASE_GLOB:+ · --case $CASE_GLOB}"
-[ -z "$DIRTY" ] || echo "note: uncommitted changes under .claude-plugin/, skills/ or evals/ are NOT evaluated"
+[ -z "$DIRTY" ] || echo "note: uncommitted changes under plugin/ or evals/ are NOT evaluated"
 case $MODE in
   dry|trip)
     echo "dry run — would run: claude plugin eval $*"

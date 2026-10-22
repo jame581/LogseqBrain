@@ -11,7 +11,7 @@ disable-model-invocation: true
 ## Hard rules
 
 - Run it **only** through WSL2 as the `logseq-eval` user: `wsl -d FedoraLinux-44 -u logseq-eval sh /mnt/d/AI/logseq-brain/tools/eval/run.sh …`. Never run it on native Windows, and never as the Docker-linked user.
-- It evaluates **committed** files only. If `git status` shows uncommitted changes to `skills/`, say that they won't be evaluated.
+- It evaluates **committed** files only. If `git status` shows uncommitted changes to `plugin/`, say that they won't be evaluated.
 - Run it through PowerShell, or through Bash with single quotes. wsl.exe heredocs halve backslashes.
 
 ## Modes
