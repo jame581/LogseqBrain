@@ -1,0 +1,1 @@
+activity "$(printf 'loaded x\nbare paragraph')"

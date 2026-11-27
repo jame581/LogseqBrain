@@ -56,7 +56,7 @@ save_fixture() {
 # sb_block NAME — the lines of block "== NAME" in $RUN/out, without its header (for post.sh).
 sb_block() { awk -v b="== $1" '$0 == b { on = 1; next } /^== / { on = 0 } on' "$RUN/out"; }
 # sb_manifest — the one save manifest under this case's TMPDIR, or nothing.
-sb_manifest() { find "$TMPDIR/logseq-brain" -name 'save.*.lst' -type f 2>/dev/null; }
+sb_manifest() { find "$TMPDIR"/logseq-brain-* -name 'save.*.lst' -type f 2>/dev/null; }
 
 # save-finish fixtures. sf_begin ARGS… — save-begin, quietly (setup.sh runs it before the "Edits");
 # exit 1 (digest findings) is normal there, exit 2 fails the setup.

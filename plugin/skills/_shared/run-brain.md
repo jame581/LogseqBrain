@@ -41,7 +41,7 @@ The script resolves the graph itself: `--graph DIR`, then `LOGSEQ_BRAIN_PATH`, t
 | `check <file…>` | After writing: lint only what was added since the baseline, with a `fix <rule>:` hint per rule that fired |
 | `lint [--all \| files…]` | Every rule over whole files (brain-doctor) |
 | `status` | One TSV row per project and task page (brain-status) |
-| `activity '<line>'` | The journey-log line in today's journal (`HH:MM` added for you) |
+| `activity '<line>'` | The journey-log line in today's journal (`HH:MM` added for you). One line, linted first: an error-tier finding (`#44`, `{{x}}`, …) or a line break is refused (exit 2) and nothing is written. |
 
 ## Reading its output
 
@@ -50,3 +50,4 @@ The script resolves the graph itself: `--graph DIR`, then `LOGSEQ_BRAIN_PATH`, t
 - Commands that return content end with a `coverage:` line. **Quote it** when you present the content: it is your truncation-honesty statement.
 - Exit **0** clean · **1** findings (read and act on them) · **2** usage or environment error (a one-line reason on stderr: act on it, don't retry blindly). A composite exits with the worst of its parts.
 - **Never recompute what it printed.** Its figures are the figures.
+- Writers on one graph take turns. `graph busy` (exit 2) means another run held the lock for 30 s. If none is running, remove the folder it names and rerun.

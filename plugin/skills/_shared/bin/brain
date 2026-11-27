@@ -104,7 +104,7 @@ now_hm() { printf '%s\n' "${BRAIN_NOW:-$(date +%H:%M)}"; }
 # State directory, run directory and today's date: resolved once, here in the main shell.
 # Resolved inside $( ) instead, a die would exit only the subshell and could not stop the run —
 # the caller would get a full section table *and* a failure, or a temp path at the filesystem root.
-STATE_DIR=; RUN_DIR=; TODAY=; INFLIGHT=; ROLLBACK=
+STATE_DIR=; RUN_DIR=; TODAY=; INFLIGHT=; ROLLBACK=; LOCKED=
 
 cleanup() {
   if [ -n "$INFLIGHT" ] && [ -n "$ROLLBACK" ] && [ -f "$ROLLBACK" ]; then
@@ -116,6 +116,9 @@ cleanup() {
   INFLIGHT=
   [ -n "$RUN_DIR" ] && rm -rf "$RUN_DIR"
   RUN_DIR=
+  # Released last: a restore above still runs under the lock.
+  [ -n "$LOCKED" ] && rm -rf "$LOCKED"
+  LOCKED=
   return 0
 }
 trap cleanup EXIT
@@ -127,11 +130,40 @@ trap 'cleanup; exit 143' TERM
 init_run() {
   TODAY=${BRAIN_TODAY:-$(date +%Y-%m-%d)}
   valid_date "$TODAY" || exit 2
-  STATE_DIR="${TMPDIR:-/tmp}/logseq-brain/$(printf '%s' "$GRAPH" | cksum | cut -d' ' -f1)"
+  # Per user and private: the baselines are copies of the user's pages. A shared /tmp/logseq-brain
+  # was world-readable, and the first user to create it locked every other user out of it.
+  _uid=$(id -u 2>/dev/null) || _uid=
+  case $_uid in ''|*[!0-9]*) _uid=$(printf '%s' "${USER:-${USERNAME:-user}}" | tr -c 'A-Za-z0-9_.-' '_') ;; esac
+  _root="${TMPDIR:-/tmp}/logseq-brain-$_uid"
+  STATE_DIR="$_root/$(printf '%s' "$GRAPH" | cksum | cut -d' ' -f1)"
   RUN_DIR="$STATE_DIR/run.$$"
   # Capture the path before clearing RUN_DIR (which stops the cleanup trap touching a dir we never
   # made): clearing it first left die printing "cannot create state dir" with nothing after it.
-  mkdir -p "$STATE_DIR/base" "$RUN_DIR" || { _rd=$RUN_DIR; RUN_DIR=; die "cannot create state dir $_rd"; }
+  # chmod fails on a directory (or a planted symlink's target) owned by someone else: refuse it.
+  { mkdir -p "$_root" && chmod 700 "$_root" && mkdir -p "$STATE_DIR/base" "$RUN_DIR"; } 2>/dev/null \
+    || { _rd=$RUN_DIR; RUN_DIR=; die "cannot create state dir $_rd"; }
+}
+
+# graph_lock — serialize the helper's own writers on this graph (two sessions saving or loading at
+# once used to rewrite each other's journal line). Taken before a writer reads its target, held to
+# exit (the cleanup trap releases it). A lock whose holder is gone is taken over. Claude's Edits and
+# Logseq never take it: the checksum recheck in commit_write still covers those.
+graph_lock() {
+  [ -n "$LOCKED" ] && return 0
+  _lk="$STATE_DIR/lock"; _lw=0
+  while ! mkdir "$_lk" 2>/dev/null; do
+    _lp=$(cat "$_lk/pid" 2>/dev/null)
+    if [ -n "$_lp" ] && ! kill -0 "$_lp" 2>/dev/null && [ "$(cat "$_lk/pid" 2>/dev/null)" = "$_lp" ]; then
+      mv "$_lk" "$_lk.stale.$$" 2>/dev/null && rm -rf "$_lk.stale.$$"
+      continue
+    fi
+    _lw=$((_lw + 1))
+    [ "$_lw" -le "${BRAIN_LOCK_WAIT:-30}" ] \
+      || die "graph busy — another brain run (pid ${_lp:-?}) holds $_lk; if none is running, remove that folder and rerun"
+    sleep 1
+  done
+  LOCKED=$_lk
+  printf '%s\n' "$$" > "$_lk/pid"
 }
 
 nonl() {
@@ -285,7 +317,8 @@ commit_write() {
   if [ -f "$_t" ] && [ "$(nonl "$_t")" != "$(nonl "$2")" ]; then
     rm -f "$2"; die "refusing to write — final-newline status of $1 would change"
   fi
-  [ -n "${BRAIN_TEST_MUTATE_BEFORE_COMMIT:-}" ] && printf ' ' >> "$_t"   # test-only hook
+  # Test-only hooks run only under BRAIN_TEST_INTERNAL=1: a stray variable must never touch a page.
+  [ "${BRAIN_TEST_INTERNAL:-}" = 1 ] && [ -n "${BRAIN_TEST_MUTATE_BEFORE_COMMIT:-}" ] && printf ' ' >> "$_t"
   if [ -f "$_t" ]; then _now=$(cksum < "$_t"); else _now=absent; fi
   if [ "$_now" != "$5" ]; then rm -f "$2"; die "$1 changed during apply — rerun"; fi
   # §2.5 mandates this in-place `cat`, which opens the target O_TRUNC. Stage a rollback copy first:
@@ -298,7 +331,7 @@ commit_write() {
     cp "$_t" "$ROLLBACK" || { ROLLBACK=; rm -f "$2"; die "cannot stage a rollback copy of $1 — refusing to write"; }
   fi
   INFLIGHT=$1
-  if [ -n "${BRAIN_TEST_FAIL_COMMIT:-}" ]; then : > "$_t"; _wrc=1   # test-only hook: truncate, then fail
+  if [ "${BRAIN_TEST_INTERNAL:-}" = 1 ] && [ -n "${BRAIN_TEST_FAIL_COMMIT:-}" ]; then : > "$_t"; _wrc=1   # test-only: truncate, then fail
   else cat "$2" > "$_t"; _wrc=$?; fi
   INFLIGHT=
   if [ "$_wrc" != 0 ]; then
@@ -346,6 +379,7 @@ apply_report() {
 }
 
 cmd_digest_apply() {
+  graph_lock
   _f="$GRAPH/$PAGE_REL"
   _sum=$(cksum < "$_f")
   _tmp="$RUN_DIR/apply"
@@ -522,34 +556,45 @@ flag_text_guard() {
   return 0
 }
 
-# validate_text KIND NAME TEXT — Claude-composed text the helper is about to write (KIND summary or
-# index), checked before anything is written: one line, the --graph guard, balanced parentheses for
-# --index, and no error-tier lint finding. Only the new text is linted (as the bullet it becomes),
-# so an old error elsewhere in the file never blocks a save. Warn-tier findings print and pass.
+# validate_text KIND NAME TEXT — Claude-composed text the helper is about to write (KIND summary,
+# index or activity), checked before anything is written: one line, the --graph guard, balanced
+# parentheses for --index, and no error-tier lint finding. Only the new text is linted (as the bullet
+# it becomes), so an old error elsewhere in the file never blocks a save. Warn-tier findings print
+# and pass — except for activity, which skips the whole-graph lists and prints errors only (every
+# load and save writes one, and its links are to the page just loaded or saved).
 # Returns 1 with the reason printed; never exits.
 validate_text() {
   _vt_k=$1; _vt_n=$2; _vt_t=$3
+  if [ "$_vt_k" = activity ]; then _vt_l="activity text"; else _vt_l="--$_vt_k text"; fi
   case $_vt_t in
-    *"$NL"*|*"$CR"*) printf 'refusing to write --%s text: it contains a line break\n' "$_vt_k"; return 1 ;;
+    *"$NL"*|*"$CR"*) printf 'refusing to write %s: it contains a line break\n' "$_vt_l"; return 1 ;;
   esac
   flag_text_guard "$_vt_k" "$_vt_t" || return 1
   if [ "$_vt_k" = index ] && ! printf '%s\n' "$_vt_t" | $AWK -v BINMODE=3 '
       { for (i = 1; i <= length($0); i++) { c = substr($0, i, 1)
           if (c == "(") d++; else if (c == ")" && --d < 0) exit 1 } }
       END { exit (d != 0) }'; then
-    printf 'refusing to write --%s text: unbalanced parentheses\n' "$_vt_k"; return 1
+    printf 'refusing to write %s: unbalanced parentheses\n' "$_vt_l"; return 1
   fi
-  graph_lists
-  _vt_d="$RUN_DIR/prelint"; mkdir -p "$_vt_d/pages" || die "cannot create $_vt_d"
+  _vt_d="$RUN_DIR/prelint.$_vt_k"; mkdir -p "$_vt_d/pages" || die "cannot create $_vt_d"
   if [ "$_vt_k" = summary ]; then printf -- '- [[%s]]: %s\n' "$_vt_n" "$_vt_t"
   else printf -- '- %s\n' "$_vt_t"; fi > "$_vt_d/pages/Prelint.md"
   printf 'pages/Prelint.md\n' > "$_vt_d/list"; : > "$_vt_d/cnt"
-  (cd "$_vt_d" && run_awk lint -v listfile=list -v pagesfile="$PAGES_LST" -v propsfile="$PROPS_LST" -v countfile=cnt) \
-    > "$_vt_d/out" || die "lint failed on the --$_vt_k text"
-  [ "$(cut -f1 "$_vt_d/cnt")" = 1 ] || die "lint failed on the --$_vt_k text — the engine did not lint it"
-  sed "s#^pages/Prelint\.md:[0-9]*#--$_vt_k text#" "$_vt_d/out"
+  if [ "$_vt_k" = activity ]; then
+    (cd "$_vt_d" && run_awk lint -v listfile=list -v countfile=cnt) > "$_vt_d/out" \
+      || die "lint failed on the $_vt_l"
+  else
+    graph_lists
+    (cd "$_vt_d" && run_awk lint -v listfile=list -v pagesfile="$PAGES_LST" -v propsfile="$PROPS_LST" -v countfile=cnt) \
+      > "$_vt_d/out" || die "lint failed on the $_vt_l"
+  fi
+  [ "$(cut -f1 "$_vt_d/cnt")" = 1 ] || die "lint failed on the $_vt_l — the engine did not lint it"
+  # Label each finding with the text's name; awk, not sed, so no byte of it is read as syntax.
+  $AWK -v BINMODE=3 -v lbl="$_vt_l" -v errs="$([ "$_vt_k" = activity ] && echo 1)" -F '\t' '
+    errs != "" && $3 != "error" { next }
+    { sub(/^pages\/Prelint\.md:[0-9]*/, ""); print lbl $0 }' "$_vt_d/out"
   if [ "$(cut -f2 "$_vt_d/cnt")" != 0 ]; then
-    printf 'refusing to write --%s text: fix it and rerun\n' "$_vt_k"; return 1
+    printf 'refusing to write %s: fix it and rerun\n' "$_vt_l"; return 1
   fi
   return 0
 }
@@ -558,6 +603,7 @@ validate_text() {
 # when missing), through the verified single-change commit. An identical bullet is not written twice.
 # The guard regexes go through awk -v, so their backslashes are doubled (Global Constraints).
 write_sessions() {
+  graph_lock
   _ws_rel=$(today_file); _ws_t="$GRAPH/$_ws_rel"; _ws_tmp="$RUN_DIR/sessions"
   _ws_bullet="[[$1]]: $2"; _ws_want='^[ \t]*- \\[\\[(Projects|Tasks)/'
   BRAIN_BULLET=$_ws_bullet; export BRAIN_BULLET
@@ -585,6 +631,7 @@ write_sessions() {
 # write_index NAME TEXT — the parenthetical of NAME's one-liner in pages/Index.md becomes "(TEXT)".
 # Missing, ambiguous or no Index: nothing is written, the message says what to do, and it returns 0.
 write_index() {
+  graph_lock
   _wi_rel=pages/Index.md; _wi_f="$GRAPH/$_wi_rel"; _wi_tmp="$RUN_DIR/index"
   [ -f "$_wi_f" ] || { echo "index: no pages/Index.md — nothing written"; return 0; }
   _wi_sum=$(cksum < "$_wi_f")
@@ -612,19 +659,22 @@ today_file() { printf 'journals/%s.md\n' "$(printf '%s' "$TODAY" | tr '-' '_')";
 
 cmd_activity() {
   [ $# -ge 1 ] || die "usage: brain activity <text>"
-  flag_text_guard activity "$*" || exit 2
+  validate_text activity '' "$*" || exit 2
   if [ "$(json_get journeyLog "$(config_file)")" = false ]; then echo "journey log disabled (journeyLog: false)"; return 0; fi
+  graph_lock
+  # Only the headings and one HH:MM bullet may be written: never a second, raw line.
+  _want='^(- )?## (Sessions|Activity)|^[ \t]*- [0-9][0-9]:[0-9][0-9] '
   _rel=$(today_file); _t="$GRAPH/$_rel"
   _line="$(now_hm) $*"
   _tmp="$RUN_DIR/activity"
   if [ -f "$_t" ]; then
     _sum=$(cksum < "$_t")
     BRAIN_BULLET=$_line run_awk activity -v nonl="$(nonl "$_t")" -v new=0 "$_t" > "$_tmp" || { rm -f "$_tmp"; die "activity failed on $_rel"; }
-    commit_write "$_rel" "$_tmp" 0 2 "$_sum"
+    commit_write "$_rel" "$_tmp" 0 2 "$_sum" "$_want"
   else
     mkdir -p "$GRAPH/journals" || die "cannot create journals/"
     BRAIN_BULLET=$_line run_awk activity -v new=1 /dev/null > "$_tmp" || { rm -f "$_tmp"; die "activity failed on $_rel"; }
-    commit_write "$_rel" "$_tmp" 0 3 absent
+    commit_write "$_rel" "$_tmp" 0 3 absent "$_want"
   fi
   printf 'activity: %s → %s\n' "$_line" "$_rel"      # not echo: dash's echo expands backslashes
 }
@@ -779,6 +829,7 @@ cmd_save_finish() {
     esac
   done
   resolve_page "$_sf_pg"; _sf_rel=$PAGE_REL; _sf_name=$PAGE_NAME
+  graph_lock      # held from the validation checksums through the activity line
   _sf_m=$(save_manifest_path "$_sf_rel")
   if [ ! -f "$_sf_m" ] || ! manifest_fresh "$_sf_m"; then
     die "no save-begin for $_sf_name in the last 12 h — run brain save-begin first"
@@ -804,7 +855,7 @@ cmd_save_finish() {
     if [ "$_sf_f" != "$_sf_rel" ] && grep -q '^digest: missing' "$_sf_rep"; then continue; fi
     if grep -q '^over: ' "$_sf_rep"; then
       if [ "$_sf_f" = "$_sf_rel" ]; then grep '^over: ' "$_sf_rep"
-      else grep '^over: ' "$_sf_rep" | sed "s#^#$_sf_f: #"; fi
+      else grep '^over: ' "$_sf_rep" | while IFS= read -r _sf_l; do printf '%s: %s\n' "$_sf_f" "$_sf_l"; done; fi
       _sf_over=1; continue
     fi
     _sf_i=$((_sf_i + 1)); _sf_out="$RUN_DIR/save-finish.map.$_sf_i"
@@ -839,7 +890,11 @@ cmd_save_finish() {
   set --
   while IFS= read -r _sf_f || [ -n "$_sf_f" ]; do
     _sf_b="$STATE_DIR/base/$(printf '%s' "$_sf_f" | sed 's#/#%#g')"
-    if [ ! -f "$GRAPH/$_sf_f" ] && [ ! -s "$_sf_b" ]; then echo "check $_sf_f: not written (absent)"; continue; fi
+    if [ ! -f "$GRAPH/$_sf_f" ]; then
+      if [ -s "$_sf_b" ]; then echo "check $_sf_f: deleted since save-begin — not checked"
+      else echo "check $_sf_f: not written (absent)"; fi
+      continue
+    fi
     set -- "$@" "$_sf_f"
   done < "$_sf_files"
   _sf_crc=0
