@@ -117,7 +117,7 @@ cleanup() {
   [ -n "$RUN_DIR" ] && rm -rf "$RUN_DIR"
   RUN_DIR=
   # Released last: a restore above still runs under the lock.
-  [ -n "$LOCKED" ] && rm -rf "$LOCKED"
+  [ -n "$LOCKED" ] && rm -f "$LOCKED"
   LOCKED=
   return 0
 }
@@ -156,22 +156,27 @@ init_run() {
 # once used to rewrite each other's journal line). Taken before a writer reads its target, held to
 # exit (the cleanup trap releases it). A lock whose holder is gone is taken over. Claude's Edits and
 # Logseq never take it: the checksum recheck in commit_write still covers those.
+# The lock is a file holding the holder's pid, created with the shell's own noclobber (O_EXCL). Not
+# `mkdir`: uutils coreutils' mkdir (Ubuntu's default since 25.10) can tell two racers both succeeded.
+excl_create() { ( set -C; printf '%s\n' "$2" > "$1" ) 2>/dev/null; }
 graph_lock() {
   [ -n "$LOCKED" ] && return 0
   _lk="$STATE_DIR/lock"; _lw=0
-  while ! mkdir "$_lk" 2>/dev/null; do
-    _lp=$(cat "$_lk/pid" 2>/dev/null)
-    if [ -n "$_lp" ] && ! kill -0 "$_lp" 2>/dev/null && [ "$(cat "$_lk/pid" 2>/dev/null)" = "$_lp" ]; then
-      mv "$_lk" "$_lk.stale.$$" 2>/dev/null && rm -rf "$_lk.stale.$$"
+  until excl_create "$_lk" "$$"; do
+    _lp=$(cat "$_lk" 2>/dev/null)
+    # A dead holder's lock is broken by one waiter at a time, rechecked under lock.break: two waiters
+    # that both saw the same stale pid must not both act, or the second removes the first's new lock.
+    if [ -n "$_lp" ] && ! kill -0 "$_lp" 2>/dev/null && excl_create "$_lk.break" "$$"; then
+      [ "$(cat "$_lk" 2>/dev/null)" = "$_lp" ] && rm -f "$_lk"
+      rm -f "$_lk.break"
       continue
     fi
     _lw=$((_lw + 1))
     [ "$_lw" -le "${BRAIN_LOCK_WAIT:-30}" ] \
-      || die "graph busy — another brain run (pid ${_lp:-?}) holds $_lk; if none is running, remove that folder and rerun"
+      || die "graph busy — another brain run (pid ${_lp:-?}) holds $_lk; if none is running, delete that file and rerun"
     sleep 1
   done
   LOCKED=$_lk
-  printf '%s\n' "$$" > "$_lk/pid"
 }
 
 nonl() {
