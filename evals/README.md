@@ -29,6 +29,8 @@ wsl -d FedoraLinux-44 -u logseq-eval
 
 In that shell, install Claude Code with the native installer ([setup docs](https://code.claude.com/docs/en/setup)). Then run `claude` once to log in with your subscription.
 
+**Pin Claude Code to 2.1.303** (`claude install 2.1.303 --force`). From 2.1.304 (still in 2.1.332), `claude plugin eval` mounts the case workspace and `/tmp` read-only for sandboxed Bash, against its own docs. The helper's writes then fail, and `load-digest`, `graph-flag-trailing`, `save-basic` and `save-phantom-syntax` fail with `Read-only file system` in their traces; `main` fails the same way. Bisected 2026-11-27. The run header prints the version: check it before trusting a failure, and lift the pin once a newer build passes `--case load-digest`.
+
 ## Running
 
 ```

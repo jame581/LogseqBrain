@@ -7,6 +7,8 @@
 - The helper's writers take a per-graph lock: two sessions loading or saving at once used to lose a journal line (1 of 8 parallel writes landed).
 - `brain activity` text is linted and must be one line. A newline used to write a raw bare paragraph into the journal.
 - The scratch state moved to a private, per-user folder (`$TMPDIR/logseq-brain-<uid>`, mode 700). It was world-readable and locked out a second user.
+- The helper falls back to `/tmp/claude`, then `/tmp`, when `$TMPDIR` is not writable (Claude Code's sandbox can leave it read-only). Every command but `info`, `read` and `tail` used to die there.
+- Eval suite 2026-11-27: 11/11 on Claude Code 2.1.303 (`load-digest` 2 calls, `save-basic` 7). Builds from 2.1.304 make the eval workspace read-only for Bash, so the suite is pinned to 2.1.303 (`evals/README.md`).
 - brain-save confirms before saving when the user didn't ask for it ("wrap up" only offers a save). brain-init no longer overwrites an existing project page. Prose contradictions about properties and task pages are fixed.
 - Findings deferred from the same review: `docs/superpowers/plans/2026-11-27-v0.13.0-review-backlog.md`.
 
