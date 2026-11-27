@@ -43,7 +43,7 @@ gemini extensions install https://github.com/jame581/LogseqBrain
 
 ## Setup
 
-**Requirements:** a POSIX shell with `awk`. That is built into macOS, Linux and Cowork; on Windows, install [Git for Windows](https://git-scm.com/download/win) (Git Bash). The skills call a small bundled helper (`plugin/skills/_shared/bin/brain` in this repo) for every byte count, digest Map and format check.
+**Requirements:** a POSIX shell with `awk`. That is built into macOS, Linux and Cowork; on Windows, install [Git for Windows](https://git-scm.com/download/win) (Git Bash). The skills call a small bundled helper (`plugin/skills/_shared/bin/brain` in this repo) for every byte count, digest Map and format check. It writes only inside your graph folder, keeps private scratch copies of the pages it checks in your temp folder, and makes no network calls.
 
 After installing, create a Logseq graph (e.g. "ClaudeBrain") and tell the plugin where to find it. Pick one:
 
@@ -56,7 +56,7 @@ Then say **"init brain"** to set up the graph structure, and **"init brain proje
 
 **brain-init** — Set up the graph for the first time, or add a new project.
 - "init brain" — creates the graph structure (Index, Meta, Decisions pages)
-- "init brain project MyProject" — adds a new project page
+- "init brain project MyProject" — adds a new project page, and never overwrites one that already exists
 
 **brain-load** — Load project context into the current session.
 - "load MyProject" — loads the project's **digest** in one helper call: ~1.5 KB no matter how big the page is, plus today's journal entry for that project if there is one (targeting ~2 KB). It tells you exactly what it *didn't* read
@@ -68,12 +68,13 @@ Then say **"init brain"** to set up the graph structure, and **"init brain proje
 
 **brain-save** — Save the current session's work to the graph.
 - "save to brain" — saves decisions, progress, and plans from this session
+- Never saves without your confirmation: "wrap up" or "before I quit" only offer a save
 - "save progress" — same as above
 - "remember this" — save specific information
 - Automatically detects multi-project sessions and Jira task context
 - Updates Meta.md when new user preferences are discovered
 - Jira comment drafts are stored verbatim in fenced code blocks
-- Every save ends with one helper call that writes the journal's `## Sessions` bullet, the `Index.md` one-liner and the digest Map, then checks every file the save touched for format problems before it logs the save. Text it would write is checked *before* writing, so a refused save leaves the graph untouched
+- Every save ends with one helper call that writes the journal's `## Sessions` bullet, the `Index.md` one-liner and the digest Map, then checks every file the save touched for format problems before it logs the save. The text it writes itself is checked first: a refusal writes none of it and says what to fix
 - Seeds and updates task `status::` as work progresses, and suggests Session Log rotation to a `SessionArchive` page once a project page grows past 64 KB / 40 entries
 - Refreshes the project's `Index.md` one-liner and the page's digest on every save, so the cheap-recall surface never goes stale; a page without a digest gets one on its first save
 
