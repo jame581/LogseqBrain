@@ -134,14 +134,22 @@ init_run() {
   # was world-readable, and the first user to create it locked every other user out of it.
   _uid=$(id -u 2>/dev/null) || _uid=
   case $_uid in ''|*[!0-9]*) _uid=$(printf '%s' "${USER:-${USERNAME:-user}}" | tr -c 'A-Za-z0-9_.-' '_') ;; esac
-  _root="${TMPDIR:-/tmp}/logseq-brain-$_uid"
-  STATE_DIR="$_root/$(printf '%s' "$GRAPH" | cksum | cut -d' ' -f1)"
+  _gk=$(printf '%s' "$GRAPH" | cksum | cut -d' ' -f1)
+  # The first temp folder we can write: Claude Code's sandbox can leave $TMPDIR read-only and allow
+  # only /tmp/claude (eval suite, Claude Code 2.1.332), and a dead state dir stops every command.
+  # chmod fails on a directory (or a planted symlink's target) owned by someone else: skip it.
+  _first=; STATE_DIR=; _fb="/tmp/claude /tmp"
+  [ "${BRAIN_TEST_INTERNAL:-}" = 1 ] && _fb=${BRAIN_TEST_STATE_FALLBACK-$_fb}   # test-only
+  for _base in "${TMPDIR:-/tmp}" $_fb; do
+    _root="$_base/logseq-brain-$_uid"
+    [ -n "$_first" ] || _first="$_root/$_gk/run.$$"
+    if { mkdir -p "$_root" && chmod 700 "$_root" && mkdir -p "$_root/$_gk/base" "$_root/$_gk/run.$$"; } 2>/dev/null; then
+      STATE_DIR="$_root/$_gk"; break
+    fi
+  done
+  # RUN_DIR is set only once it exists, so the cleanup trap never touches a dir we never made.
+  [ -n "$STATE_DIR" ] || die "cannot create state dir $_first"
   RUN_DIR="$STATE_DIR/run.$$"
-  # Capture the path before clearing RUN_DIR (which stops the cleanup trap touching a dir we never
-  # made): clearing it first left die printing "cannot create state dir" with nothing after it.
-  # chmod fails on a directory (or a planted symlink's target) owned by someone else: refuse it.
-  { mkdir -p "$_root" && chmod 700 "$_root" && mkdir -p "$STATE_DIR/base" "$RUN_DIR"; } 2>/dev/null \
-    || { _rd=$RUN_DIR; RUN_DIR=; die "cannot create state dir $_rd"; }
 }
 
 # graph_lock — serialize the helper's own writers on this graph (two sessions saving or loading at
