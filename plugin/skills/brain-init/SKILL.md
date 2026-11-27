@@ -80,13 +80,13 @@ Replace `{{today}}` with the current date in `yyyy-MM-dd` format.
 
 Confirm to the user that the graph is ready and they can open it in Logseq.
 
-After confirmation, run `brain activity "initialized graph at <graphPath>"`.
+After confirmation, run `brain activity 'initialized the graph'`.
 
 ## Adding a New Project
 
 When the user wants to add a project (e.g., "add MyProject to brain", "init brain project GameDev"):
 
-1. Determine the project name from the user's request.
+1. Determine the project name from the user's request. Then **check it doesn't exist yet:** run `brain digest Projects/<ProjectName>`. Any exit other than 2 with `page not found` means the page exists: never overwrite it. Say so and offer "load <ProjectName>" instead, or a different name. A `did you mean:` line naming `Projects/<ProjectName>` in another case means the same. Other `did you mean:` names only resemble it (a substring match), so continue.
 
 2. Ask the user for a brief description and any initial context for the project (tech stack, repo location, key info) — gather this **before** writing the page. The template (`references/templates.md`) uses the same description in three places: `focus::`, the Digest Identity bullet, and `## Overview`. If the description exceeds **120 bytes**, use a short form for `focus::` (the digest property cap — see `skills/_shared/digest.md`) and keep the full text in `## Overview` and the Digest Identity bullet.
 
@@ -105,7 +105,7 @@ When the user wants to add a project (e.g., "add MyProject to brain", "init brai
 
 Confirm the project page was created and remind the user they can now use "save to brain" during work sessions and "load [project]" to restore context.
 
-After confirmation, run `brain activity "created project [[Projects/<ProjectName>]]"`.
+After confirmation, run `brain activity 'created project [[Projects/<ProjectName>]]'`.
 
 ## Date Format
 

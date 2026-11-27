@@ -51,7 +51,7 @@ If the trigger is ambiguous, run Report first and offer to fix.
    Digests (4):        4 pages with no digest — say "backfill digests"
    ```
 
-   **Empty pages that lint no longer explains:** Logseq never deletes a page once it has parsed one. Pages created by text that has since been fixed survive until the graph is **re-indexed** in Logseq (All graphs → Re-index). A clean `brain lint` plus leftover empty pages means "re-index", not "fix more". If the graph is clean, say so, run `brain activity "ran brain-doctor (clean)"`, and stop.
+   **Empty pages that lint no longer explains:** Logseq never deletes a page once it has parsed one. Pages created by text that has since been fixed survive until the graph is **re-indexed** in Logseq (All graphs → Re-index). A clean `brain lint` plus leftover empty pages means "re-index", not "fix more". If the graph is clean, say so, run `brain activity 'ran brain-doctor (clean)'`, and stop.
 
 3. **Confirm before any write.** Ask which classes to fix if the user hasn't said.
 
@@ -67,7 +67,7 @@ If the trigger is ambiguous, run Report first and offer to fix.
    - Per-file backtick parity (the catalog's "After repair — verify").
    - Then `brain digest <page> --apply` on every digest-bearing page whose bytes changed. This is a Remap: `digest-updated::` and the prose stay untouched. Skip a page with no `## Digest` section — that's a `missing-digest` finding, not a Remap, and `--apply` exits 2 on it; leave it to the guided digest backfill below.
 
-7. **`brain activity "ran brain-doctor · fixed <N> issues"`** and report the result.
+7. **`brain activity 'ran brain-doctor · fixed <N> issues'`** and report the result.
 
 ## Guided digest backfill
 
@@ -78,7 +78,7 @@ Triggered by "backfill digests" or accepted from a `missing-digest` report. The 
 3. **Offer a scope:** project pages by default; "all" includes task pages.
 4. **Back up first**, unconditionally.
 5. **Build each digest** per the Rebuild procedure in `skills/_shared/digest.md`: bounded reads, then prose Edits, then `brain digest <page> --apply`. Work one page at a time, so an interruption leaves a consistent graph.
-6. **Report** pages built, skipped and bytes read. Then `brain activity "backfilled N digests"`.
+6. **Report** pages built, skipped and bytes read. Then `brain activity 'backfilled N digests'`.
 
 **Never build a digest without confirmation.** It is a write, and it costs tokens.
 

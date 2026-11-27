@@ -2,7 +2,7 @@
 
 Every brain skill records one line under `## Activity` in today's journal, once, after its main work succeeds. Skip it when the work failed:
 
-    brain activity "<activity line>"
+    brain activity '<activity line>'
 
 The helper adds the `HH:mm` prefix. It creates the journal, or the `- ## Activity` heading after the whole `## Sessions` block, when either is missing. It matches Logseq's reformatted headings and indentation, and writes nothing (it prints a one-line notice) when the user config sets `"journeyLog": false`.
 

@@ -19,4 +19,4 @@ If the user says yes, run the standard save flow. If no or no answer, don't brin
 
 ## Why this is a suggestion only
 
-Auto-save without explicit confirmation violates the project's "explicit-trigger only" invariant — see `CLAUDE.md`. The cost of suggesting is one short prompt; the cost of auto-saving the wrong thing is silent persistence of misleading context.
+Auto-save without explicit confirmation violates the plugin's "explicit-trigger only" rule. The cost of suggesting is one short prompt; the cost of auto-saving the wrong thing is silent persistence of misleading context.

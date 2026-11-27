@@ -8,9 +8,9 @@ The digest is a floor, not a ceiling. When the conversation needs something it d
 |---|---|---|---|
 | 0 | Digest, already loaded | — | — |
 | 1 | Consult the Map: does this even exist on this page? | — | no |
-| 2 | Count, then hits | `brain search "<term>" --page <P>` | **yes** |
-| 3 | Bounded windows around hits (≤ 8 KB total, enforced) | `brain search "<term>" --page <P> [--section S] --context 10` | yes |
-| 4 | Whole section (≤ 8 KB, enforced) | `brain read <P> "<section>"`, or `brain tail` for the newest entries | yes |
+| 2 | Count, then hits | `brain search '<term>' --page <P>` | **yes** |
+| 3 | Bounded windows around hits (≤ 8 KB total, enforced) | `brain search '<term>' --page <P> [--section S] --context 10` | yes |
+| 4 | Whole section (≤ 8 KB, enforced) | `brain read <P> '<section>'`, or `brain tail` for the newest entries | yes |
 | 5 | Whole page | Read it only after the user agrees, stating its size from `brain sections` | **ask first** |
 
 ## Rules

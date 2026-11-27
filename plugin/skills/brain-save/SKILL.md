@@ -3,8 +3,9 @@ name: brain-save
 description: >
   Save session context, decisions, progress, and plans to the Claude Brain Logseq
   graph. Triggers: "save to brain", "save this", "remember this", "store this
-  decision", "log this", "save progress", "before I quit", "wrap up". Don't fire
-  for read operations (use brain-load) or status checks (use brain-status).
+  decision", "log this", "save progress". On wrap-up cues ("before I quit",
+  "wrap up") after real project work, offer a save; never save unasked. Don't
+  fire for read operations (use brain-load) or status checks (use brain-status).
 ---
 
 # Brain Save
@@ -22,6 +23,8 @@ Persist session context to the Claude Brain Logseq graph, for continuity across 
 
 ## Save process
 
+0. **Confirm the save was asked for.** If the user's words were not an explicit save request (a wrap-up cue, "thanks", or your own idea), don't save: offer it as `references/auto-suggest.md` says, and continue only on a yes.
+
 1. **Targets.** Take the project from the names, files and repos discussed, or the user's words. If unclear, ask: "This touched [X] and [Y] — save to both?" Several pages are saved **one at a time**, each running steps 2–7 before the next begins.
 
 2. **`brain save-begin <page> [--also FILE…]`.** Don't list the graph first. It baselines the page, `pages/Index.md` and today's journal, and prints what you edit:
@@ -32,7 +35,7 @@ Persist session context to the Claude Brain Logseq graph, for continuity across 
 
    Name every other file this save may write with `--also`: `pages/Meta.md`, `pages/Decisions.md`, `pages/Tasks___<ID>.md`. If the need appears while composing, rerun `save-begin` with the full list **before the first Edit**, never after: a rerun resets the baselines.
    - **`page not found`** (exit 2): never write to a missing page. Offer to create it via brain-init's "Adding a New Project". If declined, list the projects (`brain status`) and let the user pick.
-   - **Task pages:** the page-top block must hold `status::` with `active | blocked | done`. Seed `status:: active` if it's missing. On completion signals ("merged", "deployed", "closed", "released", "hotovo"), **suggest** `status:: done`, and never write a status change the user didn't confirm. Read or edit a task page only to change its `status::`, passing it in `--also`. A worked task with no page gets only the Current Plan pointer and an offer to create it. Never create one uninvited.
+   - **Task pages:** the page-top block must hold `status::` with `active | blocked | done`. Seed `status:: active` if it's missing. On completion signals ("merged", "deployed", "closed", "released", "hotovo"), **suggest** `status:: done`, and never write a status change the user didn't confirm. When the save targets a project page, touch a related task page only to change its `status::`, passing it in `--also`. A save that targets the task page itself follows steps 2–7 like any page. A worked task with no page gets only the Current Plan pointer and an offer to create it. Never create one uninvited.
 
 3. **One Read of the page, for Edit:** `Read` with `offset: 1, limit: 1`. That unlocks Edit for the whole file. The text you replace comes from step 2's output. Need another section's text for an anchor (Implementation, Decisions)? Use `brain read <page> '<section>'`, not a whole-page Read. Don't read Index or the journal: `save-finish` writes them.
 
@@ -57,7 +60,7 @@ Persist session context to the Claude Brain Logseq graph, for continuity across 
      - Links to projects and tasks are namespaced: `[[Tasks/…]]`, `[[Projects/…]]`.
      - File paths are markdown links `[x](file:///…)` or backticks. Never `[[file://…]]`, never relative `[x](docs/x.md)`.
      - Jira drafts go verbatim in fenced blocks.
-     - `key::` only in the page-top block. In a Session Log line, `- status: blocked` is prose.
+     - `key::` only in the page-top block and the children shown in the templates above (Session Log `files-modified::` etc., the Current Plan pointer's), and Decision entries' properties per `references/decisions.md`. Any other single-colon line such as `- status: blocked` is prose: don't turn it into `::`.
      - Everything is a bullet; dates are `yyyy-MM-dd`.
 
 5. **Edit the page surgically.** Never rewrite a whole page. New entries go at the end of their section.
