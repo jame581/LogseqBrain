@@ -2,8 +2,13 @@
 
 ## Shipped
 
-### v0.12.2 — Directory review fix
-- The helper's property-key list is renamed (`keys.lst` → `props.lst`) so the plugin directory's credential check no longer mistakes it for a secret. No behavior change.
+### v0.12.2 — Directory review fix and safety fixes
+- The helper's property-key list is renamed (`keys.lst` → `props.lst`) so the plugin directory's credential check no longer mistakes it for a secret.
+- The helper's writers take a per-graph lock: two sessions loading or saving at once used to lose a journal line (1 of 8 parallel writes landed).
+- `brain activity` text is linted and must be one line. A newline used to write a raw bare paragraph into the journal.
+- The scratch state moved to a private, per-user folder (`$TMPDIR/logseq-brain-<uid>`, mode 700). It was world-readable and locked out a second user.
+- brain-save confirms before saving when the user didn't ask for it ("wrap up" only offers a save). brain-init no longer overwrites an existing project page. Prose contradictions about properties and task pages are fixed.
+- Findings deferred from the same review: `docs/superpowers/plans/2026-11-27-v0.13.0-review-backlog.md`.
 
 ### v0.12.1 — Packaging for the plugin directory
 - The shipped plugin moved into `plugin/` (41 files: `.claude-plugin/`, `skills/`, a short installer README, LICENSE and a listing icon). Tests, evals, tools, design docs and the repo's `CLAUDE.md` stay outside it, so installers and Anthropic's plugin directory get only the plugin. No skill or helper behavior changed.
@@ -102,6 +107,7 @@
 - Size-based Session Log rotation, and rotation for task pages.
 - A property vocabulary and the `:property-pages/enabled?` setting.
 - Re-checking stale `open::` items on save.
+- The deferred findings of the 2026-11-27 review (`docs/superpowers/plans/2026-11-27-v0.13.0-review-backlog.md`): task-page fallbacks, missing actions, trigger tightening, prose cleanup, helper minors.
 - After v0.12.0 ships, about two weeks of real use: rerun `tools/measure/cost.py` against the v0.11.0 real-use baseline (load median 12 calls, save 21.5).
 
 ## Future — OG (markdown)
