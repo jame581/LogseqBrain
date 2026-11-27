@@ -2,6 +2,9 @@
 
 ## Shipped
 
+### v0.12.2 — Directory review fix
+- The helper's property-key list is renamed (`keys.lst` → `props.lst`) so the plugin directory's credential check no longer mistakes it for a secret. No behavior change.
+
 ### v0.12.1 — Packaging for the plugin directory
 - The shipped plugin moved into `plugin/` (41 files: `.claude-plugin/`, `skills/`, a short installer README, LICENSE and a listing icon). Tests, evals, tools, design docs and the repo's `CLAUDE.md` stay outside it, so installers and Anthropic's plugin directory get only the plugin. No skill or helper behavior changed.
 - The skillsmith marketplace entry installs from the `plugin/` subfolder (`git-subdir`).
