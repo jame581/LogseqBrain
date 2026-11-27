@@ -5,10 +5,11 @@
 ### v0.12.2 — Directory review fix and safety fixes
 - The helper's property-key list is renamed (`keys.lst` → `props.lst`) so the plugin directory's credential check no longer mistakes it for a secret.
 - The helper's writers take a per-graph lock: two sessions loading or saving at once used to lose a journal line (1 of 8 parallel writes landed).
+- The lock is a file made with the shell's exclusive create, not `mkdir`: uutils coreutils' `mkdir` (Ubuntu's default since 25.10) can tell two racers they both created it. A stale lock is broken by one waiter at a time.
 - `brain activity` text is linted and must be one line. A newline used to write a raw bare paragraph into the journal.
 - The scratch state moved to a private, per-user folder (`$TMPDIR/logseq-brain-<uid>`, mode 700). It was world-readable and locked out a second user.
 - The helper falls back to `/tmp/claude`, then `/tmp`, when `$TMPDIR` is not writable (Claude Code's sandbox can leave it read-only). Every command but `info`, `read` and `tail` used to die there.
-- Eval suite 2026-11-27: 11/11 on Claude Code 2.1.303 (`load-digest` 2 calls, `save-basic` 7). Builds from 2.1.304 make the eval workspace read-only for Bash, so the suite is pinned to 2.1.303 (`evals/README.md`).
+- Eval suite 2026-11-27, Claude Code 2.1.303: 11/11 on `7bdc5e3`; after the lock fix, 10/11 on `5c54bb6` (`load-digest` 2 calls, `save-basic` 6), with `init-project` passing on rerun once its grader accepted a correct call. Builds from 2.1.304 make the eval workspace read-only for Bash, so the suite is pinned to 2.1.303 (`evals/README.md`).
 - brain-save confirms before saving when the user didn't ask for it ("wrap up" only offers a save). brain-init no longer overwrites an existing project page. Prose contradictions about properties and task pages are fixed.
 - Findings deferred from the same review: `docs/superpowers/plans/2026-11-27-v0.13.0-review-backlog.md`.
 
