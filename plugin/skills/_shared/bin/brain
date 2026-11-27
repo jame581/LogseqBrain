@@ -56,7 +56,7 @@ config_file() {
   else printf '%s/.config/logseq-brain/config.json\n' "$HOME"; fi
 }
 
-# json_get KEY FILE — scalar value of "KEY" (string, bool or number); JSON \x escapes undone.
+# json_get NAME FILE — scalar value of "NAME" (string, bool or number); JSON \x escapes undone.
 json_get() {
   [ -r "$2" ] || return 0
   $AWK -v BINMODE=3 -v k="$1" 'BEGIN { RS = "\001" }
@@ -355,10 +355,10 @@ cmd_digest_apply() {
 }
 
 graph_lists() {
-  PAGES_LST="$RUN_DIR/pages.lst"; KEYS_LST="$RUN_DIR/keys.lst"
+  PAGES_LST="$RUN_DIR/pages.lst"; PROPS_LST="$RUN_DIR/props.lst"
   ls "$GRAPH/pages" 2>/dev/null | sed -n 's#\.md$##p' | sed 's#___#/#g' | tr 'A-Z' 'a-z' > "$PAGES_LST"
   (cd "$GRAPH" && grep -h -E '^[[:space:]]*(- )?[A-Za-z0-9_][A-Za-z0-9_.-]*:: ' pages/*.md journals/*.md 2>/dev/null) \
-    | sed -E 's/^[[:space:]]*(- )?([A-Za-z0-9_][A-Za-z0-9_.-]*)::.*/\2/' | tr 'A-Z' 'a-z' | sort | uniq -c > "$KEYS_LST"
+    | sed -E 's/^[[:space:]]*(- )?([A-Za-z0-9_][A-Za-z0-9_.-]*)::.*/\2/' | tr 'A-Z' 'a-z' | sort | uniq -c > "$PROPS_LST"
 }
 
 # digest_lint REL — map.awk lint findings for one digest-bearing candidate.
@@ -397,10 +397,10 @@ cmd_check() {
       _add="$RUN_DIR/added.lst"
       $AWK -v BINMODE=3 -f "$LIB/added.awk" "$_b" "$GRAPH/$_rel" > "$_add" \
         || die "check failed on $_rel — could not diff it against its baseline"
-      (cd "$GRAPH" && run_awk lint -v listfile="$_list" -v pagesfile="$PAGES_LST" -v keysfile="$KEYS_LST" \
+      (cd "$GRAPH" && run_awk lint -v listfile="$_list" -v pagesfile="$PAGES_LST" -v propsfile="$PROPS_LST" \
         -v addedfile="$_add" -v countfile="$_cnt") > "$_lo"
     else
-      (cd "$GRAPH" && run_awk lint -v listfile="$_list" -v pagesfile="$PAGES_LST" -v keysfile="$KEYS_LST" \
+      (cd "$GRAPH" && run_awk lint -v listfile="$_list" -v pagesfile="$PAGES_LST" -v propsfile="$PROPS_LST" \
         -v nobase=1 -v countfile="$_cnt") > "$_lo"
     fi
     _lrc=$?
@@ -449,7 +449,7 @@ cmd_lint() {
     done
   fi
   _cnt="$RUN_DIR/lint.cnt"; : > "$_cnt"
-  (cd "$GRAPH" && run_awk lint -v listfile="$_list" -v pagesfile="$PAGES_LST" -v keysfile="$KEYS_LST" \
+  (cd "$GRAPH" && run_awk lint -v listfile="$_list" -v pagesfile="$PAGES_LST" -v propsfile="$PROPS_LST" \
     -v countfile="$_cnt") > "$_out"
   _lrc=$?
   [ "$_lrc" = 2 ] && exit 2                             # lint.awk already named the unreadable file
@@ -544,7 +544,7 @@ validate_text() {
   if [ "$_vt_k" = summary ]; then printf -- '- [[%s]]: %s\n' "$_vt_n" "$_vt_t"
   else printf -- '- %s\n' "$_vt_t"; fi > "$_vt_d/pages/Prelint.md"
   printf 'pages/Prelint.md\n' > "$_vt_d/list"; : > "$_vt_d/cnt"
-  (cd "$_vt_d" && run_awk lint -v listfile=list -v pagesfile="$PAGES_LST" -v keysfile="$KEYS_LST" -v countfile=cnt) \
+  (cd "$_vt_d" && run_awk lint -v listfile=list -v pagesfile="$PAGES_LST" -v propsfile="$PROPS_LST" -v countfile=cnt) \
     > "$_vt_d/out" || die "lint failed on the --$_vt_k text"
   [ "$(cut -f1 "$_vt_d/cnt")" = 1 ] || die "lint failed on the --$_vt_k text — the engine did not lint it"
   sed "s#^pages/Prelint\.md:[0-9]*#--$_vt_k text#" "$_vt_d/out"

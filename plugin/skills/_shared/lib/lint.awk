@@ -1,7 +1,7 @@
 # lint.awk — Logseq-faithful format rules (spec §4) over graph-relative files. Run from the graph root.
 #   -v listfile=FILE   files to lint, one per line
 #   -v pagesfile=FILE  existing page names, lowercased ("projects/x")
-#   -v keysfile=FILE   "count key" lines: property-key usage over the whole graph
+#   -v propsfile=FILE   "count key" lines: property-key usage over the whole graph
 #   -v addedfile=FILE  check mode: only these line numbers are reported; other findings are counted
 #   -v nobase=1        check mode without a baseline: report everything, suffixed, never exit 1
 #   -v countfile=FILE  write "files<TAB>errors<TAB>warns<TAB>pre-existing" there; the caller asserts
@@ -118,7 +118,7 @@ function lint_file(f,   i, inf, t, m1, m2, j, nx, tok, pv, cls, rest, pos, e, tg
 
     if (match(t, /^[ \t]*(- )?[A-Za-z0-9_][A-Za-z0-9_.-]*:: /)) {
       k = substr(t, 1, RLENGTH - 3); sub(/^[ \t]*(- )?/, "", k); k = tolower(k)
-      if ((k in KEYC) && KEYC[k] == 1 && !(k in KNOWN)) emit(i, "new-property-key", "warn", k ":: used nowhere else in the graph")
+      if ((k in PROPC) && PROPC[k] == 1 && !(k in KNOWN)) emit(i, "new-property-key", "warn", k ":: used nowhere else in the graph")
     }
   }
 }
@@ -134,7 +134,7 @@ BEGIN {
     "context alternatives rationale superseded-by supersedes estimate task-folder summary collapsed id", kn, " ")
   for (i = 1; i <= nk; i++) KNOWN[kn[i]] = 1
   if (pagesfile != "") while ((getline ln < pagesfile) > 0) PAGES[ln] = 1
-  if (keysfile != "") while ((getline ln < keysfile) > 0) { split(ln, kv, " "); KEYC[kv[2]] = kv[1] + 0 }
+  if (propsfile != "") while ((getline ln < propsfile) > 0) { split(ln, kv, " "); PROPC[kv[2]] = kv[1] + 0 }
   if (addedfile != "") { CHECK = 1; while ((getline ln < addedfile) > 0) ADDED[ln + 0] = 1 }
   nf = 0
   while ((getline f < listfile) > 0) {
